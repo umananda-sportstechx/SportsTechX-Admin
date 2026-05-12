@@ -1,26 +1,126 @@
 @import "tailwindcss";
+@import "./design-system.css";
+
+/* ============================================================================
+ * SportsTechX admin design tokens.
+ *
+ * IMPORTANT — `app/design-system.css` is a manually-synced copy of
+ * `client/app/design-system.css`. Turbopack refuses cross-project imports (it
+ * sandboxes the dev graph to the project root), so both Next apps keep their
+ * own copies. When you change one, copy the other:
+ *
+ *     copy ..\client\app\design-system.css .\app\design-system.css   (PowerShell)
+ *     cp   ../client/app/design-system.css ./app/design-system.css   (bash)
+ *
+ * Admin overrides --accent-hue to a cooler tone (cyan) below to subtly
+ * distinguish the admin shell from the user-facing app.
+ * ============================================================================ */
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --accent-hue: 220;
+  --accent: oklch(58% 0.22 var(--accent-hue));
+  --accent-2: oklch(70% 0.18 var(--accent-hue));
+  --accent-soft: oklch(58% 0.22 var(--accent-hue) / 0.12);
+  --accent-fg: #FFFFFF;
+
+  --pos: oklch(72% 0.18 145);
+  --neg: oklch(65% 0.22 25);
+  --info: oklch(70% 0.16 235);
+  --warn: oklch(78% 0.16 75);
+
+  --bg: #FAFAF7;
+  --bg-1: #FAFAF7;
+  --bg-2: #F2F0EA;
+  --bg-3: #E8E5DD;
+  --surface: #FFFFFF;
+  --fg: #0A0A0A;
+  --fg-2: #404040;
+  --fg-muted: #6B6B68;
+  --border: rgba(10, 10, 10, 0.10);
+  --border-strong: rgba(10, 10, 10, 0.20);
+  --grid-line: rgba(10, 10, 10, 0.06);
+
+  --font-display: var(--font-space-grotesk), system-ui, sans-serif;
+  --font-body: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 20px;
+  --space-5: 32px;
+  --space-6: 48px;
+
+  --rail-w: 64px;
+  --rail-w-expanded: 220px;
+  --topbar-h: 56px;
+  --ticker-h: 32px;
+  --radius: 0px;
+}
+
+[data-theme="dark"],
+.dark {
+  --bg: #0A0A0A;
+  --bg-1: #0A0A0A;
+  --bg-2: #141414;
+  --bg-3: #1F1F1F;
+  --surface: #161616;
+  --fg: #FAFAF7;
+  --fg-2: #C4C4C0;
+  --fg-muted: #8F8F8B;
+  --border: rgba(250, 250, 247, 0.10);
+  --border-strong: rgba(250, 250, 247, 0.22);
+  --grid-line: rgba(250, 250, 247, 0.06);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--fg);
+  --color-muted: var(--bg-2);
+  --color-muted-foreground: var(--fg-muted);
+  --color-border: var(--border);
+  --color-ring: var(--accent);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-fg);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-fg);
+  --color-destructive: var(--neg);
+  --color-destructive-foreground: var(--accent-fg);
+  --color-bg: var(--bg);
+  --color-bg-2: var(--bg-2);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-muted: var(--fg-muted);
+  --color-pos: var(--pos);
+  --color-neg: var(--neg);
+  --color-info: var(--info);
+  --color-warn: var(--warn);
+
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+* { box-sizing: border-box; }
+*, *::before, *::after { border-color: var(--border); }
+html, body { margin: 0; padding: 0; height: 100%; }
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+::selection { background: var(--accent); color: var(--accent-fg); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); }
+::-webkit-scrollbar-thumb:hover { background: var(--fg-muted); }

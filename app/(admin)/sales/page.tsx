@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import useSWR from 'swr';
 
 interface Sale {
 	id: string;
@@ -21,10 +21,10 @@ interface Response { data: Sale[]; total: number }
 
 export default function SalesAdminPage() {
 	const [search, setSearch] = useState('');
-	const { data } = useQuery<Response>({
-		queryKey: ['/api/admin/sales', { q: search || undefined, limit: 50 }],
-		staleTime: 30_000,
-	});
+	const { data } = useSWR<Response>(
+		['/api/admin/sales', { q: search || undefined, limit: 50 }],
+		{ dedupingInterval: 30_000 },
+	);
 
 	const rows = data?.data ?? [];
 	const totalRevenue = rows.reduce((s, r) => s + (r.amount_cents ?? 0), 0) / 100;
@@ -48,8 +48,8 @@ export default function SalesAdminPage() {
 					<div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 800 }}>{rows.filter((r) => r.plan === 'pro' && r.status === 'active').length}</div>
 				</div>
 				<div className="card" style={{ padding: 'var(--space-4)' }}>
-					<div className="co-stat-label">Free conversions</div>
-					<div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 800 }}>{rows.filter((r) => r.plan === 'plus').length}</div>
+					<div className="co-stat-label">Active Growth</div>
+					<div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 800 }}>{rows.filter((r) => r.plan === 'growth' && r.status === 'active').length}</div>
 				</div>
 				<div className="card" style={{ padding: 'var(--space-4)' }}>
 					<div className="co-stat-label">Cancellations</div>

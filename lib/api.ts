@@ -44,23 +44,32 @@ export async function api<T = unknown>(
 }
 
 /**
- * TanStack Query default queryFn: keys are `[path, params?]`.
+ * Build a URL from an SWR-style key tuple `[path, params?]`. Mirrors the
+ * client's `buildUrl` so both apps share the same key→URL convention.
  */
-export async function defaultQueryFn<T>({ queryKey }: { queryKey: readonly unknown[] }): Promise<T> {
+function buildUrl(queryKey: readonly unknown[]): string {
 	const [path, params] = queryKey as [string, Record<string, unknown> | undefined];
-	let url = path;
-	if (params && typeof params === 'object') {
-		const sp = new URLSearchParams();
-		for (const [k, v] of Object.entries(params)) {
-			if (v == null || v === '') continue;
-			if (Array.isArray(v)) {
-				for (const item of v) sp.append(k, String(item));
-			} else {
-				sp.set(k, String(v));
-			}
+	if (!params || typeof params !== 'object') return path;
+	const sp = new URLSearchParams();
+	for (const [k, v] of Object.entries(params)) {
+		if (v == null || v === '') continue;
+		if (Array.isArray(v)) {
+			for (const item of v) sp.append(k, String(item));
+		} else {
+			sp.set(k, String(v));
 		}
-		const qs = sp.toString();
-		if (qs) url += `?${qs}`;
 	}
+	const qs = sp.toString();
+	if (!qs) return path;
+	return `${path}${path.includes('?') ? '&' : '?'}${qs}`;
+}
+
+/**
+ * Global SWR fetcher. Accepts either a string URL or a key tuple `[path, params?]`.
+ * Tuple form is preferred so that two queries with different params land in
+ * different cache slots — same convention as `qk.*` on the user-facing client.
+ */
+export async function swrFetcher<T = unknown>(key: string | readonly unknown[]): Promise<T> {
+	const url = Array.isArray(key) ? buildUrl(key) : (key as string);
 	return api<T>('GET', url);
 }

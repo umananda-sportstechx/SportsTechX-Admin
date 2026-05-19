@@ -1,9 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { CalendarPlus, Coins } from 'lucide-react';
+import { CalendarPlus, Coins, KeyRound } from 'lucide-react';
 import { api } from '@/lib/api';
 
 interface TrialGrantResponse {
@@ -14,6 +13,11 @@ interface TrialGrantResponse {
 
 interface BulkCreditResponse {
 	granted: number;
+}
+
+interface BulkGrantAccessResponse {
+	results: Array<{ email: string; success: boolean; profile_id?: string; error?: string }>;
+	summary: { total: number; succeeded: number; failed: number };
 }
 
 /**
@@ -36,44 +40,87 @@ export default function BillingAdminPage() {
 	const [bulkType, setBulkType] = useState<'ai' | 'integration'>('ai');
 	const [bulkReason, setBulkReason] = useState('');
 
-	const grantTrial = useMutation({
-		mutationFn: () =>
-			api<TrialGrantResponse>('POST', '/api/admin/billing/grant-trial', {
+	// bulk-grant-access — promote a batch of users to a tier without Stripe.
+	const [accessEmails, setAccessEmails] = useState('');
+	const [accessTier, setAccessTier] = useState<'growth' | 'pro'>('pro');
+	const [accessDays, setAccessDays] = useState(30);
+	const [accessReason, setAccessReason] = useState('');
+	const [accessResults, setAccessResults] = useState<BulkGrantAccessResponse | null>(null);
+
+	const [trialPending, setTrialPending] = useState(false);
+	const [creditPending, setCreditPending] = useState(false);
+	const [accessPending, setAccessPending] = useState(false);
+
+	const grantTrial = async () => {
+		setTrialPending(true);
+		try {
+			const res = await api<TrialGrantResponse>('POST', '/api/admin/billing/grant-trial', {
 				profile_id: trialProfile.trim(),
 				days: trialDays,
-			}),
-		onSuccess: (res) => {
+			});
 			const ends = res.trial_ends_at ? new Date(res.trial_ends_at).toLocaleDateString() : 'unknown';
 			toast.success(`Trial extended — expires ${ends}`);
 			setTrialProfile('');
-		},
-		onError: (e: Error) => toast.error(e.message ?? 'Could not grant trial'),
-	});
+		} catch (e) {
+			toast.error((e as Error).message ?? 'Could not grant trial');
+		} finally {
+			setTrialPending(false);
+		}
+	};
 
-	const bulkCredit = useMutation({
-		mutationFn: () => {
+	const bulkCredit = async () => {
+		setCreditPending(true);
+		try {
 			const profile_ids = bulkIds
 				.split(/[\s,]+/)
 				.map((s) => s.trim())
 				.filter(Boolean);
-			return api<BulkCreditResponse>('POST', '/api/admin/billing/bulk-credit-grant', {
+			const res = await api<BulkCreditResponse>('POST', '/api/admin/billing/bulk-credit-grant', {
 				profile_ids,
 				credits: bulkCredits,
 				credit_type: bulkType,
 				reason: bulkReason || undefined,
 			});
-		},
-		onSuccess: (res) => {
 			toast.success(`Granted ${bulkCredits} ${bulkType} credit(s) to ${res.granted} user(s)`);
 			setBulkIds('');
-		},
-		onError: (e: Error) => toast.error(e.message ?? 'Could not grant credits'),
-	});
+		} catch (e) {
+			toast.error((e as Error).message ?? 'Could not grant credits');
+		} finally {
+			setCreditPending(false);
+		}
+	};
 
 	const parsedIdCount = bulkIds
 		.split(/[\s,]+/)
 		.map((s) => s.trim())
 		.filter(Boolean).length;
+
+	const parsedEmailCount = accessEmails
+		.split(/[\n,;]+/)
+		.map((s) => s.trim())
+		.filter(Boolean).length;
+
+	const bulkGrantAccess = async () => {
+		setAccessPending(true);
+		try {
+			const emails = accessEmails
+				.split(/[\n,;]+/)
+				.map((s) => s.trim().toLowerCase())
+				.filter(Boolean);
+			const res = await api<BulkGrantAccessResponse>('POST', '/api/admin/billing/bulk-grant-access', {
+				emails,
+				tier: accessTier,
+				days: accessDays,
+				reason: accessReason.trim() || undefined,
+			});
+			setAccessResults(res);
+			toast.success(`Granted ${res.summary.succeeded}/${res.summary.total} successfully`);
+		} catch (e) {
+			toast.error((e as Error).message ?? 'Could not grant access');
+		} finally {
+			setAccessPending(false);
+		}
+	};
 
 	return (
 		<div>
@@ -147,10 +194,10 @@ export default function BillingAdminPage() {
 					</div>
 					<button
 						className="btn"
-						disabled={!trialProfile.trim() || grantTrial.isPending}
-						onClick={() => grantTrial.mutate()}
+						disabled={!trialProfile.trim() || trialPending}
+						onClick={() => void grantTrial()}
 					>
-						{grantTrial.isPending ? 'Granting…' : `Grant ${trialDays}-day trial`}
+						{trialPending ? 'Granting…' : `Grant ${trialDays}-day trial`}
 					</button>
 				</div>
 
@@ -226,14 +273,127 @@ export default function BillingAdminPage() {
 					</div>
 					<button
 						className="btn"
-						disabled={parsedIdCount === 0 || bulkCredit.isPending}
-						onClick={() => bulkCredit.mutate()}
+						disabled={parsedIdCount === 0 || creditPending}
+						onClick={() => void bulkCredit()}
 					>
-						{bulkCredit.isPending
+						{creditPending
 							? 'Granting…'
 							: `Grant ${bulkCredits} ${bulkType} credit${bulkCredits === 1 ? '' : 's'} × ${parsedIdCount} user${parsedIdCount === 1 ? '' : 's'}`}
 					</button>
 				</div>
+			</div>
+
+			{/* ─── Bulk grant access (NEW) ─── */}
+			<div className="card" style={{ padding: 'var(--space-4)', marginTop: 'var(--space-4)' }}>
+				<div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+					<KeyRound size={16} />
+					<div style={{ fontWeight: 700, fontSize: 15 }}>Bulk grant access (time-bounded, no Stripe)</div>
+				</div>
+				<p style={{ fontSize: 13, color: 'var(--fg-2)', marginBottom: 16 }}>
+					Time-bounded promotion to Growth or Pro. Sets <code style={{ background: 'var(--bg-2)', padding: '0 4px' }}>profiles.user_type</code>,
+					<code style={{ background: 'var(--bg-2)', padding: '0 4px' }}>is_trial=true</code>, and
+					<code style={{ background: 'var(--bg-2)', padding: '0 4px' }}>trial_ends_at = now() + N days</code>.
+					The nightly trial-expiry job downgrades back to free when the window passes (unless the user paid via Stripe mid-grant).
+				</p>
+
+				<div style={{ marginBottom: 12 }}>
+					<div
+						className="co-stat-label"
+						style={{ marginBottom: 6, display: 'flex', justifyContent: 'space-between' }}
+					>
+						<span>Emails (one per line or comma-separated)</span>
+						<span style={{ color: 'var(--fg-muted)' }}>{parsedEmailCount} parsed</span>
+					</div>
+					<textarea
+						className="search-input"
+						style={{ width: '100%', minHeight: 96, fontFamily: 'var(--font-mono)', fontSize: 12, resize: 'vertical' }}
+						placeholder={'alice@example.com\nbob@example.com'}
+						value={accessEmails}
+						onChange={(e) => setAccessEmails(e.target.value)}
+					/>
+				</div>
+
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+					<div>
+						<div className="co-stat-label" style={{ marginBottom: 6 }}>Tier</div>
+						<div style={{ display: 'flex', gap: 6 }}>
+							<button
+								type="button"
+								className={`chip ${accessTier === 'growth' ? 'on' : ''}`}
+								onClick={() => setAccessTier('growth')}
+							>
+								Growth
+							</button>
+							<button
+								type="button"
+								className={`chip ${accessTier === 'pro' ? 'on' : ''}`}
+								onClick={() => setAccessTier('pro')}
+							>
+								Pro
+							</button>
+						</div>
+					</div>
+					<div>
+						<div className="co-stat-label" style={{ marginBottom: 6 }}>Days</div>
+						<input
+							className="search-input"
+							type="number"
+							min={1}
+							max={3650}
+							style={{ width: '100%' }}
+							value={accessDays}
+							onChange={(e) => setAccessDays(Math.max(1, Math.min(3650, Number(e.target.value) || 1)))}
+						/>
+					</div>
+				</div>
+
+				<div style={{ marginBottom: 16 }}>
+					<div className="co-stat-label" style={{ marginBottom: 6 }}>Reason (optional)</div>
+					<input
+						className="search-input"
+						style={{ width: '100%' }}
+						placeholder="e.g. partner program · Q2 2026"
+						value={accessReason}
+						onChange={(e) => setAccessReason(e.target.value)}
+					/>
+				</div>
+
+				<button
+					className="btn"
+					disabled={parsedEmailCount === 0 || accessPending}
+					onClick={() => void bulkGrantAccess()}
+				>
+					{accessPending
+						? 'Granting…'
+						: `Grant ${accessTier} for ${accessDays}d × ${parsedEmailCount} user${parsedEmailCount === 1 ? '' : 's'}`}
+				</button>
+
+				{accessResults && (
+					<div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+						<div style={{ fontSize: 12, color: 'var(--fg-muted)', marginBottom: 6 }}>
+							{accessResults.summary.succeeded}/{accessResults.summary.total} succeeded · {accessResults.summary.failed} failed
+						</div>
+						<div style={{ maxHeight: 200, overflow: 'auto', fontSize: 11, fontFamily: 'var(--font-mono)' }}>
+							{accessResults.results.map((r, i) => (
+								<div
+									key={i}
+									style={{
+										display: 'flex',
+										gap: 8,
+										padding: '2px 0',
+										color: r.success ? 'var(--fg-2)' : 'var(--accent)',
+									}}
+								>
+									<span style={{ width: 16 }}>{r.success ? '✓' : '✗'}</span>
+									<span style={{ flex: 1 }}>{r.email}</span>
+									<span style={{ color: 'var(--fg-muted)' }}>
+										{r.success ? (r.profile_id?.slice(0, 8) ?? '') : (r.error ?? 'failed')}
+									</span>
+								</div>
+							))}
+						</div>
+					</div>
+				)}
 			</div>
 		</div>
 	);

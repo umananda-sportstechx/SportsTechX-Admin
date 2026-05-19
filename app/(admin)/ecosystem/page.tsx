@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -10,26 +10,44 @@ interface Entity { id: string; name: string; slug?: string; entity_type: string;
 interface Response { data: Entity[]; total: number; totalPages: number }
 
 export default function EcosystemAdminPage() {
-	const qc = useQueryClient();
+	const { mutate } = useSWRConfig();
 	const [type, setType] = useState<'program' | 'event'>('program');
 	const [page, setPage] = useState(1);
 	const [draft, setDraft] = useState({ name: '', entity_type: 'program' });
+	const [createPending, setCreatePending] = useState(false);
+	const [removePending, setRemovePending] = useState(false);
 
-	const { data } = useQuery<Response>({
-		queryKey: ['/api/ecosystem-entities', { type, page, limit: 30 }],
-		staleTime: 30_000,
-	});
+	const { data } = useSWR<Response>(
+		['/api/ecosystem-entities', { type, page, limit: 30 }],
+		{ dedupingInterval: 30_000 },
+	);
 
-	const create = useMutation({
-		mutationFn: () => api('POST', '/api/admin/ecosystem-entities', { ...draft, entity_type: type }),
-		onSuccess: () => { toast.success('Created'); setDraft({ name: '', entity_type: type }); qc.invalidateQueries({ queryKey: ['/api/ecosystem-entities'] }); },
-		onError: (e: Error) => toast.error(e.message),
-	});
-	const remove = useMutation({
-		mutationFn: (id: string) => api('DELETE', `/api/admin/ecosystem-entities/${id}`),
-		onSuccess: () => { toast.success('Deleted'); qc.invalidateQueries({ queryKey: ['/api/ecosystem-entities'] }); },
-		onError: (e: Error) => toast.error(e.message),
-	});
+	const create = async () => {
+		setCreatePending(true);
+		try {
+			await api('POST', '/api/admin/ecosystem-entities', { ...draft, entity_type: type });
+			toast.success('Created');
+			setDraft({ name: '', entity_type: type });
+			void mutate((key) => Array.isArray(key) && key[0] === '/api/ecosystem-entities');
+		} catch (e) {
+			toast.error((e as Error).message);
+		} finally {
+			setCreatePending(false);
+		}
+	};
+
+	const remove = async (id: string) => {
+		setRemovePending(true);
+		try {
+			await api('DELETE', `/api/admin/ecosystem-entities/${id}`);
+			toast.success('Deleted');
+			void mutate((key) => Array.isArray(key) && key[0] === '/api/ecosystem-entities');
+		} catch (e) {
+			toast.error((e as Error).message);
+		} finally {
+			setRemovePending(false);
+		}
+	};
 
 	const entities = data?.data ?? [];
 	return (
@@ -50,7 +68,7 @@ export default function EcosystemAdminPage() {
 				<div style={{ fontWeight: 700, marginBottom: 12 }}>Add a {type}</div>
 				<div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8 }}>
 					<input className="search-input" placeholder="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
-					<button className="btn" disabled={!draft.name || create.isPending} onClick={() => create.mutate()}>Add</button>
+					<button className="btn" disabled={!draft.name || createPending} onClick={() => void create()}>Add</button>
 				</div>
 			</div>
 
@@ -65,7 +83,7 @@ export default function EcosystemAdminPage() {
 								<td>{e.status ?? '—'}</td>
 								<td>{e.hq_country ?? '—'}</td>
 								<td style={{ textAlign: 'right' }}>
-									<button className="btn ghost" disabled={remove.isPending} onClick={() => confirm(`Delete ${e.name}?`) && remove.mutate(e.id)}>
+									<button className="btn ghost" disabled={removePending} onClick={() => { if (confirm(`Delete ${e.name}?`)) void remove(e.id); }}>
 										<Trash2 size={12} />
 									</button>
 								</td>

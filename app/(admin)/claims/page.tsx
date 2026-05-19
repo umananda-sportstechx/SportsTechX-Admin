@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 
@@ -28,41 +28,56 @@ const STATUS_TABS: Array<{ label: string; key: ClaimStatus }> = [
 ];
 
 export default function ClaimsAdminPage() {
-	const queryClient = useQueryClient();
+	const { mutate } = useSWRConfig();
 	const [status, setStatus] = useState<ClaimStatus>('pending');
 	const [page, setPage] = useState(1);
+	const [pendingId, setPendingId] = useState<string | null>(null);
 
-	const { data, isLoading } = useQuery<ClaimsResponse>({
-		queryKey: ['/api/admin/claims', { status, page, limit: 30 }],
-		staleTime: 30_000,
-	});
+	const { data, isLoading } = useSWR<ClaimsResponse>(
+		['/api/admin/claims', { status, page, limit: 30 }],
+		{ dedupingInterval: 30_000 },
+	);
 
 	const claims = data?.data ?? [];
 
-	const pickup = useMutation({
-		mutationFn: (id: string) => api('POST', `/api/admin/claims/${id}/pickup`, { picked_up: true }),
-		onSuccess: () => {
+	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/admin/claims');
+
+	const pickup = async (id: string) => {
+		setPendingId(id);
+		try {
+			await api('POST', `/api/admin/claims/${id}/pickup`, { picked_up: true });
 			toast.success('Claim picked up');
-			queryClient.invalidateQueries({ queryKey: ['/api/admin/claims'] });
-		},
-		onError: (e: Error) => toast.error(e.message ?? 'Could not pick up'),
-	});
-	const verify = useMutation({
-		mutationFn: (id: string) => api('POST', `/api/admin/claims/${id}/verify`, { send_email: true }),
-		onSuccess: () => {
+			void refresh();
+		} catch (e) {
+			toast.error((e as Error).message ?? 'Could not pick up');
+		} finally {
+			setPendingId(null);
+		}
+	};
+	const verify = async (id: string) => {
+		setPendingId(id);
+		try {
+			await api('POST', `/api/admin/claims/${id}/verify`, { send_email: true });
 			toast.success('Claim verified');
-			queryClient.invalidateQueries({ queryKey: ['/api/admin/claims'] });
-		},
-		onError: (e: Error) => toast.error(e.message ?? 'Could not verify'),
-	});
-	const reject = useMutation({
-		mutationFn: (id: string) => api('POST', `/api/admin/claims/${id}/reject`),
-		onSuccess: () => {
+			void refresh();
+		} catch (e) {
+			toast.error((e as Error).message ?? 'Could not verify');
+		} finally {
+			setPendingId(null);
+		}
+	};
+	const reject = async (id: string) => {
+		setPendingId(id);
+		try {
+			await api('POST', `/api/admin/claims/${id}/reject`);
 			toast.success('Claim rejected');
-			queryClient.invalidateQueries({ queryKey: ['/api/admin/claims'] });
-		},
-		onError: (e: Error) => toast.error(e.message ?? 'Could not reject'),
-	});
+			void refresh();
+		} catch (e) {
+			toast.error((e as Error).message ?? 'Could not reject');
+		} finally {
+			setPendingId(null);
+		}
+	};
 
 	return (
 		<div>
@@ -137,13 +152,13 @@ export default function ClaimsAdminPage() {
 									<td style={{ textAlign: 'right' }}>
 										<div style={{ display: 'inline-flex', gap: 6 }}>
 											{!c.picked_up_at && !c.is_verified && (
-												<button className="btn ghost" disabled={pickup.isPending} onClick={() => pickup.mutate(c.id)}>Pick up</button>
+												<button className="btn ghost" disabled={pendingId === c.id} onClick={() => void pickup(c.id)}>Pick up</button>
 											)}
 											{!c.is_verified && (
-												<button className="btn" disabled={verify.isPending} onClick={() => verify.mutate(c.id)}>Verify</button>
+												<button className="btn" disabled={pendingId === c.id} onClick={() => void verify(c.id)}>Verify</button>
 											)}
 											{c.is_verified && (
-												<button className="btn ghost" disabled={reject.isPending} onClick={() => reject.mutate(c.id)}>Reject</button>
+												<button className="btn ghost" disabled={pendingId === c.id} onClick={() => void reject(c.id)}>Reject</button>
 											)}
 										</div>
 									</td>

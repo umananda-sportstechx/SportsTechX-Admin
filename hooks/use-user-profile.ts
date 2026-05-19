@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import useSWR from 'swr';
 import { useAuthSession } from './use-auth-session';
 
 /**
@@ -10,7 +10,7 @@ import { useAuthSession } from './use-auth-session';
  *                   guard reads this; admin promote/demote endpoints flip it.
  *                   This is what gates the admin panel.
  *
- *   - `user_type` — Subscription tier: `'free' | 'plus' | 'pro'`. Drives
+ *   - `user_type` — Subscription tier: `'free' | 'growth' | 'pro'`. Drives
  *                   feature gating in the user-facing app, has nothing to do
  *                   with admin access.
  *
@@ -31,10 +31,9 @@ export interface Profile {
 
 export function useUserProfile() {
 	const { session, loading } = useAuthSession();
-	return useQuery<Profile>({
-		queryKey: ['/api/profiles/me'],
-		enabled: !loading && !!session,
-		staleTime: 5 * 60_000,
+	const enabled = !loading && !!session;
+	return useSWR<Profile>(enabled ? ['/api/profiles/me'] : null, {
+		dedupingInterval: 5 * 60_000,
 	});
 }
 

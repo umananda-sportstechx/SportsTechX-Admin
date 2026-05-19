@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -10,30 +10,44 @@ interface Company { id: string; name: string; slug?: string; primary_sector?: st
 interface CompaniesResponse { data: Company[]; total: number; totalPages: number }
 
 export default function CompaniesAdminPage() {
-	const qc = useQueryClient();
+	const { mutate } = useSWRConfig();
 	const [search, setSearch] = useState('');
 	const [page, setPage] = useState(1);
 	const [newCompany, setNewCompany] = useState({ name: '', website: '', hq_country: '' });
+	const [createPending, setCreatePending] = useState(false);
+	const [removePending, setRemovePending] = useState(false);
 
-	const { data } = useQuery<CompaniesResponse>({
-		queryKey: ['/api/companies', { search: search || undefined, page, limit: 30 }],
-		staleTime: 30_000,
-	});
+	const { data } = useSWR<CompaniesResponse>(
+		['/api/companies', { search: search || undefined, page, limit: 30 }],
+		{ dedupingInterval: 30_000 },
+	);
 
-	const create = useMutation({
-		mutationFn: () => api('POST', '/api/admin/companies', newCompany),
-		onSuccess: () => {
+	const create = async () => {
+		setCreatePending(true);
+		try {
+			await api('POST', '/api/admin/companies', newCompany);
 			toast.success('Company created');
 			setNewCompany({ name: '', website: '', hq_country: '' });
-			qc.invalidateQueries({ queryKey: ['/api/companies'] });
-		},
-		onError: (e: Error) => toast.error(e.message),
-	});
-	const remove = useMutation({
-		mutationFn: (id: string) => api('DELETE', `/api/admin/companies/${id}`),
-		onSuccess: () => { toast.success('Deleted'); qc.invalidateQueries({ queryKey: ['/api/companies'] }); },
-		onError: (e: Error) => toast.error(e.message),
-	});
+			void mutate((key) => Array.isArray(key) && key[0] === '/api/companies');
+		} catch (e) {
+			toast.error((e as Error).message);
+		} finally {
+			setCreatePending(false);
+		}
+	};
+
+	const remove = async (id: string) => {
+		setRemovePending(true);
+		try {
+			await api('DELETE', `/api/admin/companies/${id}`);
+			toast.success('Deleted');
+			void mutate((key) => Array.isArray(key) && key[0] === '/api/companies');
+		} catch (e) {
+			toast.error((e as Error).message);
+		} finally {
+			setRemovePending(false);
+		}
+	};
 
 	const companies = data?.data ?? [];
 	return (
@@ -51,7 +65,7 @@ export default function CompaniesAdminPage() {
 					<input className="search-input" placeholder="Name" value={newCompany.name} onChange={(e) => setNewCompany({ ...newCompany, name: e.target.value })} />
 					<input className="search-input" placeholder="Website" value={newCompany.website} onChange={(e) => setNewCompany({ ...newCompany, website: e.target.value })} />
 					<input className="search-input" placeholder="HQ country" value={newCompany.hq_country} onChange={(e) => setNewCompany({ ...newCompany, hq_country: e.target.value })} />
-					<button className="btn" disabled={!newCompany.name || create.isPending} onClick={() => create.mutate()}>Add</button>
+					<button className="btn" disabled={!newCompany.name || createPending} onClick={() => void create()}>Add</button>
 				</div>
 			</div>
 
@@ -77,7 +91,7 @@ export default function CompaniesAdminPage() {
 								<td>{c.hq_country ?? '—'}</td>
 								<td>{c.status ?? '—'}</td>
 								<td style={{ textAlign: 'right' }}>
-									<button className="btn ghost" disabled={remove.isPending} onClick={() => confirm(`Delete ${c.name}?`) && remove.mutate(c.id)}>
+									<button className="btn ghost" disabled={removePending} onClick={() => { if (confirm(`Delete ${c.name}?`)) void remove(c.id); }}>
 										<Trash2 size={12} />
 									</button>
 								</td>

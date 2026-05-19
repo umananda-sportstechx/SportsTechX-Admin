@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Check, X } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -28,26 +28,39 @@ const TABS: Array<{ label: string; key: Status }> = [
 ];
 
 export default function StartupsPipelinePage() {
-	const qc = useQueryClient();
+	const { mutate } = useSWRConfig();
 	const [status, setStatus] = useState<Status>('new');
 	const [draft, setDraft] = useState({ name: '', website: '', source: '', notes: '' });
+	const [createPending, setCreatePending] = useState(false);
 
-	const { data } = useQuery<Response>({
-		queryKey: ['/api/admin/startups-pipeline', { status, limit: 50 }],
-		staleTime: 15_000,
-	});
+	const { data } = useSWR<Response>(
+		['/api/admin/startups-pipeline', { status, limit: 50 }],
+		{ dedupingInterval: 15_000 },
+	);
 
-	const create = useMutation({
-		mutationFn: () => api('POST', '/api/admin/startups-pipeline', draft),
-		onSuccess: () => { toast.success('Added to pipeline'); setDraft({ name: '', website: '', source: '', notes: '' }); qc.invalidateQueries({ queryKey: ['/api/admin/startups-pipeline'] }); },
-		onError: (e: Error) => toast.error(e.message),
-	});
-	const update = useMutation({
-		mutationFn: ({ id, next }: { id: string; next: Status }) =>
-			api('PATCH', `/api/admin/startups-pipeline/${id}`, { status: next }),
-		onSuccess: () => { qc.invalidateQueries({ queryKey: ['/api/admin/startups-pipeline'] }); },
-		onError: (e: Error) => toast.error(e.message),
-	});
+	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/admin/startups-pipeline');
+
+	const create = async () => {
+		setCreatePending(true);
+		try {
+			await api('POST', '/api/admin/startups-pipeline', draft);
+			toast.success('Added to pipeline');
+			setDraft({ name: '', website: '', source: '', notes: '' });
+			void refresh();
+		} catch (e) {
+			toast.error((e as Error).message);
+		} finally {
+			setCreatePending(false);
+		}
+	};
+	const update = async (id: string, next: Status) => {
+		try {
+			await api('PATCH', `/api/admin/startups-pipeline/${id}`, { status: next });
+			void refresh();
+		} catch (e) {
+			toast.error((e as Error).message);
+		}
+	};
 
 	const entries = data?.data ?? [];
 	return (
@@ -65,7 +78,7 @@ export default function StartupsPipelinePage() {
 					<input className="search-input" placeholder="Name" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
 					<input className="search-input" placeholder="Website" value={draft.website} onChange={(e) => setDraft({ ...draft, website: e.target.value })} />
 					<input className="search-input" placeholder="Source (Twitter, news…)" value={draft.source} onChange={(e) => setDraft({ ...draft, source: e.target.value })} />
-					<button className="btn" disabled={!draft.name || create.isPending} onClick={() => create.mutate()}>Submit</button>
+					<button className="btn" disabled={!draft.name || createPending} onClick={() => void create()}>Submit</button>
 				</div>
 			</div>
 
@@ -89,15 +102,15 @@ export default function StartupsPipelinePage() {
 								<td style={{ textAlign: 'right' }}>
 									{status === 'new' && (
 										<>
-											<button className="btn ghost" onClick={() => update.mutate({ id: e.id, next: 'reviewing' })}>Review</button>{' '}
-											<button className="btn" onClick={() => update.mutate({ id: e.id, next: 'added' })}><Check size={12} /> Added</button>{' '}
-											<button className="btn ghost" onClick={() => update.mutate({ id: e.id, next: 'rejected' })}><X size={12} /></button>
+											<button className="btn ghost" onClick={() => void update(e.id, 'reviewing')}>Review</button>{' '}
+											<button className="btn" onClick={() => void update(e.id, 'added')}><Check size={12} /> Added</button>{' '}
+											<button className="btn ghost" onClick={() => void update(e.id, 'rejected')}><X size={12} /></button>
 										</>
 									)}
 									{status === 'reviewing' && (
 										<>
-											<button className="btn" onClick={() => update.mutate({ id: e.id, next: 'added' })}><Check size={12} /> Added</button>{' '}
-											<button className="btn ghost" onClick={() => update.mutate({ id: e.id, next: 'rejected' })}><X size={12} /></button>
+											<button className="btn" onClick={() => void update(e.id, 'added')}><Check size={12} /> Added</button>{' '}
+											<button className="btn ghost" onClick={() => void update(e.id, 'rejected')}><X size={12} /></button>
 										</>
 									)}
 								</td>

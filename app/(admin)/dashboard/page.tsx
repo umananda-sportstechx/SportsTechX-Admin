@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import useSWR from 'swr';
 import { PageHeader, Section, Empty, Tag } from '@/components/atoms';
 
 interface CountResp { total: number }
@@ -33,17 +33,17 @@ interface DcrResponse { data: DcrRow[]; total: number }
  * fields on list endpoints (limit:1 keeps the payload tiny).
  */
 export default function AdminDashboard() {
-	const { data: claimsPending } = useQuery<CountResp>({ queryKey: ['/api/admin/claims', { status: 'pending', limit: 1 }] });
-	const { data: dcrOpen }       = useQuery<CountResp>({ queryKey: ['/api/admin/data-change-requests', { status: 'open', limit: 1 }] });
-	const { data: companies }     = useQuery<CountResp>({ queryKey: ['/api/companies', { limit: 1 }] });
-	const { data: deals }         = useQuery<CountResp>({ queryKey: ['/api/deals', { limit: 1 }] });
-	const { data: investors }     = useQuery<CountResp>({ queryKey: ['/api/investors', { limit: 1 }] });
-	const { data: acquisitions }  = useQuery<CountResp>({ queryKey: ['/api/acquisitions', { limit: 1 }] });
-	const { data: users }         = useQuery<CountResp>({ queryKey: ['/api/admin/users', { limit: 1 }] });
-	const { data: pipeline }      = useQuery<CountResp>({ queryKey: ['/api/admin/startups-pipeline', { status: 'new', limit: 1 }] });
+	const { data: claimsPending } = useSWR<CountResp>(['/api/admin/claims', { status: 'pending', limit: 1 }]);
+	const { data: dcrOpen }       = useSWR<CountResp>(['/api/admin/data-change-requests', { status: 'open', limit: 1 }]);
+	const { data: companies }     = useSWR<CountResp>(['/api/companies', { limit: 1 }]);
+	const { data: deals }         = useSWR<CountResp>(['/api/deals', { limit: 1 }]);
+	const { data: investors }     = useSWR<CountResp>(['/api/investors', { limit: 1 }]);
+	const { data: acquisitions }  = useSWR<CountResp>(['/api/acquisitions', { limit: 1 }]);
+	const { data: users }         = useSWR<CountResp>(['/api/admin/users', { limit: 1 }]);
+	const { data: pipeline }      = useSWR<CountResp>(['/api/admin/startups-pipeline', { status: 'new', limit: 1 }]);
 
-	const { data: recentClaims }  = useQuery<ClaimsResponse>({ queryKey: ['/api/admin/claims', { status: 'pending', limit: 5 }] });
-	const { data: recentDcr }     = useQuery<DcrResponse>({ queryKey: ['/api/admin/data-change-requests', { status: 'open', limit: 5 }] });
+	const { data: recentClaims }  = useSWR<ClaimsResponse>(['/api/admin/claims', { status: 'pending', limit: 5 }]);
+	const { data: recentDcr }     = useSWR<DcrResponse>(['/api/admin/data-change-requests', { status: 'open', limit: 5 }]);
 
 	const queues = [
 		{ label: 'Pending claims',     value: claimsPending?.total ?? 0, href: '/claims?status=pending', urgent: (claimsPending?.total ?? 0) > 0 },

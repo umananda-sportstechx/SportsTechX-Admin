@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import useSWR from 'swr';
 
 interface JobMetric { queue_name: string; status: string; count: number; avg_duration_seconds: number | null }
 interface RequestMetric { bucket: string; count: number }
@@ -11,11 +11,10 @@ const RANGES: Array<'1h' | '24h' | '7d' | '30d'> = ['1h', '24h', '7d', '30d'];
 
 export default function PerformancePage() {
 	const [range, setRange] = useState<'1h' | '24h' | '7d' | '30d'>('24h');
-	const { data } = useQuery<PerfResponse>({
-		queryKey: ['/api/admin/performance', { range }],
-		staleTime: 15_000,
-		refetchInterval: 30_000,
-	});
+	const { data } = useSWR<PerfResponse>(
+		['/api/admin/performance', { range }],
+		{ dedupingInterval: 15_000, refreshInterval: 30_000 },
+	);
 
 	const jobs = data?.jobs ?? [];
 	const requests = data?.requests ?? [];

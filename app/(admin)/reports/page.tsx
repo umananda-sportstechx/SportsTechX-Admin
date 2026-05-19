@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -18,20 +18,39 @@ interface Report {
 interface Response { data: Report[]; total: number }
 
 export default function ReportsAdminPage() {
-	const qc = useQueryClient();
+	const { mutate } = useSWRConfig();
 	const [draft, setDraft] = useState({ title: '', short_title: '', description: '', drive_link: '', pages: 0 });
-	const { data } = useQuery<Response>({ queryKey: ['/api/reports'], staleTime: 30_000 });
+	const [createPending, setCreatePending] = useState(false);
+	const [removePending, setRemovePending] = useState(false);
+	const { data } = useSWR<Response>(['/api/reports'], { dedupingInterval: 30_000 });
 
-	const create = useMutation({
-		mutationFn: () => api('POST', '/api/admin/reports', { ...draft, pages: draft.pages || undefined }),
-		onSuccess: () => { toast.success('Report published'); setDraft({ title: '', short_title: '', description: '', drive_link: '', pages: 0 }); qc.invalidateQueries({ queryKey: ['/api/reports'] }); },
-		onError: (e: Error) => toast.error(e.message),
-	});
-	const remove = useMutation({
-		mutationFn: (id: string) => api('DELETE', `/api/admin/reports/${id}`),
-		onSuccess: () => { toast.success('Deleted'); qc.invalidateQueries({ queryKey: ['/api/reports'] }); },
-		onError: (e: Error) => toast.error(e.message),
-	});
+	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/reports');
+
+	const create = async () => {
+		setCreatePending(true);
+		try {
+			await api('POST', '/api/admin/reports', { ...draft, pages: draft.pages || undefined });
+			toast.success('Report published');
+			setDraft({ title: '', short_title: '', description: '', drive_link: '', pages: 0 });
+			void refresh();
+		} catch (e) {
+			toast.error((e as Error).message);
+		} finally {
+			setCreatePending(false);
+		}
+	};
+	const remove = async (id: string) => {
+		setRemovePending(true);
+		try {
+			await api('DELETE', `/api/admin/reports/${id}`);
+			toast.success('Deleted');
+			void refresh();
+		} catch (e) {
+			toast.error((e as Error).message);
+		} finally {
+			setRemovePending(false);
+		}
+	};
 
 	const reports = data?.data ?? [];
 	return (
@@ -58,7 +77,7 @@ export default function ReportsAdminPage() {
 					onChange={(e) => setDraft({ ...draft, description: e.target.value })}
 					style={{ width: '100%', marginTop: 8, minHeight: 80, resize: 'vertical' }}
 				/>
-				<button className="btn" style={{ marginTop: 10 }} disabled={!draft.title || create.isPending} onClick={() => create.mutate()}>Publish</button>
+				<button className="btn" style={{ marginTop: 10 }} disabled={!draft.title || createPending} onClick={() => void create()}>Publish</button>
 			</div>
 
 			<div className="card">
@@ -73,7 +92,7 @@ export default function ReportsAdminPage() {
 								<td>{r.is_free ? <span className="tag pos">free</span> : <span className="tag">paid</span>}</td>
 								<td className="num">{r.published_at ? new Date(r.published_at).toLocaleDateString() : '—'}</td>
 								<td style={{ textAlign: 'right' }}>
-									<button className="btn ghost" disabled={remove.isPending} onClick={() => confirm(`Delete ${r.title}?`) && remove.mutate(r.id)}>
+									<button className="btn ghost" disabled={removePending} onClick={() => { if (confirm(`Delete ${r.title}?`)) void remove(r.id); }}>
 										<Trash2 size={12} />
 									</button>
 								</td>

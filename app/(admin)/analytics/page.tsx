@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import useSWR from 'swr';
 
 interface Counts { total: number }
 
@@ -11,13 +11,13 @@ interface Counts { total: number }
  * trailing growth as a deltas table.
  */
 export default function AdminAnalyticsPage() {
-	const { data: companies } = useQuery<Counts>({ queryKey: ['/api/companies', { limit: 1 }] });
-	const { data: deals } = useQuery<Counts>({ queryKey: ['/api/deals', { limit: 1 }] });
-	const { data: investors } = useQuery<Counts>({ queryKey: ['/api/investors', { limit: 1 }] });
-	const { data: acquisitions } = useQuery<Counts>({ queryKey: ['/api/acquisitions', { limit: 1 }] });
-	const { data: ecosystem } = useQuery<Counts>({ queryKey: ['/api/ecosystem-entities', { limit: 1 }] });
-	const { data: users } = useQuery<Counts>({ queryKey: ['/api/admin/users', { limit: 1 }] });
-	const { data: claims } = useQuery<Counts>({ queryKey: ['/api/admin/claims', { limit: 1 }] });
+	const { data: companies } = useSWR<Counts>(['/api/companies', { limit: 1 }]);
+	const { data: deals } = useSWR<Counts>(['/api/deals', { limit: 1 }]);
+	const { data: investors } = useSWR<Counts>(['/api/investors', { limit: 1 }]);
+	const { data: acquisitions } = useSWR<Counts>(['/api/acquisitions', { limit: 1 }]);
+	const { data: ecosystem } = useSWR<Counts>(['/api/ecosystem-entities', { limit: 1 }]);
+	const { data: users } = useSWR<Counts>(['/api/admin/users', { limit: 1 }]);
+	const { data: claims } = useSWR<Counts>(['/api/admin/claims', { limit: 1 }]);
 
 	const stats = [
 		{ label: 'Companies', value: companies?.total ?? 0 },

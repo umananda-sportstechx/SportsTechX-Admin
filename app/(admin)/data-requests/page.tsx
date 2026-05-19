@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 
@@ -26,21 +26,28 @@ const TABS: Array<{ label: string; key: DcrStatus }> = [
 ];
 
 export default function DataRequestsPage() {
-	const qc = useQueryClient();
+	const { mutate } = useSWRConfig();
 	const [status, setStatus] = useState<DcrStatus>('open');
 	const [page, setPage] = useState(1);
+	const [pendingId, setPendingId] = useState<string | null>(null);
 
-	const { data } = useQuery<DcrResponse>({
-		queryKey: ['/api/admin/data-change-requests', { status, page, limit: 30 }],
-		staleTime: 15_000,
-	});
+	const { data } = useSWR<DcrResponse>(
+		['/api/admin/data-change-requests', { status, page, limit: 30 }],
+		{ dedupingInterval: 15_000 },
+	);
 
-	const update = useMutation({
-		mutationFn: ({ id, next }: { id: string; next: DcrStatus }) =>
-			api('POST', `/api/admin/data-change-requests/${id}/status`, { status: next }),
-		onSuccess: () => { toast.success('Updated'); qc.invalidateQueries({ queryKey: ['/api/admin/data-change-requests'] }); },
-		onError: (e: Error) => toast.error(e.message),
-	});
+	const update = async (id: string, next: DcrStatus) => {
+		setPendingId(id);
+		try {
+			await api('POST', `/api/admin/data-change-requests/${id}/status`, { status: next });
+			toast.success('Updated');
+			void mutate((key) => Array.isArray(key) && key[0] === '/api/admin/data-change-requests');
+		} catch (e) {
+			toast.error((e as Error).message);
+		} finally {
+			setPendingId(null);
+		}
+	};
 
 	const items = data?.data ?? [];
 	return (
@@ -81,13 +88,13 @@ export default function DataRequestsPage() {
 								<td style={{ textAlign: 'right' }}>
 									<div style={{ display: 'inline-flex', gap: 6 }}>
 										{r.status !== 'picked_up' && r.status !== 'resolved' && (
-											<button className="btn ghost" onClick={() => update.mutate({ id: r.id, next: 'picked_up' })}>Pick up</button>
+											<button className="btn ghost" disabled={pendingId === r.id} onClick={() => void update(r.id, 'picked_up')}>Pick up</button>
 										)}
 										{r.status !== 'resolved' && (
-											<button className="btn" onClick={() => update.mutate({ id: r.id, next: 'resolved' })}>Resolve</button>
+											<button className="btn" disabled={pendingId === r.id} onClick={() => void update(r.id, 'resolved')}>Resolve</button>
 										)}
 										{r.status !== 'rejected' && (
-											<button className="btn ghost" onClick={() => update.mutate({ id: r.id, next: 'rejected' })}>Reject</button>
+											<button className="btn ghost" disabled={pendingId === r.id} onClick={() => void update(r.id, 'rejected')}>Reject</button>
 										)}
 									</div>
 								</td>

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 
@@ -43,17 +42,20 @@ const ENDPOINTS: Array<{ key: EndpointKey; label: string; desc: string; path: st
 
 export default function JobsPage() {
 	const [enrichId, setEnrichId] = useState('');
+	const [runningKey, setRunningKey] = useState<EndpointKey | null>(null);
 
-	const run = useMutation({
-		mutationFn: async (endpoint: typeof ENDPOINTS[number]) => {
+	const run = async (endpoint: typeof ENDPOINTS[number]) => {
+		setRunningKey(endpoint.key);
+		try {
 			const path = endpoint.needsId ? `${endpoint.path}/${enrichId}` : endpoint.path;
-			return api<{ jobLogId: string; bullJobId: string | null }>('POST', path);
-		},
-		onSuccess: (res, endpoint) => {
+			const res = await api<{ jobLogId: string; bullJobId: string | null }>('POST', path);
 			toast.success(`Queued ${endpoint.label}: job ${res.jobLogId.slice(0, 8)}`);
-		},
-		onError: (e: Error) => toast.error(e.message),
-	});
+		} catch (e) {
+			toast.error((e as Error).message);
+		} finally {
+			setRunningKey(null);
+		}
+	};
 
 	return (
 		<div>
@@ -80,10 +82,10 @@ export default function JobsPage() {
 						)}
 						<button
 							className="btn"
-							disabled={run.isPending || (e.needsId && !enrichId)}
-							onClick={() => run.mutate(e)}
+							disabled={runningKey === e.key || (e.needsId && !enrichId)}
+							onClick={() => void run(e)}
 						>
-							{run.isPending ? 'Queuing…' : 'Run now'}
+							{runningKey === e.key ? 'Queuing…' : 'Run now'}
 						</button>
 					</div>
 				))}

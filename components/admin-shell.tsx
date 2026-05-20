@@ -69,16 +69,20 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 		.toUpperCase();
 
 	return (
-		<div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', minHeight: '100vh' }}>
+		<div style={{ minHeight: '100vh' }}>
 			<aside
 				style={{
+					position: 'fixed',
+					top: 0,
+					left: 0,
+					bottom: 0,
+					width: 220,
 					background: 'var(--bg-2)',
 					borderRight: '1px solid var(--border)',
 					padding: 'var(--space-4) 0',
-					position: 'sticky',
-					top: 0,
-					height: '100vh',
 					overflowY: 'auto',
+					scrollbarGutter: 'stable',
+					zIndex: 10,
 				}}
 			>
 				<div style={{ padding: '0 var(--space-4) var(--space-4)' }}>
@@ -131,7 +135,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 					})}
 				</nav>
 			</aside>
-			<main style={{ display: 'flex', flexDirection: 'column' }}>
+			<main style={{ display: 'flex', flexDirection: 'column', marginLeft: 220, minHeight: '100vh' }}>
 				<header
 					style={{
 						display: 'flex',

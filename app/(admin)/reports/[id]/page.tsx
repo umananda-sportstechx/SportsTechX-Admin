@@ -16,6 +16,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { api } from '@/lib/api';
 import { TiptapEditor } from '@/components/tiptap-editor';
 import { CompanyPicker, SectorPicker, PollPicker } from '@/components/section-pickers';
+import { ImageInput } from '@/components/image-input';
 
 // ---- types matching the server registry --------------------------------------
 
@@ -127,25 +128,28 @@ export default function ReportSectionsEditorPage(
 
 	return (
 		<div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 16, minHeight: 'calc(100vh - var(--topbar-h) - 40px)' }}>
-			<aside style={{ borderRight: '1px solid var(--border)', paddingRight: 12 }}>
-				<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 6 }}>
-					<div style={{ fontWeight: 700, fontSize: 14 }}>Sections</div>
-					<div style={{ display: 'flex', gap: 4 }}>
-						<Link href={`/reports/${reportId}/preview`} className="btn ghost" title="Preview as user">
-							<Eye size={12} />
-						</Link>
-						<button className="btn" onClick={() => setPickerOpen(!pickerOpen)} title="Add section">
-							<Plus size={12} /> Add
-						</button>
+			<aside style={{ borderRight: '1px solid var(--border)', paddingRight: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+				<ReportCoverEditor reportId={reportId} />
+				<div>
+					<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 6 }}>
+						<div style={{ fontWeight: 700, fontSize: 14 }}>Sections</div>
+						<div style={{ display: 'flex', gap: 4 }}>
+							<Link href={`/reports/${reportId}/preview`} className="btn ghost" title="Preview as user">
+								<Eye size={12} />
+							</Link>
+							<button className="btn" onClick={() => setPickerOpen(!pickerOpen)} title="Add section">
+								<Plus size={12} /> Add
+							</button>
+						</div>
 					</div>
+					{pickerOpen && <KindPicker onPick={onAddKind} onClose={() => setPickerOpen(false)} />}
+					<SectionList
+						sections={sections}
+						activeId={activeId}
+						onSelect={setActiveId}
+						onReorder={onReorder}
+					/>
 				</div>
-				{pickerOpen && <KindPicker onPick={onAddKind} onClose={() => setPickerOpen(false)} />}
-				<SectionList
-					sections={sections}
-					activeId={activeId}
-					onSelect={setActiveId}
-					onReorder={onReorder}
-				/>
 			</aside>
 			<main style={{ overflow: 'hidden' }}>
 				{active ? (
@@ -163,6 +167,52 @@ export default function ReportSectionsEditorPage(
 					</div>
 				)}
 			</main>
+		</div>
+	);
+}
+
+// ---- report cover (shown on the public listing page) ----------------------
+
+function ReportCoverEditor({ reportId }: { reportId: string }) {
+	const { mutate } = useSWRConfig();
+	const { data: report } = useSWR<{ id: string; cover_url?: string | null }>(
+		[`/api/reports/${reportId}`],
+		{ revalidateOnFocus: false },
+	);
+	const [pending, setPending] = useState(false);
+
+	const persistCover = async (url: string) => {
+		setPending(true);
+		try {
+			await api('PATCH', `/api/admin/reports/${reportId}`, { cover_url: url || null });
+			// Invalidate every cache entry for this report so the listing
+			// grid + detail page both pick up the new cover immediately.
+			void mutate((k) =>
+				Array.isArray(k) && typeof k[0] === 'string'
+				&& (k[0] === '/api/reports' || k[0] === `/api/reports/${reportId}`));
+			toast.success('Cover saved');
+		} catch (e) {
+			toast.error((e as Error).message);
+		} finally {
+			setPending(false);
+		}
+	};
+
+	return (
+		<div className="card" style={{ padding: 10, display: 'grid', gap: 6 }}>
+			<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+				<div style={{ fontWeight: 700, fontSize: 13 }}>Report cover</div>
+				{pending && <span style={{ fontSize: 10, color: 'var(--fg-muted)' }}>Saving…</span>}
+			</div>
+			<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>
+				Shown on the reports listing card.
+			</div>
+			<ImageInput
+				value={report?.cover_url ?? ''}
+				onChange={(url) => void persistCover(url)}
+				pathPrefix={`reports/${reportId}`}
+				placeholder="https://… or upload"
+			/>
 		</div>
 	);
 }
@@ -287,23 +337,49 @@ function SectionEditor({
 	const patchContent = (p: Record<string, unknown>) =>
 		setDraft((d) => ({ ...d, content: { ...d.content, ...p } }));
 
+	const persist = async (next: Section) => {
+		await api('PATCH', `/api/admin/reports/${next.report_id}/sections/${next.id}`, {
+			title: next.title,
+			slug: next.slug,
+			access_tier: next.access_tier,
+			is_published: next.is_published,
+			content: next.content,
+			poll_id: next.poll_id,
+		});
+		onSaved();
+	};
+
 	const save = async () => {
 		setSaving(true);
 		try {
-			await api('PATCH', `/api/admin/reports/${draft.report_id}/sections/${draft.id}`, {
-				title: draft.title,
-				slug: draft.slug,
-				access_tier: draft.access_tier,
-				is_published: draft.is_published,
-				content: draft.content,
-				poll_id: draft.poll_id,
-			});
+			await persist(draft);
 			toast.success('Saved');
-			onSaved();
 		} catch (e) {
 			toast.error((e as Error).message);
 		} finally {
 			setSaving(false);
+		}
+	};
+
+	/**
+	 * Auto-save the section after an image-field commit (upload success, URL
+	 * commit, reset). Image edits are single committed events — making the
+	 * admin click "Save" after every upload was confusing them into thinking
+	 * the field wasn't persisting. Typed-content edits (TipTap, KPI labels,
+	 * etc.) still require the explicit Save click; this only fires for image
+	 * fields that explicitly opt in via `patchContentAndSave`.
+	 *
+	 * We pass `next` directly to `persist` because state updates are batched
+	 * and `draft` would otherwise be one render stale.
+	 */
+	const patchContentAndSave = async (p: Record<string, unknown>) => {
+		const next: Section = { ...draft, content: { ...draft.content, ...p } };
+		setDraft(next);
+		try {
+			await persist(next);
+			toast.success('Saved');
+		} catch (e) {
+			toast.error((e as Error).message);
 		}
 	};
 
@@ -371,7 +447,12 @@ function SectionEditor({
 			</div>
 
 			{/* Per-kind body */}
-			<KindBody section={draft} patchContent={patchContent} onSectionChange={patch} />
+			<KindBody
+				section={draft}
+				patchContent={patchContent}
+				patchContentAndSave={patchContentAndSave}
+				onSectionChange={patch}
+			/>
 		</div>
 	);
 }
@@ -379,22 +460,23 @@ function SectionEditor({
 // ---- per-kind editor bodies --------------------------------------------------
 
 function KindBody({
-	section, patchContent, onSectionChange,
+	section, patchContent, patchContentAndSave, onSectionChange,
 }: {
 	section: Section;
 	patchContent: (p: Record<string, unknown>) => void;
+	patchContentAndSave: (p: Record<string, unknown>) => Promise<void>;
 	onSectionChange: (p: Partial<Section>) => void;
 }) {
 	const c = section.content as Record<string, unknown>;
 	switch (section.kind) {
 		case 'hero':
-			return <HeroBody content={c} patch={patchContent} />;
+			return <HeroBody content={c} patch={patchContent} patchAndSave={patchContentAndSave} sectionId={section.id} />;
 		case 'narrative':
 			return <NarrativeBody content={c} patch={patchContent} />;
 		case 'kpi_grid':
 			return <KpiGridBody content={c} patch={patchContent} />;
 		case 'quote':
-			return <QuoteBody content={c} patch={patchContent} />;
+			return <QuoteBody content={c} patch={patchContent} patchAndSave={patchContentAndSave} sectionId={section.id} />;
 		case 'embed':
 			return <EmbedBody content={c} patch={patchContent} />;
 		case 'deal_table':
@@ -424,7 +506,14 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 	return <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{children}</div>;
 }
 
-function HeroBody({ content, patch }: { content: Record<string, unknown>; patch: (p: Record<string, unknown>) => void }) {
+function HeroBody({
+	content, patch, patchAndSave, sectionId,
+}: {
+	content: Record<string, unknown>;
+	patch: (p: Record<string, unknown>) => void;
+	patchAndSave: (p: Record<string, unknown>) => Promise<void>;
+	sectionId: string;
+}) {
 	const subtitle = content.subtitle as unknown;
 	const kpis = (content.kpis as Array<{ label: unknown; value: unknown; delta?: string }>) ?? [];
 	const coverUrl = (content.cover_url as string) ?? '';
@@ -435,8 +524,13 @@ function HeroBody({ content, patch }: { content: Record<string, unknown>; patch:
 				<TiptapEditor mode="inline" value={subtitle} onChange={(doc) => patch({ subtitle: doc })} placeholder="Write the lede…" />
 			</div>
 			<div>
-				<FieldLabel>Cover URL (optional)</FieldLabel>
-				<input className="search-input" style={{ width: '100%' }} value={coverUrl} onChange={(e) => patch({ cover_url: e.target.value || undefined })} placeholder="https://…" />
+				<FieldLabel>Cover image (optional — auto-saves on upload / URL commit / reset)</FieldLabel>
+				<ImageInput
+					value={coverUrl}
+					onChange={(url) => void patchAndSave({ cover_url: url || undefined })}
+					pathPrefix={`sections/${sectionId}`}
+					placeholder="https://…"
+				/>
 			</div>
 			<div>
 				<FieldLabel>KPIs ({kpis.length}/8)</FieldLabel>
@@ -505,10 +599,17 @@ function KpiGridBody({ content, patch }: { content: Record<string, unknown>; pat
 	);
 }
 
-function QuoteBody({ content, patch }: { content: Record<string, unknown>; patch: (p: Record<string, unknown>) => void }) {
+function QuoteBody({
+	content, patch, patchAndSave, sectionId,
+}: {
+	content: Record<string, unknown>;
+	patch: (p: Record<string, unknown>) => void;
+	patchAndSave: (p: Record<string, unknown>) => Promise<void>;
+	sectionId: string;
+}) {
 	return (
 		<div className="card" style={{ padding: 12, display: 'grid', gap: 8 }}>
-			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: 8 }}>
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
 				<div>
 					<FieldLabel>Author</FieldLabel>
 					<TiptapEditor mode="inline" value={content.author} onChange={(doc) => patch({ author: doc })} placeholder="Author name" />
@@ -517,10 +618,15 @@ function QuoteBody({ content, patch }: { content: Record<string, unknown>; patch
 					<FieldLabel>Role (optional)</FieldLabel>
 					<TiptapEditor mode="inline" value={content.role} onChange={(doc) => patch({ role: doc })} placeholder="Role / title" />
 				</div>
-				<div>
-					<FieldLabel>Avatar URL (optional)</FieldLabel>
-					<input className="search-input" value={(content.avatar_url as string) ?? ''} onChange={(e) => patch({ avatar_url: e.target.value || undefined })} />
-				</div>
+			</div>
+			<div>
+				<FieldLabel>Avatar (optional — auto-saves on upload / URL commit / reset)</FieldLabel>
+				<ImageInput
+					value={(content.avatar_url as string) ?? ''}
+					onChange={(url) => void patchAndSave({ avatar_url: url || undefined })}
+					pathPrefix={`sections/${sectionId}`}
+					placeholder="https://…"
+				/>
 			</div>
 			<div>
 				<FieldLabel>Body</FieldLabel>

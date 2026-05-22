@@ -63,8 +63,13 @@ export function TiptapEditor({ value, onChange, placeholder, minHeight, mode = '
 					codeBlock: false,
 					horizontalRule: false,
 					hardBreak: false,
+					// Disable StarterKit's bundled Link extension — we register our
+					// own configured version below (openOnClick=false, target=_blank).
+					// Without this, both get registered and TipTap warns about a
+					// duplicate extension name.
+					link: false,
 				}
-				: { heading: { levels: [2, 3] } }
+				: { heading: { levels: [2, 3] }, link: false }
 			),
 			Link.configure({
 				openOnClick: false,

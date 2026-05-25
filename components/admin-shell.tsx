@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import {
 	LayoutDashboard, Briefcase, Users, FilePlus, FileText, Database, Layers,
-	Activity, ShoppingCart, LogOut, ShieldAlert, CreditCard,
+	Activity, ShoppingCart, LogOut, ShieldAlert, CreditCard, ToggleLeft,
 } from 'lucide-react';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useIsAdmin, useUserProfile } from '@/hooks/use-user-profile';
@@ -20,6 +20,7 @@ const NAV = [
 	{ href: '/startups-pipeline', label: 'Startups pipeline', Icon: FilePlus },
 	{ href: '/sales', label: 'Sales', Icon: ShoppingCart },
 	{ href: '/billing', label: 'Billing tools', Icon: CreditCard },
+	{ href: '/features', label: 'Features', Icon: ToggleLeft },
 	{ href: '/jobs', label: 'Jobs & integrations', Icon: Activity },
 	{ href: '/data-requests', label: 'Data requests', Icon: Database },
 	{ href: '/performance', label: 'Performance', Icon: Activity },

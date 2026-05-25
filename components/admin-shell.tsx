@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import {
 	LayoutDashboard, Briefcase, Users, FilePlus, FileText, Database, Layers,
 	Activity, ShoppingCart, LogOut, ShieldAlert, CreditCard, ToggleLeft,
+	Banknote, Sparkles, Tag, BookOpen,
 } from 'lucide-react';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useIsAdmin, useUserProfile } from '@/hooks/use-user-profile';
@@ -15,12 +16,16 @@ const NAV = [
 	{ href: '/claims', label: 'Claims', Icon: ShieldAlert },
 	{ href: '/users', label: 'Users', Icon: Users },
 	{ href: '/companies', label: 'Companies & deals', Icon: Briefcase },
+	{ href: '/investors', label: 'Investors', Icon: Banknote },
 	{ href: '/ecosystem', label: 'Ecosystem', Icon: Layers },
 	{ href: '/reports', label: 'Reports', Icon: FileText },
+	{ href: '/polls', label: 'Polls', Icon: Sparkles },
 	{ href: '/startups-pipeline', label: 'Startups pipeline', Icon: FilePlus },
 	{ href: '/sales', label: 'Sales', Icon: ShoppingCart },
 	{ href: '/billing', label: 'Billing tools', Icon: CreditCard },
+	{ href: '/subscription-plans', label: 'Plans editorial', Icon: Tag },
 	{ href: '/features', label: 'Features', Icon: ToggleLeft },
+	{ href: '/reference', label: 'Reference data', Icon: BookOpen },
 	{ href: '/jobs', label: 'Jobs & integrations', Icon: Activity },
 	{ href: '/data-requests', label: 'Data requests', Icon: Database },
 	{ href: '/performance', label: 'Performance', Icon: Activity },

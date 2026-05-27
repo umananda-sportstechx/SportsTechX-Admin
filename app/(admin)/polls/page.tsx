@@ -133,7 +133,7 @@ function AddOptionInline({ onAdd }: { onAdd: (label: string) => void }) {
 function NewPollModal({ reports, onClose, onSaved }: { reports: Report[]; onClose: () => void; onSaved: () => void }) {
 	const [reportId, setReportId] = useState(reports[0]?.id ?? '');
 	const [question, setQuestion] = useState('');
-	const [optionsText, setOptionsText] = useState('Option A\nOption B');
+	const [optionsText, setOptionsText] = useState('');
 	const [pending, setPending] = useState(false);
 
 	const submit = async () => {
@@ -168,7 +168,13 @@ function NewPollModal({ reports, onClose, onSaved }: { reports: Report[]; onClos
 					</div>
 					<div>
 						<div className="co-stat-label" style={{ marginBottom: 6 }}>Options (one per line)</div>
-						<textarea className="search-input" style={{ width: '100%', minHeight: 100 }} value={optionsText} onChange={(e) => setOptionsText(e.target.value)} />
+						<textarea
+							className="search-input"
+							style={{ width: '100%', minHeight: 100 }}
+							value={optionsText}
+							onChange={(e) => setOptionsText(e.target.value)}
+							placeholder={'Yes\nNo\nMaybe'}
+						/>
 					</div>
 				</div>
 				<div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>

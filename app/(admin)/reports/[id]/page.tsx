@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { use, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { Trash2, Plus, GripVertical, Lock, Unlock, Eye, EyeOff } from 'lucide-react';
+import { Trash2, Plus, GripVertical, Lock, Unlock, Eye, EyeOff, X } from 'lucide-react';
 import {
 	DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors,
 	closestCenter,
@@ -679,6 +679,16 @@ function DealTableBody({ content, patch }: { content: Record<string, unknown>; p
 					<input className="search-input" type="number" value={(q.year as number) ?? ''} onChange={(e) => patchQuery({ year: e.target.value ? Number(e.target.value) : undefined })} />
 				</div>
 				<div>
+					<FieldLabel>Quarter (optional)</FieldLabel>
+					<select className="search-input" value={(q.period as string) ?? ''} onChange={(e) => patchQuery({ period: e.target.value || undefined })}>
+						<option value="">all year</option>
+						<option value="q1">Q1</option>
+						<option value="q2">Q2</option>
+						<option value="q3">Q3</option>
+						<option value="q4">Q4</option>
+					</select>
+				</div>
+				<div>
 					<FieldLabel>Region (optional)</FieldLabel>
 					<input className="search-input" value={(q.region as string) ?? ''} onChange={(e) => patchQuery({ region: e.target.value || undefined })} placeholder="e.g. Europe" />
 				</div>
@@ -804,6 +814,19 @@ function CompanyGridBody({ content, patch }: { content: Record<string, unknown>;
 						</div>
 					</div>
 					<div>
+						<FieldLabel>Funding stages (optional — comma-separated, e.g. seed, series_a)</FieldLabel>
+						<input
+							className="search-input"
+							style={{ width: '100%' }}
+							value={((query.stages as string[]) ?? []).join(', ')}
+							onChange={(e) => {
+								const stages = e.target.value.split(',').map((s) => s.trim()).filter(Boolean);
+								patchQuery({ stages: stages.length > 0 ? stages : undefined });
+							}}
+							placeholder="seed, series_a, series_b"
+						/>
+					</div>
+					<div>
 						<FieldLabel>Sectors (optional — leave empty for all)</FieldLabel>
 						<SectorPicker
 							value={(query.sectors as string[]) ?? []}
@@ -870,6 +893,10 @@ function TrendCardListBody({ content, patch }: { content: Record<string, unknown
 						<button className="btn ghost" onClick={() => patch({ items: items.filter((_, j) => j !== i) })}><Trash2 size={12} /></button>
 					</div>
 					<TiptapEditor value={it.body} onChange={(doc) => patch({ items: items.map((x, j) => j === i ? { ...x, body: doc } : x) })} minHeight={120} />
+					<TrendCardTableEditor
+						table={it.table}
+						onChange={(table) => patch({ items: items.map((x, j) => j === i ? { ...x, table } : x) })}
+					/>
 				</div>
 			))}
 			{items.length < 20 && (
@@ -877,6 +904,60 @@ function TrendCardListBody({ content, patch }: { content: Record<string, unknown
 					<Plus size={12} /> Add trend card
 				</button>
 			)}
+		</div>
+	);
+}
+
+/**
+ * Optional table sub-editor for a trend card. Mirrors the section-kinds
+ * `table: { headers: string[]; rows: string[][] }` shape. Renderers (admin +
+ * client) display the table when present.
+ */
+function TrendCardTableEditor({ table, onChange }: { table?: { headers: string[]; rows: string[][] }; onChange: (t: { headers: string[]; rows: string[][] } | undefined) => void }) {
+	if (!table) {
+		return (
+			<button className="btn ghost" style={{ justifySelf: 'start' }} onClick={() => onChange({ headers: ['', ''], rows: [['', '']] })}>
+				<Plus size={12} /> Add table
+			</button>
+		);
+	}
+	const cols = table.headers.length;
+	const setHeader = (c: number, v: string) => onChange({ ...table, headers: table.headers.map((h, j) => j === c ? v : h) });
+	const setCell = (r: number, c: number, v: string) => onChange({ ...table, rows: table.rows.map((row, ri) => ri === r ? row.map((cell, ci) => ci === c ? v : cell) : row) });
+	const addRow = () => onChange({ ...table, rows: [...table.rows, Array(cols).fill('')] });
+	const addCol = () => onChange({ headers: [...table.headers, ''], rows: table.rows.map((row) => [...row, '']) });
+	const removeRow = (r: number) => onChange({ ...table, rows: table.rows.filter((_, ri) => ri !== r) });
+
+	return (
+		<div className="card" style={{ padding: 10, display: 'grid', gap: 6, background: 'var(--bg-2, transparent)' }}>
+			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+				<FieldLabel>Table</FieldLabel>
+				<button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => onChange(undefined)}><Trash2 size={11} /> Remove table</button>
+			</div>
+			<table className="data-table" style={{ width: '100%' }}>
+				<thead>
+					<tr>
+						{table.headers.map((h, c) => (
+							<th key={c}><input className="search-input" style={{ width: '100%', fontWeight: 700 }} value={h} onChange={(e) => setHeader(c, e.target.value)} placeholder={`Col ${c + 1}`} /></th>
+						))}
+						<th style={{ width: 32 }} />
+					</tr>
+				</thead>
+				<tbody>
+					{table.rows.map((row, r) => (
+						<tr key={r}>
+							{Array.from({ length: cols }).map((_, c) => (
+								<td key={c}><input className="search-input" style={{ width: '100%' }} value={row[c] ?? ''} onChange={(e) => setCell(r, c, e.target.value)} /></td>
+							))}
+							<td><button className="btn ghost" style={{ padding: '2px 6px' }} onClick={() => removeRow(r)}><X size={11} /></button></td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+			<div style={{ display: 'flex', gap: 6 }}>
+				{table.rows.length < 50 && <button className="btn ghost" onClick={addRow}><Plus size={11} /> Row</button>}
+				{cols < 8 && <button className="btn ghost" onClick={addCol}><Plus size={11} /> Column</button>}
+			</div>
 		</div>
 	);
 }

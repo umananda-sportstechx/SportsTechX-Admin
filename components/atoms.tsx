@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 
 /**
  * Tiny shared atoms for admin pages. Mirrors the small subset of components
@@ -89,6 +90,102 @@ export function Empty({ msg }: { msg: string }) {
 			{msg}
 		</div>
 	);
+}
+
+/** Indeterminate loading placeholder with a subtle pulsing bar. */
+export function Loading({ msg = 'Loading…' }: { msg?: string }) {
+	return (
+		<div style={{ padding: 'var(--space-5)', display: 'grid', placeItems: 'center', gap: 12 }}>
+			<div className="skeleton-bar" style={{ width: 160, height: 8 }} />
+			<div style={{ color: 'var(--fg-muted)', fontSize: 12, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+				{msg}
+			</div>
+		</div>
+	);
+}
+
+/** Error state with the message and an optional retry. */
+export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+	const message = error instanceof Error ? error.message : 'Something went wrong.';
+	return (
+		<div style={{ padding: 'var(--space-5)', textAlign: 'center', display: 'grid', gap: 10, placeItems: 'center' }}>
+			<div style={{ color: 'var(--neg)', fontSize: 13, maxWidth: 480 }}>{message}</div>
+			{onRetry && <button className="btn ghost" onClick={onRetry}>Retry</button>}
+		</div>
+	);
+}
+
+/**
+ * Wrap any data view. Renders the right placeholder for loading / error / empty
+ * and only shows `children` once there's data. Keeps every page's async
+ * handling identical instead of each reinventing it.
+ */
+export function AsyncState({
+	loading,
+	error,
+	empty,
+	emptyMsg = 'Nothing here yet.',
+	onRetry,
+	children,
+}: {
+	loading?: boolean;
+	error?: unknown;
+	empty?: boolean;
+	emptyMsg?: string;
+	onRetry?: () => void;
+	children: React.ReactNode;
+}) {
+	if (error) return <ErrorState error={error} onRetry={onRetry} />;
+	if (loading) return <Loading />;
+	if (empty) return <Empty msg={emptyMsg} />;
+	return <>{children}</>;
+}
+
+/** A single KPI tile. Optionally a link; shows a skeleton while loading. */
+export function StatCard({
+	label,
+	value,
+	href,
+	loading,
+	urgent,
+}: {
+	label: string;
+	value: React.ReactNode;
+	href?: string;
+	loading?: boolean;
+	urgent?: boolean;
+}) {
+	const inner = (
+		<>
+			<div className="co-stat-label">{label}</div>
+			{loading ? (
+				<div className="skeleton-bar" style={{ width: 64, height: 22, marginTop: 8 }} />
+			) : (
+				<div
+					style={{
+						fontFamily: 'var(--font-display)',
+						fontSize: 28,
+						fontWeight: 800,
+						letterSpacing: '-0.02em',
+						marginTop: 4,
+						color: urgent ? 'var(--accent)' : 'var(--fg)',
+					}}
+				>
+					{value}
+				</div>
+			)}
+		</>
+	);
+	const style: React.CSSProperties = {
+		padding: 'var(--space-4)',
+		textDecoration: 'none',
+		color: 'inherit',
+		display: 'block',
+		borderTop: urgent ? '2px solid var(--accent)' : '2px solid transparent',
+	};
+	return href
+		? <Link href={href} className="card" style={style}>{inner}</Link>
+		: <div className="card" style={style}>{inner}</div>;
 }
 
 type TagVariant = '' | 'pos' | 'neg' | 'warn' | 'pill';

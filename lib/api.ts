@@ -11,22 +11,35 @@ import { getSupabaseBrowser } from './supabase';
  * also avoid CORS preflight overhead in dev. Absolute URLs are still
  * supported for the rare case of cross-host requests.
  */
-async function getAuthHeader(): Promise<Record<string, string>> {
+/** Error carrying the HTTP status so callers / SWR onError can branch on 401. */
+export class ApiError extends Error {
+	constructor(public readonly status: number, message: string) {
+		super(message);
+		this.name = 'ApiError';
+	}
+}
+
+async function getAuthHeader(forceRefresh = false): Promise<Record<string, string>> {
 	const supabase = getSupabaseBrowser();
+	if (forceRefresh) {
+		// Hard refresh the access token using the stored refresh token.
+		const { data } = await supabase.auth.refreshSession();
+		return data.session?.access_token ? { Authorization: `Bearer ${data.session.access_token}` } : {};
+	}
 	const { data: { session } } = await supabase.auth.getSession();
 	return session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {};
 }
 
-export async function api<T = unknown>(
-	method: string,
-	path: string,
-	body?: unknown,
-): Promise<T> {
-	const auth = await getAuthHeader();
-	const url = path.startsWith('http')
-		? path
-		: path.startsWith('/') ? path : `/${path}`;
-	const res = await fetch(url, {
+/** Redirect to the login page, preserving where we came from. */
+function redirectToLogin(): void {
+	if (typeof window === 'undefined') return;
+	if (window.location.pathname === '/login') return;
+	window.location.assign('/login');
+}
+
+async function doFetch(method: string, url: string, body: unknown, forceRefresh: boolean): Promise<Response> {
+	const auth = await getAuthHeader(forceRefresh);
+	return fetch(url, {
 		method,
 		headers: {
 			...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
@@ -34,9 +47,31 @@ export async function api<T = unknown>(
 		},
 		body: body !== undefined ? JSON.stringify(body) : undefined,
 	});
+}
+
+export async function api<T = unknown>(
+	method: string,
+	path: string,
+	body?: unknown,
+): Promise<T> {
+	const url = path.startsWith('http')
+		? path
+		: path.startsWith('/') ? path : `/${path}`;
+	let res = await doFetch(method, url, body, false);
+
+	// Session likely expired — try one hard token refresh and retry. If still
+	// unauthorized, the refresh token is dead too: bounce to /login.
+	if (res.status === 401) {
+		res = await doFetch(method, url, body, true);
+		if (res.status === 401) {
+			redirectToLogin();
+			throw new ApiError(401, 'Session expired — please sign in again.');
+		}
+	}
+
 	if (!res.ok) {
 		const text = await res.text().catch(() => res.statusText);
-		throw new Error(`${res.status} ${res.statusText}: ${text}`);
+		throw new ApiError(res.status, `${res.status} ${res.statusText}: ${text}`);
 	}
 	const ct = res.headers.get('content-type') ?? '';
 	if (ct.includes('application/json')) return (await res.json()) as T;

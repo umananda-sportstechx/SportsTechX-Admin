@@ -2,15 +2,14 @@
 
 import Link from 'next/link';
 import useSWR from 'swr';
-import { PageHeader, Section, Empty, Tag } from '@/components/atoms';
-
-interface CountResp { total: number }
+import { PageHeader, Section, AsyncState, StatCard, Tag } from '@/components/atoms';
 
 interface ClaimRow {
 	id: string;
 	claim_type: string;
-	target_name?: string | null;
-	target_id?: string | null;
+	entity_type?: string | null;
+	entity_name?: string | null;
+	entity_id?: string | null;
 	is_verified: boolean;
 	picked_up_at: string | null;
 	created_at: string;
@@ -20,43 +19,44 @@ interface ClaimsResponse { data: ClaimRow[]; total: number }
 interface DcrRow {
 	id: string;
 	entity_type: string;
-	entity_id: string;
-	notes: string | null;
+	target_name_snapshot?: string | null;
+	field_change?: string | null;
 	status: string;
 	created_at: string;
 }
 interface DcrResponse { data: DcrRow[]; total: number }
+interface CountResp { total: number }
 
 /**
  * Admin operations dashboard. Surfaces the queues admins drain daily plus a
- * snapshot of the data warehouse size. Counts come from existing `total`
- * fields on list endpoints (limit:1 keeps the payload tiny).
+ * snapshot of the data warehouse size. Counts are read off the `total` of the
+ * limit:5 list calls below — no separate limit:1 ping needed.
  */
 export default function AdminDashboard() {
-	const { data: claimsPending } = useSWR<CountResp>(['/api/admin/claims', { status: 'pending', limit: 1 }]);
-	const { data: dcrOpen }       = useSWR<CountResp>(['/api/admin/data-change-requests', { status: 'open', limit: 1 }]);
-	const { data: companies }     = useSWR<CountResp>(['/api/companies', { limit: 1 }]);
-	const { data: deals }         = useSWR<CountResp>(['/api/deals', { limit: 1 }]);
-	const { data: investors }     = useSWR<CountResp>(['/api/investors', { limit: 1 }]);
-	const { data: acquisitions }  = useSWR<CountResp>(['/api/acquisitions', { limit: 1 }]);
-	const { data: users }         = useSWR<CountResp>(['/api/admin/users', { limit: 1 }]);
-	const { data: pipeline }      = useSWR<CountResp>(['/api/admin/startups-pipeline', { status: 'new', limit: 1 }]);
+	const claims      = useSWR<ClaimsResponse>(['/api/admin/claims', { status: 'pending', limit: 5 }]);
+	const dcr         = useSWR<DcrResponse>(['/api/admin/data-change-requests', { status: 'open', limit: 5 }]);
+	const pipeline    = useSWR<CountResp>(['/api/admin/startups-pipeline', { status: 'new', limit: 1 }]);
+	const companies   = useSWR<CountResp>(['/api/companies', { limit: 1 }]);
+	const deals       = useSWR<CountResp>(['/api/deals', { limit: 1 }]);
+	const investors   = useSWR<CountResp>(['/api/investors', { limit: 1 }]);
+	const acquisitions = useSWR<CountResp>(['/api/acquisitions', { limit: 1 }]);
+	const users       = useSWR<CountResp>(['/api/admin/users', { limit: 1 }]);
 
-	const { data: recentClaims }  = useSWR<ClaimsResponse>(['/api/admin/claims', { status: 'pending', limit: 5 }]);
-	const { data: recentDcr }     = useSWR<DcrResponse>(['/api/admin/data-change-requests', { status: 'open', limit: 5 }]);
+	const claimsTotal = claims.data?.total ?? 0;
+	const dcrTotal = dcr.data?.total ?? 0;
 
 	const queues = [
-		{ label: 'Pending claims',     value: claimsPending?.total ?? 0, href: '/claims?status=pending', urgent: (claimsPending?.total ?? 0) > 0 },
-		{ label: 'Open data requests', value: dcrOpen?.total ?? 0,       href: '/data-requests',         urgent: (dcrOpen?.total ?? 0) > 0 },
-		{ label: 'Pipeline (new)',     value: pipeline?.total ?? 0,      href: '/startups-pipeline',     urgent: (pipeline?.total ?? 0) > 0 },
+		{ label: 'Pending claims',     value: claimsTotal,                  href: '/claims?status=pending', loading: claims.isLoading,   urgent: claimsTotal > 0 },
+		{ label: 'Open data requests', value: dcrTotal,                     href: '/data-requests',         loading: dcr.isLoading,      urgent: dcrTotal > 0 },
+		{ label: 'Pipeline (new)',     value: pipeline.data?.total ?? 0,    href: '/startups-pipeline',     loading: pipeline.isLoading, urgent: (pipeline.data?.total ?? 0) > 0 },
 	];
 
 	const stats = [
-		{ label: 'Companies',    value: companies?.total ?? 0,    href: '/companies' },
-		{ label: 'Deals',        value: deals?.total ?? 0 },
-		{ label: 'Investors',    value: investors?.total ?? 0 },
-		{ label: 'M&A',          value: acquisitions?.total ?? 0 },
-		{ label: 'Users',        value: users?.total ?? 0,        href: '/users' },
+		{ label: 'Companies', q: companies,   href: '/companies' },
+		{ label: 'Deals',     q: deals },
+		{ label: 'Investors', q: investors },
+		{ label: 'M&A',       q: acquisitions },
+		{ label: 'Users',     q: users,       href: '/users' },
 	];
 
 	return (
@@ -70,112 +70,55 @@ export default function AdminDashboard() {
 			{/* Active queues that need draining */}
 			<div className="grid-3" style={{ marginBottom: 'var(--space-5)' }}>
 				{queues.map((q) => (
-					<Link
-						key={q.label}
-						href={q.href}
-						className="card"
-						style={{
-							padding: 'var(--space-4)',
-							textDecoration: 'none',
-							color: 'inherit',
-							borderTop: q.urgent ? `2px solid var(--accent)` : '2px solid transparent',
-						}}
-					>
-						<div className="co-stat-label">{q.label}</div>
-						<div
-							style={{
-								fontFamily: 'var(--font-display)',
-								fontSize: 32,
-								fontWeight: 800,
-								letterSpacing: '-0.02em',
-								marginTop: 4,
-								color: q.urgent ? 'var(--accent)' : 'var(--fg)',
-							}}
-						>
-							{q.value.toLocaleString()}
-						</div>
-					</Link>
+					<StatCard key={q.label} label={q.label} href={q.href} loading={q.loading} urgent={q.urgent} value={q.value.toLocaleString()} />
 				))}
 			</div>
 
 			{/* Warehouse snapshot */}
 			<div className="grid-4" style={{ marginBottom: 'var(--space-5)', gridTemplateColumns: 'repeat(5, 1fr)' }}>
-				{stats.map((s) => {
-					const inner = (
-						<>
-							<div className="co-stat-label">{s.label}</div>
-							<div
-								style={{
-									fontFamily: 'var(--font-display)',
-									fontSize: 26,
-									fontWeight: 800,
-									letterSpacing: '-0.02em',
-									marginTop: 4,
-								}}
-							>
-								{s.value.toLocaleString()}
-							</div>
-						</>
-					);
-					return s.href ? (
-						<Link
-							key={s.label}
-							href={s.href}
-							className="card"
-							style={{ padding: 'var(--space-4)', textDecoration: 'none', color: 'inherit' }}
-						>
-							{inner}
-						</Link>
-					) : (
-						<div key={s.label} className="card" style={{ padding: 'var(--space-4)' }}>
-							{inner}
-						</div>
-					);
-				})}
+				{stats.map((s) => (
+					<StatCard key={s.label} label={s.label} href={s.href} loading={s.q.isLoading} value={(s.q.data?.total ?? 0).toLocaleString()} />
+				))}
 			</div>
 
 			{/* Recent activity panels */}
 			<div className="grid-2" style={{ marginBottom: 'var(--space-5)' }}>
-				<Section title="Recent pending claims" meta={`${claimsPending?.total ?? 0} total`} padded={false}>
-					{!recentClaims?.data?.length ? (
-						<Empty msg="No pending claims" />
-					) : (
+				<Section title="Recent pending claims" meta={`${claimsTotal} total`} padded={false}>
+					<AsyncState loading={claims.isLoading} error={claims.error} empty={!claims.data?.data?.length} emptyMsg="No pending claims" onRetry={() => void claims.mutate()}>
 						<table className="data-table">
 							<thead><tr><th>Created</th><th>Type</th><th>Target</th><th></th></tr></thead>
 							<tbody>
-								{recentClaims.data.map((c) => (
+								{(claims.data?.data ?? []).map((c) => (
 									<tr key={c.id}>
 										<td className="num">{new Date(c.created_at).toLocaleDateString()}</td>
-										<td>{c.claim_type}</td>
-										<td>{c.target_name ?? c.target_id ?? '—'}</td>
+										<td>{c.entity_type ?? c.claim_type}</td>
+										<td>{c.entity_name ?? c.entity_id ?? '—'}</td>
 										<td style={{ textAlign: 'right' }}><Link href="/claims?status=pending" className="btn ghost">Open</Link></td>
 									</tr>
 								))}
 							</tbody>
 						</table>
-					)}
+					</AsyncState>
 				</Section>
 
-				<Section title="Recent open requests" meta={`${dcrOpen?.total ?? 0} total`} padded={false}>
-					{!recentDcr?.data?.length ? (
-						<Empty msg="No open requests" />
-					) : (
+				<Section title="Recent open requests" meta={`${dcrTotal} total`} padded={false}>
+					<AsyncState loading={dcr.isLoading} error={dcr.error} empty={!dcr.data?.data?.length} emptyMsg="No open requests" onRetry={() => void dcr.mutate()}>
 						<table className="data-table">
-							<thead><tr><th>Created</th><th>Entity</th><th>Notes</th><th></th></tr></thead>
+							<thead><tr><th>Created</th><th>Target</th><th>Change</th><th></th></tr></thead>
 							<tbody>
-								{recentDcr.data.map((r) => (
+								{(dcr.data?.data ?? []).map((r) => (
 									<tr key={r.id}>
 										<td className="num">{new Date(r.created_at).toLocaleDateString()}</td>
-										<td>{r.entity_type}</td>
+										<td>{r.target_name_snapshot ?? r.entity_type}</td>
 										<td style={{ maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-											{r.notes ?? '—'}
+											{r.field_change ?? '—'}
 										</td>
 										<td style={{ textAlign: 'right' }}><Link href="/data-requests" className="btn ghost">Open</Link></td>
 									</tr>
 								))}
 							</tbody>
 						</table>
-					)}
+					</AsyncState>
 				</Section>
 			</div>
 

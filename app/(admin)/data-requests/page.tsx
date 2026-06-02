@@ -4,6 +4,7 @@ import { useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { PageHeader, AsyncState } from '@/components/atoms';
 
 type DcrStatus = 'open' | 'picked_up' | 'resolved' | 'rejected';
 
@@ -11,8 +12,13 @@ interface Dcr {
 	id: string;
 	entity_type: string | null;
 	entity_id: string | null;
-	requested_by: string | null;
-	notes: string | null;
+	target_name_snapshot: string | null;
+	field_change: string | null;
+	old_value: string | null;
+	requested_value: string | null;
+	change_type: string | null;
+	user_email: string | null;
+	resolution_notes: string | null;
 	status: DcrStatus;
 	created_at: string;
 }
@@ -31,15 +37,17 @@ export default function DataRequestsPage() {
 	const [page, setPage] = useState(1);
 	const [pendingId, setPendingId] = useState<string | null>(null);
 
-	const { data } = useSWR<DcrResponse>(
+	const { data, error, isLoading } = useSWR<DcrResponse>(
 		['/api/admin/data-change-requests', { status, page, limit: 30 }],
 		{ dedupingInterval: 15_000 },
 	);
 
-	const update = async (id: string, next: DcrStatus) => {
+	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/admin/data-change-requests');
+
+	const update = async (id: string, next: DcrStatus, notes?: string) => {
 		setPendingId(id);
 		try {
-			await api('POST', `/api/admin/data-change-requests/${id}/status`, { status: next });
+			await api('POST', `/api/admin/data-change-requests/${id}/status`, { status: next, ...(notes !== undefined ? { notes } : {}) });
 			toast.success('Updated');
 			void mutate((key) => Array.isArray(key) && key[0] === '/api/admin/data-change-requests');
 		} catch (e) {
@@ -49,15 +57,16 @@ export default function DataRequestsPage() {
 		}
 	};
 
+	const resolveWithNotes = (id: string, next: 'resolved' | 'rejected') => {
+		const notes = window.prompt(next === 'rejected' ? 'Reason for rejection (optional):' : 'Resolution notes (optional):') ?? undefined;
+		if (notes === undefined) return; // cancelled
+		void update(id, next, notes);
+	};
+
 	const items = data?.data ?? [];
 	return (
 		<div>
-			<div style={{ marginBottom: 'var(--space-5)' }}>
-				<div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
-					Queues · {(data?.total ?? 0).toLocaleString()} in {status}
-				</div>
-				<h1 style={{ fontFamily: 'var(--font-display)', fontSize: 38, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1, margin: 0 }}>Data change requests</h1>
-			</div>
+			<PageHeader kicker={`Queues · ${(data?.total ?? 0).toLocaleString()} in ${status}`} title="Data change requests" />
 
 			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)' }}>
 				{TABS.map((t) => (
@@ -68,12 +77,14 @@ export default function DataRequestsPage() {
 			</div>
 
 			<div className="card">
+				<AsyncState loading={isLoading} error={error} empty={items.length === 0} emptyMsg={`Nothing in ${status}.`} onRetry={() => void refresh()}>
 				<table className="data-table">
 					<thead>
 						<tr>
 							<th>Created</th>
-							<th>Entity</th>
-							<th>Notes</th>
+							<th>Target</th>
+							<th>Requested change</th>
+							<th>Requester</th>
 							<th>Status</th>
 							<th style={{ textAlign: 'right' }}>Actions</th>
 						</tr>
@@ -82,8 +93,24 @@ export default function DataRequestsPage() {
 						{items.map((r) => (
 							<tr key={r.id}>
 								<td className="num">{new Date(r.created_at).toLocaleDateString()}</td>
-								<td>{r.entity_type ?? '—'}{r.entity_id ? ` · ${r.entity_id.slice(0, 8)}…` : ''}</td>
-								<td style={{ maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.notes ?? '—'}</td>
+								<td>
+									<div style={{ fontWeight: 600 }}>{r.target_name_snapshot ?? '—'}</div>
+									<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{r.entity_type ?? ''}{r.entity_id ? ` · ${r.entity_id.slice(0, 8)}…` : ''}</div>
+								</td>
+								<td style={{ maxWidth: 320 }}>
+									{r.field_change ? (
+										<div style={{ fontSize: 13 }}>
+											<span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)' }}>{r.change_type ?? 'edit'} · {r.field_change}</span>
+											<div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+												<span style={{ color: 'var(--fg-muted)', textDecoration: 'line-through' }}>{r.old_value || '∅'}</span>
+												{' → '}
+												<span style={{ fontWeight: 600 }}>{r.requested_value || '∅'}</span>
+											</div>
+										</div>
+									) : '—'}
+									{r.resolution_notes && <div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 4 }}>note: {r.resolution_notes}</div>}
+								</td>
+								<td style={{ fontSize: 12 }}>{r.user_email ?? '—'}</td>
 								<td><span className="tag">{r.status}</span></td>
 								<td style={{ textAlign: 'right' }}>
 									<div style={{ display: 'inline-flex', gap: 6 }}>
@@ -91,10 +118,13 @@ export default function DataRequestsPage() {
 											<button className="btn ghost" disabled={pendingId === r.id} onClick={() => void update(r.id, 'picked_up')}>Pick up</button>
 										)}
 										{r.status !== 'resolved' && (
-											<button className="btn" disabled={pendingId === r.id} onClick={() => void update(r.id, 'resolved')}>Resolve</button>
+											<button className="btn" disabled={pendingId === r.id} onClick={() => resolveWithNotes(r.id, 'resolved')}>Resolve</button>
 										)}
 										{r.status !== 'rejected' && (
-											<button className="btn ghost" disabled={pendingId === r.id} onClick={() => void update(r.id, 'rejected')}>Reject</button>
+											<button className="btn ghost" disabled={pendingId === r.id} onClick={() => resolveWithNotes(r.id, 'rejected')}>Reject</button>
+										)}
+										{r.status !== 'open' && (
+											<button className="btn ghost" disabled={pendingId === r.id} onClick={() => void update(r.id, 'open')}>Re-open</button>
 										)}
 									</div>
 								</td>
@@ -102,6 +132,7 @@ export default function DataRequestsPage() {
 						))}
 					</tbody>
 				</table>
+				</AsyncState>
 			</div>
 		</div>
 	);

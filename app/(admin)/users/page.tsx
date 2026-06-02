@@ -4,6 +4,7 @@ import { Fragment, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { PageHeader, AsyncState } from '@/components/atoms';
 
 interface User {
 	id: string;
@@ -26,13 +27,7 @@ interface GrantRow {
 	created_at: string;
 }
 
-// Mirrors the in-code FEATURE_SLUGS set on the server.
-const FEATURE_OPTIONS = [
-	'reports_access', 'companies_full', 'deals_full', 'investors_full', 'acquisitions_full',
-	'programs_access', 'events_access', 'framework_access', 'newsletter_access',
-	'analytics_access', 'csv_export', 'api_access', 'ai_chat',
-	'saved_searches', 'watchlists', 'recommendations',
-];
+interface FeatureCatalogRow { id: string; slug: string; name: string }
 
 export default function UsersAdminPage() {
 	const { mutate } = useSWRConfig();
@@ -41,7 +36,7 @@ export default function UsersAdminPage() {
 	const [expandedId, setExpandedId] = useState<string | null>(null);
 	const [rolePending, setRolePending] = useState<string | null>(null);
 
-	const { data } = useSWR<UsersResponse>(
+	const { data, error, isLoading } = useSWR<UsersResponse>(
 		['/api/admin/users', { q: search || undefined, page, limit: 30 }],
 		{ dedupingInterval: 15_000 },
 	);
@@ -70,12 +65,7 @@ export default function UsersAdminPage() {
 	const users = data?.data ?? [];
 	return (
 		<div>
-			<div style={{ marginBottom: 'var(--space-5)' }}>
-				<div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
-					Identity · {(data?.total ?? 0).toLocaleString()} total
-				</div>
-				<h1 style={{ fontFamily: 'var(--font-display)', fontSize: 38, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1, margin: 0 }}>Users</h1>
-			</div>
+			<PageHeader kicker={`Identity · ${(data?.total ?? 0).toLocaleString()} total`} title="Users" />
 
 			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)' }}>
 				<input
@@ -88,6 +78,7 @@ export default function UsersAdminPage() {
 			</div>
 
 			<div className="card">
+				<AsyncState loading={isLoading} error={error} empty={users.length === 0} emptyMsg={search ? 'No users match.' : 'No users yet.'} onRetry={() => void refresh()}>
 				<table className="data-table">
 					<thead>
 						<tr>
@@ -135,6 +126,7 @@ export default function UsersAdminPage() {
 						))}
 					</tbody>
 				</table>
+				</AsyncState>
 			</div>
 
 			{data && data.totalPages > 1 && (
@@ -199,7 +191,7 @@ function TierChangeSection({ user }: { user: User }) {
 				value={tier}
 				onChange={(e) => setTier(e.target.value)}
 			>
-				{['free', 'growth', 'pro', 'admin'].map((t) => (
+				{['free', 'growth', 'pro'].map((t) => (
 					<option key={t} value={t}>{t}</option>
 				))}
 			</select>
@@ -281,11 +273,16 @@ function GrantAccessSection({ profileId }: { profileId: string }) {
 
 function FeatureGrantsSection({ profileId }: { profileId: string }) {
 	const { mutate } = useSWRConfig();
-	const [slug, setSlug] = useState('csv_export');
+	const [slug, setSlug] = useState('');
 	const [days, setDays] = useState<number | ''>(30);
 	const [reason, setReason] = useState('');
 	const [addPending, setAddPending] = useState(false);
 	const [revokePending, setRevokePending] = useState(false);
+
+	// Fetch the live feature catalog so the dropdown can't drift from the DB
+	// (the grant endpoint validates the slug against this same catalog).
+	const { data: catalog } = useSWR<{ data: FeatureCatalogRow[] }>(['/api/admin/features'], { dedupingInterval: 5 * 60_000 });
+	const featureOptions = catalog?.data ?? [];
 
 	const { data } = useSWR<{ data: GrantRow[] }>(
 		[`/api/admin/users/${profileId}/feature-grants`],
@@ -371,8 +368,9 @@ function FeatureGrantsSection({ profileId }: { profileId: string }) {
 
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: 6, marginBottom: 6 }}>
 				<select className="search-input" value={slug} onChange={(e) => setSlug(e.target.value)}>
-					{FEATURE_OPTIONS.map((s) => (
-						<option key={s} value={s}>{s}</option>
+					<option value="">Select feature…</option>
+					{featureOptions.map((f) => (
+						<option key={f.id} value={f.slug}>{f.name}</option>
 					))}
 				</select>
 				<input
@@ -396,8 +394,8 @@ function FeatureGrantsSection({ profileId }: { profileId: string }) {
 				value={reason}
 				onChange={(e) => setReason(e.target.value)}
 			/>
-			<button className="btn" disabled={addPending} onClick={() => void add()}>
-				{addPending ? 'Granting…' : `Grant ${slug}${days === '' ? ' (permanent)' : ` · ${days}d`}`}
+			<button className="btn" disabled={addPending || !slug} onClick={() => void add()}>
+				{addPending ? 'Granting…' : slug ? `Grant ${slug}${days === '' ? ' (permanent)' : ` · ${days}d`}` : 'Grant feature'}
 			</button>
 		</div>
 	);

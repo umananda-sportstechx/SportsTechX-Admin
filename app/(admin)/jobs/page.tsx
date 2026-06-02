@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 
-type EndpointKey = 'apolloBatch' | 'attioSync' | 'embeddings' | 'recommendations' | 'apolloEnrich';
+type EndpointKey = 'apolloBatch' | 'attioSync' | 'recommendations' | 'apolloEnrich';
 
 const ENDPOINTS: Array<{ key: EndpointKey; label: string; desc: string; path: string; needsId?: boolean }> = [
 	{
@@ -25,12 +25,6 @@ const ENDPOINTS: Array<{ key: EndpointKey; label: string; desc: string; path: st
 		label: 'Attio CRM sync',
 		desc: 'Sync companies, investors, deals to Attio CRM now.',
 		path: '/api/admin/integrations/attio/sync',
-	},
-	{
-		key: 'embeddings',
-		label: 'Embeddings backfill',
-		desc: 'Embed missing rows in entity_embeddings (200 per kind).',
-		path: '/api/admin/jobs/embeddings/backfill',
 	},
 	{
 		key: 'recommendations',

@@ -12,12 +12,12 @@
  *     copy ..\client\app\design-system.css .\app\design-system.css   (PowerShell)
  *     cp   ../client/app/design-system.css ./app/design-system.css   (bash)
  *
- * Admin overrides --accent-hue to a cooler tone (cyan) below to subtly
- * distinguish the admin shell from the user-facing app.
+ * Admin matches the client app's warm accent (--accent-hue: 14) so the two
+ * surfaces share one visual identity.
  * ============================================================================ */
 
 :root {
-  --accent-hue: 220;
+  --accent-hue: 14;
   --accent: oklch(58% 0.22 var(--accent-hue));
   --accent-2: oklch(70% 0.18 var(--accent-hue));
   --accent-soft: oklch(58% 0.22 var(--accent-hue) / 0.12);
@@ -124,3 +124,233 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); }
 ::-webkit-scrollbar-thumb:hover { background: var(--fg-muted); }
+
+/* ============================================================================
+ * Admin-only UI primitives (kept here, NOT in design-system.css, so the
+ * client-synced copy doesn't diverge).
+ * ========================================================================== */
+
+/* --- Modal dialog (see components/modal.tsx) ----------------------------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 6vh 16px;
+  overflow-y: auto;            /* overlay scrolls if the modal is very tall */
+  -webkit-overflow-scrolling: touch;
+}
+.modal-card {
+  width: 100%;
+  margin: auto;                /* centers when short; collapses to 0 when tall */
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 12vh);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+.modal-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 1.2;
+}
+.modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 20px;
+  overflow-y: auto;            /* the real fix: body scrolls vertically */
+  overflow-x: hidden;
+}
+/* Inputs in a form must fill their grid/flex cell AND be allowed to shrink
+ * below their intrinsic min-content width — otherwise multi-column rows
+ * (e.g. HQ country / city / founded) overflow the modal and get clipped. */
+.modal-body .search-input { width: 100%; min-width: 0; }
+.modal-body input,
+.modal-body select,
+.modal-body textarea { max-width: 100%; }
+.modal-body input[type="checkbox"] { width: auto; }
+/* Grid/flex cells default to min-width:auto, which refuses to shrink below the
+ * input's intrinsic width and overflows multi-column rows. Allow every wrapper
+ * in the body to shrink so columns fit the modal. */
+.modal-body div { min-width: 0; }
+.modal-foot {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+}
+
+/* --- Wide tables shouldn't blow out the page width ----------------------- */
+/* Scroll the CARD horizontally (not the <table>) when a data-table is wider
+ * than the column. Keeping the table as a real `display:table` preserves
+ * proper column sizing — turning the table itself into a block element breaks
+ * column widths. Form cards have no .data-table, so they're unaffected. */
+.card:has(> .data-table) { overflow-x: auto; }
+.data-table { width: 100%; }
+main { min-width: 0; }
+
+/* --- Inputs / selects / textareas --------------------------------------- */
+/* Crisper focus ring + comfortable sizing inside forms. The shared
+ * design-system.css keeps .search-input at 32px (right for filter bars); in a
+ * modal/form body we want a touch more height and a visible focus ring. */
+.search-input:focus,
+textarea.search-input:focus,
+select.search-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+textarea.search-input { height: auto; padding: 8px 10px; line-height: 1.5; }
+select.search-input {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 28px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238F8F8B' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  cursor: pointer;
+}
+.modal-body .search-input,
+.modal-body select.search-input { height: 38px; }
+.modal-body textarea.search-input { height: auto; }
+/* Form field label rhythm (co-stat-label is reused as a field label). */
+.modal-body .co-stat-label { font-size: 11px; letter-spacing: 0.06em; }
+input[disabled], select[disabled], textarea[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* --- Accessibility: visible keyboard focus ------------------------------ */
+.btn:focus-visible,
+.chip:focus-visible,
+a:focus-visible,
+.search-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.btn:active:not(:disabled) { transform: translateY(1px); }
+
+/* --- Cards: subtle hairline elevation so they read as surfaces ----------- */
+.card { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); }
+.dark .card,
+[data-theme="dark"] .card { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); }
+
+/* --- Page content readability cap (very wide monitors) ------------------- */
+.admin-content { max-width: 1440px; margin: 0 auto; width: 100%; }
+
+/* --- Skeleton loading bar (see components/atoms.tsx) --------------------- */
+.skeleton-bar {
+  background: linear-gradient(90deg, var(--bg-2) 25%, var(--bg-3) 37%, var(--bg-2) 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+/* --- Reduced motion ------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ============================================================================
+ * Admin shell (sidebar rail + topbar). Classes used by components/admin-shell.
+ * ========================================================================== */
+.admin-rail {
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  width: var(--rail-w-expanded);
+  background: var(--bg-2);
+  border-right: 1px solid var(--border);
+  padding: var(--space-4) 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  z-index: 40;
+  transition: transform 0.2s ease;
+}
+.admin-rail-brandrow {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 var(--space-4) var(--space-4);
+}
+.nav-group { margin-top: 14px; }
+.nav-group:first-of-type { margin-top: 0; }
+.nav-group-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  padding: 0 var(--space-4) 6px;
+}
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 1px 8px;
+  padding: 8px 12px;
+  text-decoration: none;
+  color: var(--fg-2);
+  font-size: 13px;
+  font-weight: 500;
+  border-left: 2px solid transparent;
+  transition: background 0.12s, color 0.12s;
+}
+.nav-link:hover { background: var(--bg-3); color: var(--fg); }
+.nav-link.active {
+  background: var(--bg-3);
+  color: var(--fg);
+  font-weight: 600;
+  border-left-color: var(--accent);
+}
+.nav-link svg { flex-shrink: 0; color: var(--fg-muted); }
+.nav-link.active svg { color: var(--accent); }
+
+.admin-main { display: flex; flex-direction: column; min-height: 100vh; margin-left: var(--rail-w-expanded); min-width: 0; }
+.admin-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 var(--space-4);
+  height: var(--topbar-h);
+  background: color-mix(in oklab, var(--bg) 86%, transparent);
+  backdrop-filter: saturate(1.2) blur(8px);
+  border-bottom: 1px solid var(--border);
+}
+.admin-topbar-title { font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: -0.01em; }
+.admin-avatar {
+  width: 30px; height: 30px;
+  background: var(--accent); color: var(--accent-fg);
+  display: grid; place-items: center;
+  font-family: var(--font-display); font-weight: 700; font-size: 12px;
+}
+.admin-rail-toggle { display: none; }
+.admin-scrim { display: none; }
+
+/* Mobile / narrow: rail slides off-canvas, toggled by the hamburger. */
+@media (max-width: 880px) {
+  .admin-rail { transform: translateX(-100%); box-shadow: 0 0 40px rgba(0,0,0,0.4); }
+  .admin-rail.open { transform: translateX(0); }
+  .admin-main { margin-left: 0; }
+  .admin-rail-toggle { display: inline-flex; }
+  .admin-scrim.open {
+    display: block; position: fixed; inset: 0; z-index: 35;
+    background: rgba(0,0,0,0.45);
+  }
+}

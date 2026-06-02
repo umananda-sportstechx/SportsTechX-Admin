@@ -2,31 +2,50 @@
 
 import { useState } from 'react';
 import useSWR from 'swr';
+import { PageHeader, AsyncState } from '@/components/atoms';
 
-interface JobMetric { queue_name: string; status: string; count: number; avg_duration_seconds: number | null }
-interface RequestMetric { bucket: string; count: number }
-interface PerfResponse { jobs: JobMetric[]; requests: RequestMetric[]; range: string }
+interface SummaryRow {
+	metric_type: string;
+	total_requests: string;
+	avg_duration_ms: string;
+	p95_duration_ms: string;
+	max_duration_ms: number;
+	success_count: string;
+	error_count: string;
+}
+interface SlowestRow {
+	metric_type: string;
+	queue_name: string;
+	entity_type: string | null;
+	entity_id: string | null;
+	duration_ms: number;
+	completed_at: string;
+}
+interface PerfResponse { summary: SummaryRow[]; slowest: SlowestRow[]; range: string }
 
-const RANGES: Array<'1h' | '24h' | '7d' | '30d'> = ['1h', '24h', '7d', '30d'];
+const RANGES = ['1h', '6h', '24h', '7d', '30d'] as const;
+type Range = (typeof RANGES)[number];
+
+function ms(v: string | number | null): string {
+	const n = typeof v === 'string' ? Number(v) : v;
+	if (n == null || Number.isNaN(n)) return '—';
+	if (n >= 1000) return `${(n / 1000).toFixed(2)}s`;
+	return `${Math.round(n)}ms`;
+}
 
 export default function PerformancePage() {
-	const [range, setRange] = useState<'1h' | '24h' | '7d' | '30d'>('24h');
-	const { data } = useSWR<PerfResponse>(
+	const [range, setRange] = useState<Range>('24h');
+	const { data, error, isLoading, mutate } = useSWR<PerfResponse>(
 		['/api/admin/performance', { range }],
 		{ dedupingInterval: 15_000, refreshInterval: 30_000 },
 	);
 
-	const jobs = data?.jobs ?? [];
-	const requests = data?.requests ?? [];
+	const summary = data?.summary ?? [];
+	const slowest = data?.slowest ?? [];
 
 	return (
 		<div>
-			<div style={{ marginBottom: 'var(--space-5)' }}>
-				<div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
-					Operations · last {range}
-				</div>
-				<h1 style={{ fontFamily: 'var(--font-display)', fontSize: 38, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1, margin: 0 }}>Performance</h1>
-			</div>
+			<PageHeader kicker={`Operations · last ${range}`} title="Performance" subtitle="Background job throughput and latency, refreshed every 30s." />
 
 			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)' }}>
 				{RANGES.map((r) => (
@@ -34,50 +53,48 @@ export default function PerformancePage() {
 				))}
 			</div>
 
-			<div className="grid-2">
-				<div className="card">
-					<div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--border)', fontWeight: 700 }}>Job queues</div>
-					{jobs.length === 0 ? (
-						<div style={{ padding: 'var(--space-4)', color: 'var(--fg-muted)' }}>No data</div>
-					) : (
-						<table className="data-table">
-							<thead><tr><th>Queue</th><th>Status</th><th>Count</th><th>Avg duration</th></tr></thead>
-							<tbody>
-								{jobs.map((j, i) => (
-									<tr key={`${j.queue_name}-${j.status}-${i}`}>
-										<td>{j.queue_name}</td>
-										<td>
-											<span className={`tag ${j.status === 'failed' ? 'neg' : j.status === 'completed' ? 'pos' : ''}`}>
-												{j.status}
-											</span>
-										</td>
-										<td className="num">{j.count}</td>
-										<td className="num">{j.avg_duration_seconds != null ? `${j.avg_duration_seconds.toFixed(1)}s` : '—'}</td>
+			<div className="card" style={{ marginBottom: 'var(--space-4)' }}>
+				<div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--border)', fontWeight: 700 }}>Job queues</div>
+				<AsyncState loading={isLoading} error={error} empty={summary.length === 0} emptyMsg="No jobs in this range" onRetry={() => void mutate()}>
+					<table className="data-table">
+						<thead><tr><th>Queue</th><th>Total</th><th>Succeeded</th><th>Errored</th><th>Avg</th><th>p95</th><th>Max</th></tr></thead>
+						<tbody>
+							{summary.map((s) => {
+								const errors = Number(s.error_count);
+								return (
+									<tr key={s.metric_type}>
+										<td>{s.metric_type}</td>
+										<td className="num">{Number(s.total_requests).toLocaleString()}</td>
+										<td className="num"><span className="tag pos">{Number(s.success_count).toLocaleString()}</span></td>
+										<td className="num">{errors > 0 ? <span className="tag neg">{errors.toLocaleString()}</span> : '—'}</td>
+										<td className="num">{ms(s.avg_duration_ms)}</td>
+										<td className="num">{ms(s.p95_duration_ms)}</td>
+										<td className="num">{ms(s.max_duration_ms)}</td>
 									</tr>
-								))}
-							</tbody>
-						</table>
-					)}
-				</div>
+								);
+							})}
+						</tbody>
+					</table>
+				</AsyncState>
+			</div>
 
-				<div className="card">
-					<div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--border)', fontWeight: 700 }}>HTTP requests</div>
-					{requests.length === 0 ? (
-						<div style={{ padding: 'var(--space-4)', color: 'var(--fg-muted)' }}>No request_logs table yet</div>
-					) : (
-						<table className="data-table">
-							<thead><tr><th>Status</th><th>Count</th></tr></thead>
-							<tbody>
-								{requests.map((r) => (
-									<tr key={r.bucket}>
-										<td>{r.bucket}</td>
-										<td className="num">{r.count.toLocaleString()}</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					)}
-				</div>
+			<div className="card">
+				<div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--border)', fontWeight: 700 }}>Slowest jobs</div>
+				<AsyncState loading={isLoading} error={error} empty={slowest.length === 0} emptyMsg="No completed jobs in this range" onRetry={() => void mutate()}>
+					<table className="data-table">
+						<thead><tr><th>Queue</th><th>Entity</th><th>Duration</th><th>Completed</th></tr></thead>
+						<tbody>
+							{slowest.map((r, i) => (
+								<tr key={`${r.queue_name}-${i}`}>
+									<td>{r.queue_name}</td>
+									<td>{r.entity_type ? `${r.entity_type}${r.entity_id ? ` · ${r.entity_id.slice(0, 8)}` : ''}` : '—'}</td>
+									<td className="num">{ms(r.duration_ms)}</td>
+									<td>{r.completed_at ? new Date(r.completed_at).toLocaleString() : '—'}</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</AsyncState>
 			</div>
 		</div>
 	);

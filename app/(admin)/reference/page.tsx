@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { Plus, Trash2, X, Save } from 'lucide-react';
+import { Plus, Trash2, Save } from 'lucide-react';
+import { Modal } from '@/components/modal';
 import { api } from '@/lib/api';
 
 type Kind = 'sectors' | 'sports' | 'tech-tags' | 'round-types';
@@ -148,34 +149,34 @@ function RefModal({ kind, initial, parents, onClose, onSaved }: { kind: Kind; in
 	};
 
 	return (
-		<div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'grid', placeItems: 'center', zIndex: 100 }} onClick={onClose}>
-			<div className="card" style={{ width: 'min(480px, 92vw)', padding: 'var(--space-4)' }} onClick={(e) => e.stopPropagation()}>
-				<div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-					<div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18 }}>{initial ? 'Edit' : 'New'} entry</div>
-					<button className="btn ghost" onClick={onClose}><X size={12} /></button>
-				</div>
-				<div style={{ display: 'grid', gap: 12 }}>
-					<Field label="Name"><input className="search-input" value={name} onChange={(e) => setName(e.target.value)} /></Field>
-					<Field label="Slug (optional — auto from name)"><input className="search-input" style={{ fontFamily: 'var(--font-mono)' }} value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} disabled={!!initial} /></Field>
-					{showParent && (
-						<Field label="Parent (optional)">
-							<select className="search-input" value={parentId} onChange={(e) => setParentId(e.target.value)}>
-								<option value="">— top level —</option>
-								{parents.filter((p) => p.id !== initial?.id).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-							</select>
-						</Field>
-					)}
-					{showDescription && <Field label="Description"><textarea className="search-input" style={{ minHeight: 60 }} value={description} onChange={(e) => setDescription(e.target.value)} /></Field>}
-					{showSort && <Field label="Sort"><input className="search-input" type="number" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} /></Field>}
-				</div>
-				<div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+		<Modal
+			title={`${initial ? 'Edit' : 'New'} entry`}
+			onClose={onClose}
+			width={480}
+			footer={
+				<>
 					<button className="btn ghost" onClick={onClose}>Cancel</button>
 					<button className="btn" disabled={!name.trim() || pending} onClick={() => void submit()}>
 						<Save size={12} /> {pending ? 'Saving…' : 'Save'}
 					</button>
-				</div>
+				</>
+			}
+		>
+			<div style={{ display: 'grid', gap: 12 }}>
+				<Field label="Name"><input className="search-input" value={name} onChange={(e) => setName(e.target.value)} /></Field>
+				<Field label="Slug (optional — auto from name)"><input className="search-input" style={{ fontFamily: 'var(--font-mono)' }} value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} disabled={!!initial} /></Field>
+				{showParent && (
+					<Field label="Parent (optional)">
+						<select className="search-input" value={parentId} onChange={(e) => setParentId(e.target.value)}>
+							<option value="">— top level —</option>
+							{parents.filter((p) => p.id !== initial?.id).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+						</select>
+					</Field>
+				)}
+				{showDescription && <Field label="Description"><textarea className="search-input" style={{ minHeight: 60 }} value={description} onChange={(e) => setDescription(e.target.value)} /></Field>}
+				{showSort && <Field label="Sort"><input className="search-input" type="number" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} /></Field>}
 			</div>
-		</div>
+		</Modal>
 	);
 }
 

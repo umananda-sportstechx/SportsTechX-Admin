@@ -4,7 +4,7 @@ import { SWRConfig } from 'swr';
 import { ThemeProvider } from 'next-themes';
 import { Toaster } from 'sonner';
 import { AuthSessionProvider } from '@/hooks/use-auth-session';
-import { swrFetcher } from '@/lib/api';
+import { swrFetcher, ApiError } from '@/lib/api';
 
 /**
  * App-wide providers. Two global concerns:
@@ -33,6 +33,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
 					revalidateOnReconnect: false,
 					errorRetryCount: 1,
 					keepPreviousData: true,
+					// Don't retry auth/client errors — api() already handled the 401
+					// refresh+redirect, and retrying a 4xx just spams the server.
+					onErrorRetry: (error, _key, _config, revalidate, { retryCount }) => {
+						const status = (error as ApiError)?.status;
+						if (typeof status === 'number' && status >= 400 && status < 500) return;
+						if (retryCount >= 1) return;
+						setTimeout(() => revalidate({ retryCount }), 1000);
+					},
 				}}
 			>
 				<AuthSessionProvider>{children}</AuthSessionProvider>

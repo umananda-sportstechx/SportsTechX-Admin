@@ -3,8 +3,10 @@
 import { useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { Plus, Trash2, X, Save } from 'lucide-react';
+import { Plus, Trash2, X, Save, Pencil, ArrowUp, ArrowDown } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Modal } from '@/components/modal';
+import { PageHeader, AsyncState } from '@/components/atoms';
 
 interface PollOption { id: string; poll_id: string; label: string; sort_order: number }
 interface Poll {
@@ -24,7 +26,7 @@ export default function PollsAdminPage() {
 	const [reportFilter, setReportFilter] = useState<string>('');
 	const [creating, setCreating] = useState(false);
 
-	const { data: polls } = useSWR<PollsResponse>(
+	const { data: polls, error: pollsError, isLoading: pollsLoading } = useSWR<PollsResponse>(
 		['/api/admin/polls', { report_id: reportFilter || undefined }],
 		{ dedupingInterval: 30_000 },
 	);
@@ -40,6 +42,11 @@ export default function PollsAdminPage() {
 		} catch (e) { toast.error((e as Error).message); }
 	};
 
+	const saveQuestion = async (id: string, question: string) => {
+		try { await api('PATCH', `/api/admin/polls/${id}`, { question: question.trim() }); toast.success('Question updated'); void refresh(); }
+		catch (e) { toast.error((e as Error).message); }
+	};
+
 	const removePoll = async (id: string) => {
 		if (!confirm('Delete poll? Votes will be removed too.')) return;
 		try { await api('DELETE', `/api/admin/polls/${id}`); toast.success('Deleted'); void refresh(); }
@@ -51,21 +58,36 @@ export default function PollsAdminPage() {
 		catch (e) { toast.error((e as Error).message); }
 	};
 
-	const addOption = async (pollId: string, label: string) => {
-		if (!label.trim()) return;
-		try { await api('POST', `/api/admin/polls/${pollId}/options`, { label: label.trim() }); void refresh(); }
+	const renameOption = async (optionId: string, label: string) => {
+		try { await api('PATCH', `/api/admin/polls/options/${optionId}`, { label: label.trim() }); void refresh(); }
 		catch (e) { toast.error((e as Error).message); }
+	};
+
+	const addOption = async (poll: Poll, label: string) => {
+		if (!label.trim()) return;
+		const nextOrder = poll.options.reduce((m, o) => Math.max(m, o.sort_order), -1) + 1;
+		try { await api('POST', `/api/admin/polls/${poll.id}/options`, { label: label.trim(), sort_order: nextOrder }); void refresh(); }
+		catch (e) { toast.error((e as Error).message); }
+	};
+
+	// Swap sort_order of two options to move one up/down.
+	const swapOptions = async (a: PollOption, b: PollOption) => {
+		try {
+			await Promise.all([
+				api('PATCH', `/api/admin/polls/options/${a.id}`, { sort_order: b.sort_order }),
+				api('PATCH', `/api/admin/polls/options/${b.id}`, { sort_order: a.sort_order }),
+			]);
+			void refresh();
+		} catch (e) { toast.error((e as Error).message); }
 	};
 
 	return (
 		<div>
-			<div style={{ marginBottom: 'var(--space-5)' }}>
-				<div className="co-stat-label" style={{ marginBottom: 6 }}>Reader engagement</div>
-				<h1 style={{ fontFamily: 'var(--font-display)', fontSize: 38, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1, margin: 0 }}>Polls</h1>
-				<p style={{ fontSize: 14, color: 'var(--fg-2)', marginTop: 6 }}>
-					Authored once here, then attached to report sections via the section editor's poll picker.
-				</p>
-			</div>
+			<PageHeader
+				kicker="Reader engagement"
+				title="Polls"
+				subtitle="Authored once here, then attached to report sections via the section editor's poll picker."
+			/>
 
 			<div className="filter-bar" style={{ marginBottom: 12 }}>
 				<select className="search-input" style={{ flex: '0 0 280px' }} value={reportFilter} onChange={(e) => setReportFilter(e.target.value)}>
@@ -82,19 +104,12 @@ export default function PollsAdminPage() {
 				<NewPollModal reports={reports?.data ?? []} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); void refresh(); }} />
 			)}
 
+			<AsyncState loading={pollsLoading} error={pollsError} empty={(polls?.data ?? []).length === 0} emptyMsg="No polls yet." onRetry={() => void refresh()}>
 			<div style={{ display: 'grid', gap: 12 }}>
-				{(polls?.data ?? []).length === 0 && (
-					<div className="card" style={{ padding: 24, textAlign: 'center', color: 'var(--fg-muted)' }}>No polls yet.</div>
-				)}
 				{(polls?.data ?? []).map((p) => (
 					<div key={p.id} className="card" style={{ padding: 'var(--space-4)' }}>
 						<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
-							<div>
-								<div style={{ fontWeight: 700, fontSize: 15 }}>{p.question}</div>
-								<div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)', marginTop: 4 }}>
-									report: {p.report_id.slice(0, 8)} · {p.is_open ? 'open' : 'closed'}
-								</div>
-							</div>
+							<EditableQuestion poll={p} onSave={(q) => void saveQuestion(p.id, q)} />
 							<div style={{ display: 'flex', gap: 6 }}>
 								<button className="btn ghost" onClick={() => void togglePoll(p)}>
 									{p.is_open ? 'Close' : 'Reopen'}
@@ -105,17 +120,77 @@ export default function PollsAdminPage() {
 							</div>
 						</div>
 						<div style={{ display: 'grid', gap: 6 }}>
-							{p.options.map((o) => (
-								<div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-									<span style={{ flex: 1 }}>{o.label}</span>
-									<button className="btn ghost" style={{ padding: '2px 6px' }} onClick={() => void removeOption(o.id)}><X size={11} /></button>
-								</div>
+							{p.options.map((o, idx) => (
+								<OptionRow
+									key={o.id}
+									option={o}
+									canUp={idx > 0}
+									canDown={idx < p.options.length - 1}
+									onUp={() => void swapOptions(o, p.options[idx - 1])}
+									onDown={() => void swapOptions(o, p.options[idx + 1])}
+									onRename={(label) => void renameOption(o.id, label)}
+									onRemove={() => void removeOption(o.id)}
+								/>
 							))}
-							<AddOptionInline onAdd={(label) => void addOption(p.id, label)} />
+							<AddOptionInline onAdd={(label) => void addOption(p, label)} />
 						</div>
 					</div>
 				))}
 			</div>
+			</AsyncState>
+		</div>
+	);
+}
+
+function EditableQuestion({ poll, onSave }: { poll: Poll; onSave: (q: string) => void }) {
+	const [editing, setEditing] = useState(false);
+	const [value, setValue] = useState(poll.question);
+	if (editing) {
+		return (
+			<div style={{ display: 'flex', gap: 6, alignItems: 'center', flex: 1 }}>
+				<input className="search-input" style={{ flex: 1 }} value={value} onChange={(e) => setValue(e.target.value)} autoFocus />
+				<button className="btn" disabled={!value.trim()} onClick={() => { onSave(value); setEditing(false); }}><Save size={12} /></button>
+				<button className="btn ghost" onClick={() => { setValue(poll.question); setEditing(false); }}><X size={12} /></button>
+			</div>
+		);
+	}
+	return (
+		<div>
+			<div style={{ fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
+				{poll.question}
+				<button className="btn ghost" style={{ padding: '2px 6px' }} onClick={() => setEditing(true)}><Pencil size={11} /></button>
+			</div>
+			<div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)', marginTop: 4 }}>
+				report: {poll.report_id.slice(0, 8)} · {poll.is_open ? 'open' : 'closed'}
+			</div>
+		</div>
+	);
+}
+
+function OptionRow({ option, canUp, canDown, onUp, onDown, onRename, onRemove }: {
+	option: PollOption; canUp: boolean; canDown: boolean; onUp: () => void; onDown: () => void; onRename: (label: string) => void; onRemove: () => void;
+}) {
+	const [editing, setEditing] = useState(false);
+	const [value, setValue] = useState(option.label);
+	return (
+		<div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+			<div style={{ display: 'flex', flexDirection: 'column' }}>
+				<button className="btn ghost" style={{ padding: 0, height: 14, opacity: canUp ? 1 : 0.3 }} disabled={!canUp} onClick={onUp}><ArrowUp size={11} /></button>
+				<button className="btn ghost" style={{ padding: 0, height: 14, opacity: canDown ? 1 : 0.3 }} disabled={!canDown} onClick={onDown}><ArrowDown size={11} /></button>
+			</div>
+			{editing ? (
+				<>
+					<input className="search-input" style={{ flex: 1 }} value={value} onChange={(e) => setValue(e.target.value)} autoFocus />
+					<button className="btn ghost" disabled={!value.trim()} onClick={() => { onRename(value); setEditing(false); }}><Save size={11} /></button>
+					<button className="btn ghost" onClick={() => { setValue(option.label); setEditing(false); }}><X size={11} /></button>
+				</>
+			) : (
+				<>
+					<span style={{ flex: 1 }}>{option.label}</span>
+					<button className="btn ghost" style={{ padding: '2px 6px' }} onClick={() => setEditing(true)}><Pencil size={11} /></button>
+					<button className="btn ghost" style={{ padding: '2px 6px' }} onClick={onRemove}><X size={11} /></button>
+				</>
+			)}
 		</div>
 	);
 }
@@ -134,6 +209,7 @@ function NewPollModal({ reports, onClose, onSaved }: { reports: Report[]; onClos
 	const [reportId, setReportId] = useState(reports[0]?.id ?? '');
 	const [question, setQuestion] = useState('');
 	const [optionsText, setOptionsText] = useState('');
+	const [isOpen, setIsOpen] = useState(true);
 	const [pending, setPending] = useState(false);
 
 	const submit = async () => {
@@ -141,7 +217,8 @@ function NewPollModal({ reports, onClose, onSaved }: { reports: Report[]; onClos
 		try {
 			const options = optionsText.split('\n').map((s) => s.trim()).filter(Boolean);
 			if (options.length < 2) { toast.error('Need at least 2 options'); setPending(false); return; }
-			await api('POST', '/api/admin/polls', { report_id: reportId, question: question.trim(), options });
+			if (options.length > 8) { toast.error('Maximum 8 options'); setPending(false); return; }
+			await api('POST', '/api/admin/polls', { report_id: reportId, question: question.trim(), options, is_open: isOpen });
 			toast.success('Poll created');
 			onSaved();
 		} catch (e) { toast.error((e as Error).message); }
@@ -149,41 +226,44 @@ function NewPollModal({ reports, onClose, onSaved }: { reports: Report[]; onClos
 	};
 
 	return (
-		<div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'grid', placeItems: 'center', zIndex: 100 }} onClick={onClose}>
-			<div className="card" style={{ width: 'min(520px, 92vw)', padding: 'var(--space-4)' }} onClick={(e) => e.stopPropagation()}>
-				<div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-					<div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18 }}>New poll</div>
-					<button className="btn ghost" onClick={onClose}><X size={12} /></button>
-				</div>
-				<div style={{ display: 'grid', gap: 12 }}>
-					<div>
-						<div className="co-stat-label" style={{ marginBottom: 6 }}>Report</div>
-						<select className="search-input" style={{ width: '100%' }} value={reportId} onChange={(e) => setReportId(e.target.value)}>
-							{reports.map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
-						</select>
-					</div>
-					<div>
-						<div className="co-stat-label" style={{ marginBottom: 6 }}>Question</div>
-						<input className="search-input" style={{ width: '100%' }} value={question} onChange={(e) => setQuestion(e.target.value)} />
-					</div>
-					<div>
-						<div className="co-stat-label" style={{ marginBottom: 6 }}>Options (one per line)</div>
-						<textarea
-							className="search-input"
-							style={{ width: '100%', minHeight: 100 }}
-							value={optionsText}
-							onChange={(e) => setOptionsText(e.target.value)}
-							placeholder={'Yes\nNo\nMaybe'}
-						/>
-					</div>
-				</div>
-				<div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+		<Modal
+			title="New poll"
+			onClose={onClose}
+			width={520}
+			footer={
+				<>
 					<button className="btn ghost" onClick={onClose}>Cancel</button>
 					<button className="btn" disabled={!reportId || !question.trim() || pending} onClick={() => void submit()}>
 						<Save size={12} /> {pending ? 'Creating…' : 'Create'}
 					</button>
+				</>
+			}
+		>
+			<div style={{ display: 'grid', gap: 12 }}>
+				<div>
+					<div className="co-stat-label" style={{ marginBottom: 6 }}>Report</div>
+					<select className="search-input" style={{ width: '100%' }} value={reportId} onChange={(e) => setReportId(e.target.value)}>
+						{reports.map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
+					</select>
 				</div>
+				<div>
+					<div className="co-stat-label" style={{ marginBottom: 6 }}>Question</div>
+					<input className="search-input" style={{ width: '100%' }} value={question} onChange={(e) => setQuestion(e.target.value)} />
+				</div>
+				<div>
+					<div className="co-stat-label" style={{ marginBottom: 6 }}>Options (one per line, 2–8)</div>
+					<textarea
+						className="search-input"
+						style={{ width: '100%', minHeight: 100 }}
+						value={optionsText}
+						onChange={(e) => setOptionsText(e.target.value)}
+						placeholder={'Yes\nNo\nMaybe'}
+					/>
+				</div>
+				<label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13 }}>
+					<input type="checkbox" checked={isOpen} onChange={(e) => setIsOpen(e.target.checked)} /> Open for voting immediately
+				</label>
 			</div>
-		</div>
+		</Modal>
 	);
 }

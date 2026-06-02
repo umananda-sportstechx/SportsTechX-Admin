@@ -2,35 +2,71 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
 	LayoutDashboard, Briefcase, Users, FilePlus, FileText, Database, Layers,
 	Activity, ShoppingCart, LogOut, ShieldAlert, CreditCard, ToggleLeft,
-	Banknote, Sparkles, Tag, BookOpen,
+	Banknote, Sparkles, Tag, BookOpen, Menu, BarChart3, Gauge,
 } from 'lucide-react';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useIsAdmin, useUserProfile } from '@/hooks/use-user-profile';
 
-const NAV = [
-	{ href: '/dashboard', label: 'Overview', Icon: LayoutDashboard },
-	{ href: '/claims', label: 'Claims', Icon: ShieldAlert },
-	{ href: '/users', label: 'Users', Icon: Users },
-	{ href: '/companies', label: 'Companies & deals', Icon: Briefcase },
-	{ href: '/investors', label: 'Investors', Icon: Banknote },
-	{ href: '/ecosystem', label: 'Ecosystem', Icon: Layers },
-	{ href: '/reports', label: 'Reports', Icon: FileText },
-	{ href: '/polls', label: 'Polls', Icon: Sparkles },
-	{ href: '/startups-pipeline', label: 'Startups pipeline', Icon: FilePlus },
-	{ href: '/sales', label: 'Sales', Icon: ShoppingCart },
-	{ href: '/billing', label: 'Billing tools', Icon: CreditCard },
-	{ href: '/subscription-plans', label: 'Plans editorial', Icon: Tag },
-	{ href: '/features', label: 'Features', Icon: ToggleLeft },
-	{ href: '/reference', label: 'Reference data', Icon: BookOpen },
-	{ href: '/jobs', label: 'Jobs & integrations', Icon: Activity },
-	{ href: '/data-requests', label: 'Data requests', Icon: Database },
-	{ href: '/performance', label: 'Performance', Icon: Activity },
-	{ href: '/analytics', label: 'Analytics', Icon: LayoutDashboard },
+interface NavItem { href: string; label: string; Icon: typeof LayoutDashboard }
+interface NavGroup { label: string; items: NavItem[] }
+
+// Grouped so 18 destinations stay scannable instead of one flat list.
+const NAV_GROUPS: NavGroup[] = [
+	{
+		label: 'Overview',
+		items: [
+			{ href: '/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
+			{ href: '/analytics', label: 'Analytics', Icon: BarChart3 },
+		],
+	},
+	{
+		label: 'Review queues',
+		items: [
+			{ href: '/claims', label: 'Claims', Icon: ShieldAlert },
+			{ href: '/data-requests', label: 'Data requests', Icon: Database },
+			{ href: '/startups-pipeline', label: 'Startups pipeline', Icon: FilePlus },
+		],
+	},
+	{
+		label: 'Catalog',
+		items: [
+			{ href: '/companies', label: 'Companies & deals', Icon: Briefcase },
+			{ href: '/investors', label: 'Investors', Icon: Banknote },
+			{ href: '/ecosystem', label: 'Ecosystem', Icon: Layers },
+			{ href: '/reference', label: 'Reference data', Icon: BookOpen },
+		],
+	},
+	{
+		label: 'Content',
+		items: [
+			{ href: '/reports', label: 'Reports', Icon: FileText },
+			{ href: '/polls', label: 'Polls', Icon: Sparkles },
+		],
+	},
+	{
+		label: 'Growth & access',
+		items: [
+			{ href: '/users', label: 'Users', Icon: Users },
+			{ href: '/billing', label: 'Billing tools', Icon: CreditCard },
+			{ href: '/subscription-plans', label: 'Plans', Icon: Tag },
+			{ href: '/features', label: 'Features', Icon: ToggleLeft },
+		],
+	},
+	{
+		label: 'Operations',
+		items: [
+			{ href: '/sales', label: 'Sales', Icon: ShoppingCart },
+			{ href: '/jobs', label: 'Jobs & integrations', Icon: Activity },
+			{ href: '/performance', label: 'Performance', Icon: Gauge },
+		],
+	},
 ];
+
+const ALL_NAV = NAV_GROUPS.flatMap((g) => g.items);
 
 /**
  * Admin shell — auth-gated, admin-role-gated wrapper for every admin page.
@@ -45,6 +81,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 	const { data: profile } = useUserProfile();
 	const router = useRouter();
 	const pathname = usePathname();
+	const [navOpen, setNavOpen] = useState(false);
 
 	useEffect(() => {
 		if (authLoading) return;
@@ -74,109 +111,53 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 		.join('')
 		.toUpperCase();
 
+	const isActive = (href: string) => pathname === href || pathname?.startsWith(`${href}/`);
+	const current = ALL_NAV.find((n) => isActive(n.href));
+
 	return (
 		<div style={{ minHeight: '100vh' }}>
-			<aside
-				style={{
-					position: 'fixed',
-					top: 0,
-					left: 0,
-					bottom: 0,
-					width: 220,
-					background: 'var(--bg-2)',
-					borderRight: '1px solid var(--border)',
-					padding: 'var(--space-4) 0',
-					overflowY: 'auto',
-					scrollbarGutter: 'stable',
-					zIndex: 10,
-				}}
-			>
-				<div style={{ padding: '0 var(--space-4) var(--space-4)' }}>
-					<div
-						style={{
-							fontFamily: 'var(--font-mono)',
-							fontSize: 10,
-							color: 'var(--fg-muted)',
-							textTransform: 'uppercase',
-							letterSpacing: '0.12em',
-							marginBottom: 4,
-						}}
-					>
-						SportsTechX
-					</div>
-					<div
-						style={{
-							fontFamily: 'var(--font-display)',
-							fontSize: 18,
-							fontWeight: 800,
-							letterSpacing: '-0.02em',
-						}}
-					>
-						Admin
+			<div className={`admin-scrim ${navOpen ? 'open' : ''}`} onClick={() => setNavOpen(false)} />
+
+			<aside className={`admin-rail ${navOpen ? 'open' : ''}`}>
+				<div className="admin-rail-brandrow">
+					<div>
+						<div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 4 }}>
+							SportsTechX
+						</div>
+						<div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em' }}>
+							Admin
+						</div>
 					</div>
 				</div>
-				<nav style={{ display: 'flex', flexDirection: 'column', padding: '0 8px' }}>
-					{NAV.map(({ href, label, Icon }) => {
-						const active = pathname === href || pathname?.startsWith(`${href}/`);
-						return (
-							<Link
-								key={href}
-								href={href}
-								style={{
-									display: 'flex',
-									alignItems: 'center',
-									gap: 10,
-									padding: '8px 12px',
-									textDecoration: 'none',
-									color: active ? 'var(--fg)' : 'var(--fg-2)',
-									background: active ? 'var(--bg-3)' : 'transparent',
-									fontSize: 13,
-									fontWeight: active ? 600 : 500,
-									borderLeft: active ? '2px solid var(--accent)' : '2px solid transparent',
-								}}
-							>
-								<Icon size={14} /> {label}
-							</Link>
-						);
-					})}
+				<nav>
+					{NAV_GROUPS.map((group) => (
+						<div className="nav-group" key={group.label}>
+							<div className="nav-group-label">{group.label}</div>
+							{group.items.map(({ href, label, Icon }) => (
+								<Link key={href} href={href} className={`nav-link ${isActive(href) ? 'active' : ''}`} onClick={() => setNavOpen(false)}>
+									<Icon size={15} /> {label}
+								</Link>
+							))}
+						</div>
+					))}
 				</nav>
 			</aside>
-			<main style={{ display: 'flex', flexDirection: 'column', marginLeft: 220, minHeight: '100vh' }}>
-				<header
-					style={{
-						display: 'flex',
-						alignItems: 'center',
-						gap: 12,
-						padding: '12px var(--space-4)',
-						borderBottom: '1px solid var(--border)',
-						height: 'var(--topbar-h)',
-					}}
-				>
+
+			<main className="admin-main">
+				<header className="admin-topbar">
+					<button className="btn ghost admin-rail-toggle" onClick={() => setNavOpen((v) => !v)} aria-label="Toggle navigation">
+						<Menu size={16} />
+					</button>
+					<div className="admin-topbar-title">{current?.label ?? 'Admin'}</div>
 					<div style={{ flex: 1 }} />
-					<div
-						style={{
-							width: 32,
-							height: 32,
-							background: 'var(--accent)',
-							color: 'var(--accent-fg)',
-							display: 'grid',
-							placeItems: 'center',
-							fontFamily: 'var(--font-display)',
-							fontWeight: 700,
-							fontSize: 12,
-						}}
-					>
-						{initials}
-					</div>
-					<button
-						onClick={() => signOut().then(() => router.replace('/login'))}
-						className="btn ghost"
-						title="Sign out"
-					>
+					<div className="admin-avatar" title={profile?.email ?? undefined}>{initials}</div>
+					<button onClick={() => signOut().then(() => router.replace('/login'))} className="btn ghost" title="Sign out">
 						<LogOut size={12} /> Sign out
 					</button>
 				</header>
-				<div style={{ flex: 1, padding: 'var(--space-5) var(--space-4)' }}>{children}</div>
+				<div style={{ flex: 1, padding: 'var(--space-5) var(--space-4)' }}>
+					<div className="admin-content">{children}</div>
+				</div>
 			</main>
 		</div>
 	);

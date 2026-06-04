@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import { PageHeader, StatCard, AsyncState } from '@/components/atoms';
+import { ComboBarLine, HBarDrilldown, type HBarRow } from '@/components/charts';
+
+const EVENT_COLORS = ['#79CABD', '#C0F4DE', '#6CA8FF', '#FFB36C', '#D99CFF', '#FF9CA8', '#9CE0C0'];
 
 interface Counts { total: number }
 interface DailyRow { day: string; active_users: number; events: number }
@@ -34,6 +37,20 @@ export default function AdminAnalyticsPage() {
 	const peakUsers = daily.reduce((m, d) => Math.max(m, d.active_users), 0);
 	const peakEvents = daily.reduce((m, d) => Math.max(m, d.events), 0);
 
+	const chartData = daily.map((d) => ({
+		label: new Date(d.day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+		amt: d.events,
+		deals: d.active_users,
+	}));
+	const topEvents = analytics?.top_events ?? [];
+	const eventRows: HBarRow[] = topEvents.map((e, i) => ({
+		id: e.event_type,
+		label: e.event_type,
+		value: e.count,
+		formatted: e.count.toLocaleString(),
+		color: EVENT_COLORS[i % EVENT_COLORS.length],
+	}));
+
 	const inventory = [
 		{ label: 'Companies', value: companies?.total ?? 0 },
 		{ label: 'Deals', value: deals?.total ?? 0 },
@@ -57,6 +74,25 @@ export default function AdminAnalyticsPage() {
 				<StatCard label="Peak DAU" loading={analyticsLoading} value={peakUsers.toLocaleString()} />
 				<StatCard label="Peak daily events" loading={analyticsLoading} value={peakEvents.toLocaleString()} />
 				<StatCard label="Days with activity" loading={analyticsLoading} value={daily.length.toLocaleString()} />
+			</div>
+
+			<div className="grid-2" style={{ marginBottom: 'var(--space-5)' }}>
+				<div className="card">
+					<div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--border)', fontWeight: 700 }}>Activity trend <span style={{ fontWeight: 400, color: 'var(--fg-muted)', fontSize: 12 }}>· bars = events · line = active users</span></div>
+					<div style={{ padding: 'var(--space-4)' }}>
+						<AsyncState loading={analyticsLoading} error={analyticsError} empty={chartData.length === 0} emptyMsg="No events recorded in this range yet" onRetry={() => void mutateAnalytics()}>
+							<ComboBarLine data={chartData} height={260} barLabel="Events" lineLabel="active users" valueFormatter={(v) => v.toLocaleString()} />
+						</AsyncState>
+					</div>
+				</div>
+				<div className="card">
+					<div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--border)', fontWeight: 700 }}>Top events</div>
+					<div style={{ padding: 'var(--space-4)' }}>
+						<AsyncState loading={analyticsLoading} error={analyticsError} empty={eventRows.length === 0} emptyMsg="No events recorded in this range yet" onRetry={() => void mutateAnalytics()}>
+							<HBarDrilldown rows={eventRows} />
+						</AsyncState>
+					</div>
+				</div>
 			</div>
 
 			<div className="grid-2" style={{ marginBottom: 'var(--space-5)' }}>

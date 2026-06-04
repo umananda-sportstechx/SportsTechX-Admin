@@ -2,7 +2,10 @@
 
 import { useState } from 'react';
 import useSWR from 'swr';
-import { PageHeader, AsyncState } from '@/components/atoms';
+import { PageHeader, StatCard, AsyncState } from '@/components/atoms';
+import { HBarDrilldown, type HBarRow } from '@/components/charts';
+
+const QUEUE_COLORS = ['#79CABD', '#6CA8FF', '#FFB36C', '#D99CFF', '#FF9CA8', '#9CE0C0', '#C0F4DE'];
 
 interface SummaryRow {
 	metric_type: string;
@@ -43,6 +46,25 @@ export default function PerformancePage() {
 	const summary = data?.summary ?? [];
 	const slowest = data?.slowest ?? [];
 
+	// Aggregate across queues for the headline stat cards.
+	const totalReq = summary.reduce((s, r) => s + Number(r.total_requests), 0);
+	const totalSucc = summary.reduce((s, r) => s + Number(r.success_count), 0);
+	const totalErr = summary.reduce((s, r) => s + Number(r.error_count), 0);
+	const successRate = totalSucc + totalErr > 0 ? (totalSucc / (totalSucc + totalErr)) * 100 : 0;
+	const weightedAvg = totalReq > 0 ? summary.reduce((s, r) => s + Number(r.avg_duration_ms) * Number(r.total_requests), 0) / totalReq : 0;
+	const maxP95 = summary.reduce((m, r) => Math.max(m, Number(r.p95_duration_ms)), 0);
+
+	const reqRows: HBarRow[] = summary.map((s, i) => ({
+		id: s.metric_type, label: s.metric_type, value: Number(s.total_requests),
+		formatted: Number(s.total_requests).toLocaleString(), color: QUEUE_COLORS[i % QUEUE_COLORS.length],
+	}));
+	const p95Rows: HBarRow[] = [...summary]
+		.sort((a, b) => Number(b.p95_duration_ms) - Number(a.p95_duration_ms))
+		.map((s, i) => ({
+			id: s.metric_type, label: s.metric_type, value: Number(s.p95_duration_ms),
+			formatted: ms(s.p95_duration_ms), color: QUEUE_COLORS[i % QUEUE_COLORS.length],
+		}));
+
 	return (
 		<div>
 			<PageHeader kicker={`Operations · last ${range}`} title="Performance" subtitle="Background job throughput and latency, refreshed every 30s." />
@@ -51,6 +73,32 @@ export default function PerformancePage() {
 				{RANGES.map((r) => (
 					<button key={r} className={`chip ${range === r ? 'on' : ''}`} onClick={() => setRange(r)}>{r}</button>
 				))}
+			</div>
+
+			<div className="grid-4" style={{ marginBottom: 'var(--space-5)' }}>
+				<StatCard label="Total jobs" loading={isLoading} value={totalReq.toLocaleString()} />
+				<StatCard label="Success rate" loading={isLoading} value={`${successRate.toFixed(1)}%`} urgent={successRate < 95 && totalReq > 0} />
+				<StatCard label="Avg latency" loading={isLoading} value={ms(weightedAvg)} />
+				<StatCard label="Worst p95" loading={isLoading} value={ms(maxP95)} />
+			</div>
+
+			<div className="grid-2" style={{ marginBottom: 'var(--space-5)' }}>
+				<div className="card">
+					<div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--border)', fontWeight: 700 }}>Throughput by queue</div>
+					<div style={{ padding: 'var(--space-4)' }}>
+						<AsyncState loading={isLoading} error={error} empty={reqRows.length === 0} emptyMsg="No jobs in this range" onRetry={() => void mutate()}>
+							<HBarDrilldown rows={reqRows} />
+						</AsyncState>
+					</div>
+				</div>
+				<div className="card">
+					<div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--border)', fontWeight: 700 }}>p95 latency by queue</div>
+					<div style={{ padding: 'var(--space-4)' }}>
+						<AsyncState loading={isLoading} error={error} empty={p95Rows.length === 0} emptyMsg="No jobs in this range" onRetry={() => void mutate()}>
+							<HBarDrilldown rows={p95Rows} />
+						</AsyncState>
+					</div>
+				</div>
 			</div>
 
 			<div className="card" style={{ marginBottom: 'var(--space-4)' }}>

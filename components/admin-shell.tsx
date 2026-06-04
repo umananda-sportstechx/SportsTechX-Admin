@@ -7,6 +7,7 @@ import {
 	LayoutDashboard, Briefcase, Users, FilePlus, FileText, Database, Layers,
 	Activity, ShoppingCart, LogOut, ShieldAlert, CreditCard, ToggleLeft,
 	Banknote, Sparkles, Tag, BookOpen, Menu, BarChart3, Gauge,
+	CircleDollarSign, GitMerge,
 } from 'lucide-react';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useIsAdmin, useUserProfile } from '@/hooks/use-user-profile';
@@ -29,14 +30,18 @@ const NAV_GROUPS: NavGroup[] = [
 			{ href: '/claims', label: 'Claims', Icon: ShieldAlert },
 			{ href: '/data-requests', label: 'Data requests', Icon: Database },
 			{ href: '/startups-pipeline', label: 'Startups pipeline', Icon: FilePlus },
+			{ href: '/investor-review', label: 'Investor review', Icon: Banknote },
 		],
 	},
 	{
 		label: 'Catalog',
 		items: [
-			{ href: '/companies', label: 'Companies & deals', Icon: Briefcase },
+			{ href: '/companies', label: 'Companies', Icon: Briefcase },
+			{ href: '/deals', label: 'Deals', Icon: CircleDollarSign },
+			{ href: '/acquisitions', label: 'Acquisitions', Icon: GitMerge },
 			{ href: '/investors', label: 'Investors', Icon: Banknote },
 			{ href: '/ecosystem', label: 'Ecosystem', Icon: Layers },
+			{ href: '/featured-lists', label: 'Featured lists', Icon: Sparkles },
 			{ href: '/reference', label: 'Reference data', Icon: BookOpen },
 		],
 	},

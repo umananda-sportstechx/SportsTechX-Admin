@@ -354,3 +354,70 @@ a:focus-visible,
     background: rgba(0,0,0,0.45);
   }
 }
+
+/* ============================================================================
+ * Chart primitives — supporting classes for components/charts.tsx.
+ * Ported from client/app/analytics.css so the admin charts render identically.
+ * ========================================================================== */
+
+/* Pie / donut tooltip (shared with ComboBarLine) */
+.pie-wrap { position: relative; display: flex; justify-content: center; align-items: center; }
+.pie-tip {
+  position: absolute; pointer-events: none;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  padding: 8px 10px;
+  font-size: 12px; white-space: nowrap;
+  z-index: 5;
+  box-shadow: 0 4px 16px rgba(0,0,0,.22);
+}
+.pie-tip-l { font-weight: 700; margin-bottom: 2px; color: var(--fg); }
+.pie-tip-v { font-family: var(--font-mono); color: var(--fg-muted); font-size: 11px; }
+
+/* Pie/donut legend (next to or under the chart) */
+.an-legend { display: flex; flex-direction: column; gap: 0; margin-top: 12px; }
+.an-legend-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 12px; }
+.an-legend-sw { width: 10px; height: 10px; flex-shrink: 0; }
+.an-legend-name { flex: 1; color: var(--fg-2); }
+.an-legend-val { font-family: var(--font-mono); font-weight: 700; color: var(--fg); }
+
+/* Combo bar+line wrapper + legend */
+.cbl-wrap { width: 100%; padding: 4px 0 0; position: relative; }
+.cbl-legend {
+  display: flex; justify-content: center; gap: 24px;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.cbl-legend-item { display: inline-flex; align-items: center; gap: 8px; }
+
+/* Hierarchical drilldown rows */
+.hb-row { border-top: 1px solid var(--border); padding: 14px 0; cursor: default; }
+.hb-row.has-children { cursor: pointer; }
+.hb-row.has-children:hover .hb-label { color: var(--fg); }
+.hb-row:first-child { border-top: 0; padding-top: 6px; }
+.hb-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.hb-caret {
+  width: 14px; height: 14px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--fg-muted);
+  transition: transform .15s, color .15s;
+}
+.hb-row.open > .hb-head .hb-caret,
+.hb-child.open > .hb-head .hb-caret { transform: rotate(90deg); color: var(--fg); }
+.hb-label { flex: 1; font-size: 13px; font-weight: 600; color: var(--fg-2); min-width: 0; }
+.hb-row > .hb-head .hb-label { font-size: 14px; color: var(--fg); }
+.hb-pct { font-family: var(--font-mono); font-size: 11px; color: var(--fg-muted); margin-right: 14px; min-width: 50px; text-align: right; }
+.hb-val { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--fg); min-width: 60px; text-align: right; }
+.hb-bar { height: 4px; background: var(--bg-2); position: relative; overflow: hidden; }
+.hb-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--bar-color, var(--accent)); transition: width .35s ease; }
+.hb-children { margin-top: 10px; margin-left: 24px; border-left: 2px solid var(--bar-color, var(--border)); padding-left: 16px; }
+.hb-child { padding: 10px 0; border-top: 1px solid var(--border); }
+.hb-child:first-child { border-top: 0; padding-top: 4px; }
+.hb-child.has-children { cursor: pointer; }
+.hb-grandchildren { margin-top: 10px; padding-left: 16px; }
+.hb-grandchild { padding: 6px 0; }
+.hb-grandchild .hb-label { font-size: 12px; color: var(--fg-muted); font-weight: 500; }
+.hb-grandchild .hb-head { margin-bottom: 4px; }
+.hb-grandchild .hb-bar { height: 3px; opacity: 0.7; }

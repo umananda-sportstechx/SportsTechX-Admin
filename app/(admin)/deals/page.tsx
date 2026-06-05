@@ -9,6 +9,7 @@ import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, Section } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
+import { CsvImportButton } from '@/components/csv-import';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import {
 	CompanySelectOne, SectorCascade, SportsPicker, RoundTypeSelect, CurrencySelect, InvestorPicker, LocationFields,
@@ -111,6 +112,7 @@ export default function DealsAdminPage() {
 				<FilterSelect ariaLabel="Deal size" value={sizeBucket} onChange={(v) => { setSizeBucket(v); setPage(1); }} options={SIZE_BUCKETS.map((s) => ({ value: s, label: s.replace(/_/g, ' ').replace('from ', '').replace('to', '–') }))} allLabel="Any size" />
 				<FilterSelect ariaLabel="Year" value={year} onChange={(v) => { setYear(v); setPage(1); }} options={yearOpts} allLabel="All years" />
 				<div style={{ flex: 1 }} />
+				<CsvImportButton entity="deals" onDone={() => void refresh()} />
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add deal</button>
 			</FilterBar>
 

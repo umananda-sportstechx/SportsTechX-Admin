@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Trash2, FileText, Eye, EyeOff } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader, AsyncState } from '@/components/atoms';
+import { YearSelect } from '@/components/year-select';
 
 interface Report {
 	id: string;
@@ -102,7 +103,7 @@ export default function ReportsAdminPage() {
 						<option value="">Month —</option>
 						{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
 					</select>
-					<input className="search-input" type="number" placeholder="Year" value={draft.report_year} onChange={(e) => setDraft({ ...draft, report_year: e.target.value })} />
+					<YearSelect value={draft.report_year} onChange={(v) => setDraft({ ...draft, report_year: v })} placeholder="Year —" />
 					<label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
 						<input type="checkbox" checked={draft.show_on_dashboard} onChange={(e) => setDraft({ ...draft, show_on_dashboard: e.target.checked })} />
 						Feature on dashboard

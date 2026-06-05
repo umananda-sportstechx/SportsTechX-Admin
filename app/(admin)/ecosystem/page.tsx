@@ -9,6 +9,8 @@ import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, Section } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
+import { CsvImportButton } from '@/components/csv-import';
+import { YearSelect } from '@/components/year-select';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import { SportsPicker, LocationFields, SocialLinks, EMPTY_SOCIAL, EMPTY_LOCATION, type SocialValue, type LocationValue } from '@/components/entity-pickers';
 
@@ -96,6 +98,7 @@ export default function EcosystemAdminPage() {
 				<input className="search-input" style={{ flex: '0 0 240px', height: 32 }} placeholder="Search…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
 				<FilterSelect ariaLabel="Status" value={status} onChange={(v) => { setStatus(v); setPage(1); }} options={[...STATUSES]} allLabel="All statuses" />
 				<div style={{ flex: 1 }} />
+				<CsvImportButton entity="ecosystem" onDone={() => void refresh()} />
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add {type}</button>
 			</FilterBar>
 
@@ -315,7 +318,7 @@ function EntityForm({ id, initial, onClose, onSaved }: { id: string | null; init
 								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 120px', gap: 12 }}>
 									<Field label="Website"><input className="search-input" type="url" value={form.website} onChange={(e) => set('website', e.target.value)} placeholder="https://" /></Field>
 									<Field label="Category"><input className="search-input" value={form.category} onChange={(e) => set('category', e.target.value)} placeholder="Incubator, VC…" /></Field>
-									<Field label="Founded"><input className="search-input" type="number" value={form.founded_year} onChange={(e) => set('founded_year', e.target.value)} /></Field>
+									<Field label="Founded"><YearSelect value={form.founded_year} onChange={(v) => set('founded_year', v)} /></Field>
 								</div>
 								<Field label="Status">
 									<select className="search-input" value={form.status} onChange={(e) => set('status', e.target.value)}>
@@ -362,7 +365,7 @@ function EntityForm({ id, initial, onClose, onSaved }: { id: string | null; init
 									<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 120px', gap: 12 }}>
 										<Field label="Stage"><input className="search-input" value={form.program.stage_label} onChange={(e) => setProgram('stage_label', e.target.value)} placeholder="Pre-seed" /></Field>
 										<Field label="Cohort size"><input className="search-input" type="number" value={form.program.cohort_size} onChange={(e) => setProgram('cohort_size', e.target.value)} /></Field>
-										<Field label="Latest cohort"><input className="search-input" type="number" value={form.program.latest_cohort_year} onChange={(e) => setProgram('latest_cohort_year', e.target.value)} /></Field>
+										<Field label="Latest cohort"><YearSelect value={form.program.latest_cohort_year} onChange={(v) => setProgram('latest_cohort_year', v)} /></Field>
 									</div>
 									<Field label="Cohort history"><input className="search-input" value={form.program.cohort_history_label} onChange={(e) => setProgram('cohort_history_label', e.target.value)} /></Field>
 									<Field label="Details"><textarea className="search-input" style={{ minHeight: 60, resize: 'vertical' }} value={form.program.details} onChange={(e) => setProgram('details', e.target.value)} /></Field>
@@ -377,9 +380,104 @@ function EntityForm({ id, initial, onClose, onSaved }: { id: string | null; init
 						},
 						{ key: 'social', label: 'Social', node: <SocialLinks value={form.social} onChange={(v) => set('social', v)} /> },
 						{ key: 'sports', label: 'Sports', hint: form.sport_ids.length, node: <Field label="Sports"><SportsPicker value={form.sport_ids} onChange={(v) => set('sport_ids', v)} /></Field> },
+						{ key: 'links', label: 'Links & cohort', node: isEdit && id
+							? <LinksCohortPanel entityId={id} />
+							: <div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>Save the entity first, then re-open it to link related programs/events and manage cohort participants.</div> },
 					]}
 				/>
 			)}
 		</Modal>
+	);
+}
+
+const REL_TYPES = ['initiative_has_program', 'initiative_has_event', 'program_has_event', 'program_has_initiative', 'program_has_program', 'initiative_has_initiative', 'organization_has_program', 'organization_has_event'] as const;
+const PART_STATUS = ['applied', 'accepted', 'graduated', 'dropped'] as const;
+
+interface RelRow { id: string; relationship_type: string; child_id: string; child_name: string; child_type: string }
+interface PartRow { id: string; company_id: string | null; name: string | null; cohort_name: string | null; cohort_year: number | null; participation_status: string }
+interface EcoHit { id: string; name: string; entity_type: string }
+
+/** Relationship-linking + cohort-participant management for an existing entity. */
+function LinksCohortPanel({ entityId }: { entityId: string }) {
+	const { mutate } = useSWRConfig();
+	const rels = useSWR<RelRow[]>([`/api/admin/ecosystem-entities/${entityId}/relationships`], { dedupingInterval: 10_000 });
+	const parts = useSWR<PartRow[]>([`/api/admin/ecosystem-entities/${entityId}/participants`], { dedupingInterval: 10_000 });
+	const refreshRels = () => mutate([`/api/admin/ecosystem-entities/${entityId}/relationships`]);
+	const refreshParts = () => mutate([`/api/admin/ecosystem-entities/${entityId}/participants`]);
+
+	// relationship add state
+	const [relType, setRelType] = useState<string>('program_has_event');
+	const [childQ, setChildQ] = useState('');
+	const [childId, setChildId] = useState('');
+	const childSearch = useSWR<{ data: EcoHit[] }>(childQ.length >= 2 ? ['/api/ecosystem-entities', { q: childQ, limit: 8 }] : null, { dedupingInterval: 10_000, keepPreviousData: true });
+	const addRel = async () => {
+		if (!childId) { toast.error('Pick an entity to link.'); return; }
+		try { await api('POST', `/api/admin/ecosystem-entities/${entityId}/relationships`, { child_id: childId, relationship_type: relType }); toast.success('Linked'); setChildId(''); setChildQ(''); void refreshRels(); }
+		catch (e) { toast.error((e as Error).message); }
+	};
+	const delRel = async (relId: string) => { try { await api('DELETE', `/api/admin/ecosystem-entities/${entityId}/relationships/${relId}`); void refreshRels(); } catch (e) { toast.error((e as Error).message); } };
+
+	// participant add state
+	const [pName, setPName] = useState('');
+	const [pCohort, setPCohort] = useState('');
+	const [pYear, setPYear] = useState('');
+	const [pStatus, setPStatus] = useState<string>('accepted');
+	const addPart = async () => {
+		if (!pName.trim()) { toast.error('Enter a company / startup name.'); return; }
+		try {
+			await api('POST', `/api/admin/ecosystem-entities/${entityId}/participants`, { startup_name: pName.trim(), cohort_name: pCohort.trim() || undefined, cohort_year: pYear ? Number(pYear) : undefined, status: pStatus });
+			toast.success('Participant added'); setPName(''); setPCohort(''); setPYear(''); void refreshParts();
+		} catch (e) { toast.error((e as Error).message); }
+	};
+	const delPart = async (ppId: string) => { try { await api('DELETE', `/api/admin/ecosystem-entities/${entityId}/participants/${ppId}`); void refreshParts(); } catch (e) { toast.error((e as Error).message); } };
+
+	return (
+		<div style={{ display: 'grid', gap: 18 }}>
+			<div>
+				<div className="co-stat-label" style={{ marginBottom: 8 }}>Related entities</div>
+				<div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'flex-start', marginBottom: 10 }}>
+					<select className="search-input" style={{ height: 32, flex: '0 0 auto' }} value={relType} onChange={(e) => setRelType(e.target.value)}>
+						{REL_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
+					</select>
+					<div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+						<input className="search-input" style={{ width: '100%', height: 32 }} placeholder="Search entity to link…" value={childId ? '' : childQ} onChange={(e) => { setChildQ(e.target.value); setChildId(''); }} />
+						{childId === '' && childQ.length >= 2 && (childSearch.data?.data?.length ?? 0) > 0 && (
+							<div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, background: 'var(--bg-1)', border: '1px solid var(--border)', maxHeight: 180, overflow: 'auto' }}>
+								{(childSearch.data?.data ?? []).filter((h) => h.id !== entityId).map((h) => (
+									<button key={h.id} type="button" onClick={() => { setChildId(h.id); setChildQ(h.name); }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--fg)', fontSize: 13 }}>{h.name} <span style={{ color: 'var(--fg-muted)' }}>· {h.entity_type}</span></button>
+								))}
+							</div>
+						)}
+						{childId && <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>selected: {childQ}</div>}
+					</div>
+					<button className="btn" style={{ height: 32 }} onClick={() => void addRel()}>Link</button>
+				</div>
+				<AsyncState loading={rels.isLoading} error={rels.error} empty={(rels.data?.length ?? 0) === 0} emptyMsg="No linked entities." onRetry={() => void refreshRels()}>
+					<table className="data-table"><tbody>
+						{(rels.data ?? []).map((r) => (
+							<tr key={r.id}><td>{r.child_name} <span style={{ color: 'var(--fg-muted)', fontSize: 11 }}>· {r.child_type}</span></td><td style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)' }}>{r.relationship_type.replace(/_/g, ' ')}</td><td style={{ textAlign: 'right' }}><button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => void delRel(r.id)}><Trash2 size={12} /></button></td></tr>
+						))}
+					</tbody></table>
+				</AsyncState>
+			</div>
+
+			<div>
+				<div className="co-stat-label" style={{ marginBottom: 8 }}>Cohort participants</div>
+				<div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+					<input className="search-input" style={{ height: 32, flex: '1 1 160px' }} placeholder="Company / startup name" value={pName} onChange={(e) => setPName(e.target.value)} />
+					<input className="search-input" style={{ height: 32, flex: '0 0 120px' }} placeholder="Cohort" value={pCohort} onChange={(e) => setPCohort(e.target.value)} />
+					<div style={{ flex: '0 0 110px' }}><YearSelect value={pYear} onChange={setPYear} placeholder="Year" /></div>
+					<select className="search-input" style={{ height: 32, flex: '0 0 auto' }} value={pStatus} onChange={(e) => setPStatus(e.target.value)}>{PART_STATUS.map((s) => <option key={s} value={s}>{s}</option>)}</select>
+					<button className="btn" style={{ height: 32 }} onClick={() => void addPart()}>Add</button>
+				</div>
+				<AsyncState loading={parts.isLoading} error={parts.error} empty={(parts.data?.length ?? 0) === 0} emptyMsg="No participants." onRetry={() => void refreshParts()}>
+					<table className="data-table"><thead><tr><th>Name</th><th>Cohort</th><th>Year</th><th>Status</th><th /></tr></thead><tbody>
+						{(parts.data ?? []).map((pp) => (
+							<tr key={pp.id}><td>{pp.name ?? '—'}</td><td>{pp.cohort_name ?? '—'}</td><td className="num">{pp.cohort_year ?? '—'}</td><td>{pp.participation_status}</td><td style={{ textAlign: 'right' }}><button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => void delPart(pp.id)}><Trash2 size={12} /></button></td></tr>
+						))}
+					</tbody></table>
+				</AsyncState>
+			</div>
+		</div>
 	);
 }

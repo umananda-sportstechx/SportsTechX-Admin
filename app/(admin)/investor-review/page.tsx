@@ -25,13 +25,15 @@ export default function InvestorReviewPage() {
 	const [status, setStatus] = useState<string>('pending');
 	const [assigned, setAssigned] = useState<string>('');
 	const [search, setSearch] = useState('');
+	const [from, setFrom] = useState('');
+	const [to, setTo] = useState('');
 	const [selected, setSelected] = useState<Set<string>>(new Set());
 	const [creating, setCreating] = useState(false);
 	const [skipping, setSkipping] = useState<QueueRow | null>(null);
 	const [bulkAssignee, setBulkAssignee] = useState('');
 
 	const { data, error, isLoading } = useSWR<QueueResponse>(
-		['/api/admin/investor-review', { status: status || undefined, assigned_to: assigned || undefined, q: search || undefined, limit: 50 }],
+		['/api/admin/investor-review', { status: status || undefined, assigned_to: assigned || undefined, q: search || undefined, from: from || undefined, to: to || undefined, limit: 50 }],
 		{ dedupingInterval: 15_000 },
 	);
 	const { data: stats } = useSWR<Stats>(['/api/admin/investor-review/stats'], { dedupingInterval: 15_000 });
@@ -59,6 +61,17 @@ export default function InvestorReviewPage() {
 
 	const bulkAssign = () => act(() => api('PATCH', '/api/admin/investor-review/bulk-assign', { ids: [...selected], assigned_to: bulkAssignee || null }), 'Assigned');
 	const bulkComplete = () => act(() => api('PATCH', '/api/admin/investor-review/bulk-status', { ids: [...selected], status: 'completed' }), 'Marked completed');
+	const bulkDelete = () => { if (confirm(`Delete ${selected.size} candidate(s)? This cannot be undone.`)) void act(() => api('DELETE', '/api/admin/investor-review/bulk', { ids: [...selected] }), 'Deleted'); };
+	const selectAllMatching = async () => {
+		const p = new URLSearchParams();
+		if (status) p.set('status', status);
+		if (assigned) p.set('assigned_to', assigned);
+		if (search) p.set('q', search);
+		if (from) p.set('from', from);
+		if (to) p.set('to', to);
+		try { const r = await api<{ ids: string[] }>('GET', `/api/admin/investor-review/ids?${p.toString()}`); setSelected(new Set(r.ids)); }
+		catch (e) { toast.error((e as Error).message); }
+	};
 	const addToDb = (id: string) => act(() => api('POST', `/api/admin/investor-review/${id}/add-to-database`), 'Promoted to investors');
 	const remove = (id: string) => { if (confirm('Delete this candidate?')) void act(() => api('DELETE', `/api/admin/investor-review/${id}`), 'Deleted'); };
 
@@ -101,7 +114,9 @@ export default function InvestorReviewPage() {
 					<option value="unassigned">Unassigned</option>
 					{admins.map((a) => <option key={a.id} value={a.id}>{a.full_name || a.display_name || a.email}</option>)}
 				</select>
-				<input className="search-input" style={{ flex: '0 0 240px', height: 30 }} placeholder="Search name…" value={search} onChange={(e) => setSearch(e.target.value)} />
+				<input className="search-input" style={{ flex: '0 0 200px', height: 30 }} placeholder="Search name…" value={search} onChange={(e) => setSearch(e.target.value)} />
+				<input className="search-input" type="date" style={{ height: 30 }} value={from} onChange={(e) => setFrom(e.target.value)} title="Added from" />
+				<input className="search-input" type="date" style={{ height: 30 }} value={to} onChange={(e) => setTo(e.target.value)} title="Added to" />
 				<div style={{ flex: 1 }} />
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add candidate</button>
 			</div>
@@ -109,12 +124,17 @@ export default function InvestorReviewPage() {
 			{selected.size > 0 && (
 				<div className="card" style={{ padding: 12, marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
 					<strong>{selected.size} selected</strong>
+					{(data?.total ?? 0) > selected.size && (
+						<button className="btn ghost" onClick={() => void selectAllMatching()}>Select all {(data?.total ?? 0).toLocaleString()} matching</button>
+					)}
 					<select className="search-input" style={{ height: 30, width: 200 }} value={bulkAssignee} onChange={(e) => setBulkAssignee(e.target.value)}>
 						<option value="">Unassign</option>
 						{admins.map((a) => <option key={a.id} value={a.id}>{a.full_name || a.display_name || a.email}</option>)}
 					</select>
 					<button className="btn ghost" onClick={() => void bulkAssign()}>Assign</button>
 					<button className="btn ghost" onClick={() => void bulkComplete()}><Check size={12} /> Mark completed</button>
+					<div style={{ flex: 1 }} />
+					<button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => void bulkDelete()}><Trash2 size={12} /> Delete</button>
 				</div>
 			)}
 

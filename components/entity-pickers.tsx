@@ -190,6 +190,20 @@ export function TechTagsPicker({ value, onChange }: { value: string[]; onChange:
 	return <MultiCheckPicker rows={data ?? []} value={value} onChange={onChange} placeholder="No tech tags — select…" loadingMsg="Loading tech tags…" onCreate={onCreate} createLabel="New tech tag name…" />;
 }
 
+/** Multi-select round types (e.g. investor thesis preferred rounds). */
+export function RoundTypesPicker({ value, onChange }: { value: string[]; onChange: (ids: string[]) => void }) {
+	const { data } = useSWR<RefRow[]>(qk.reference.roundTypes(), { dedupingInterval: 60 * 60_000 });
+	const { mutate } = useSWRConfig();
+	const onCreate = async (name: string) => {
+		const row = await createRef('round-types', name);
+		if (!row) return;
+		await mutate(qk.reference.roundTypes());
+		onChange([...value, row.id]);
+		toast.success(`Added round “${row.name}”`);
+	};
+	return <MultiCheckPicker rows={data ?? []} value={value} onChange={onChange} placeholder="No rounds — select…" loadingMsg="Loading rounds…" onCreate={onCreate} createLabel="New round type name…" />;
+}
+
 // ─── Round type / currency single selects ────────────────────────────────────
 
 export function RoundTypeSelect({ value, onChange }: { value: string; onChange: (id: string) => void }) {
@@ -341,10 +355,10 @@ export function SectorCascade({ value, onChange }: { value: string; onChange: (s
 // locations table; everything stays editable for custom entries. The backend
 // persists all of these to the locations row.
 
-export interface LocationValue { country: string; city: string; continent: string; region: string; state: string }
-export const EMPTY_LOCATION: LocationValue = { country: '', city: '', continent: '', region: '', state: '' };
+export interface LocationValue { country: string; city: string; continent: string; region: string; state: string; report_region?: string }
+export const EMPTY_LOCATION: LocationValue = { country: '', city: '', continent: '', region: '', state: '', report_region: '' };
 
-interface LocHit { city: string | null; state: string | null; country: string | null; continent: string | null; region: string | null }
+interface LocHit { city: string | null; state: string | null; country: string | null; continent: string | null; region: string | null; report_region: string | null }
 
 export function LocationFields({ value, onChange, prefix }: { value: LocationValue; onChange: (v: LocationValue) => void; prefix?: string }) {
 	const [q, setQ] = useState(value.city);
@@ -370,6 +384,7 @@ export function LocationFields({ value, onChange, prefix }: { value: LocationVal
 			continent: h.continent ?? value.continent,
 			region: h.region ?? value.region,
 			state: h.state ?? value.state,
+			report_region: h.report_region ?? value.report_region ?? '',
 		});
 		setQ(h.city ?? '');
 		setOpen(false);

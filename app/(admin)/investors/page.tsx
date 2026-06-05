@@ -11,9 +11,10 @@ import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/chart
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import {
-	SectorCascade, SportsPicker, TechTagsPicker, RoundTypeSelect, LocationFields, SocialLinks,
+	SectorCascade, SportsPicker, TechTagsPicker, RoundTypesPicker, LocationFields, SocialLinks,
 	EMPTY_SOCIAL, EMPTY_LOCATION, type SocialValue, type LocationValue,
 } from '@/components/entity-pickers';
+import { YearSelect } from '@/components/year-select';
 
 interface Investor {
 	id: string;
@@ -293,7 +294,7 @@ function InvestorForm({ id, initial, onClose, onSaved }: { id: string | null; in
 												{CATEGORIES.map((c) => <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>)}
 											</select>
 										</Field>
-										<Field label="Launched"><input className="search-input" type="number" value={form.year_launched} onChange={(e) => set('year_launched', e.target.value)} /></Field>
+										<Field label="Launched"><YearSelect value={form.year_launched} onChange={(v) => set('year_launched', v)} /></Field>
 									</div>
 									<Field label="Status">
 										<div style={{ display: 'flex', gap: 6 }}>
@@ -324,7 +325,7 @@ function InvestorForm({ id, initial, onClose, onSaved }: { id: string | null; in
 								<Field label="Sectors"><SectorCascadeMulti value={form.thesis_sector_ids} onChange={(v) => set('thesis_sector_ids', v)} /></Field>
 								<Field label="Sports"><SportsPicker value={form.thesis_sport_ids} onChange={(v) => set('thesis_sport_ids', v)} /></Field>
 								<Field label="Tech tags"><TechTagsPicker value={form.thesis_tech_tag_ids} onChange={(v) => set('thesis_tech_tag_ids', v)} /></Field>
-								<Field label="Preferred round (one)"><RoundTypeSelect value={form.thesis_round_type_ids[0] ?? ''} onChange={(v) => set('thesis_round_type_ids', v ? [v] : [])} /></Field>
+								<Field label="Preferred rounds"><RoundTypesPicker value={form.thesis_round_type_ids} onChange={(v) => set('thesis_round_type_ids', v)} /></Field>
 							</>
 						) },
 						{ key: 'stats', label: 'Stats & Notes', node: (

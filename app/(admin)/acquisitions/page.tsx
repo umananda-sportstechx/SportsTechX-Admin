@@ -9,6 +9,7 @@ import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, Section } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
+import { CsvImportButton } from '@/components/csv-import';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import { CompanySelectOne, SectorCascade, SportsPicker, CurrencySelect, LocationFields, EMPTY_LOCATION, type LocationValue } from '@/components/entity-pickers';
 
@@ -100,6 +101,7 @@ export default function AcquisitionsAdminPage() {
 				<FilterSelect ariaLabel="Type" value={type} onChange={(v) => { setType(v); setPage(1); }} options={[...TYPES]} allLabel="All types" />
 				<FilterSelect ariaLabel="Year" value={year} onChange={(v) => { setYear(v); setPage(1); }} options={yearOpts} allLabel="All years" />
 				<div style={{ flex: 1 }} />
+				<CsvImportButton entity="acquisitions" onDone={() => void refresh()} />
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add acquisition</button>
 			</FilterBar>
 

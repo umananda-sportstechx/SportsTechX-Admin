@@ -42,6 +42,7 @@ export default function DataRequestsPage() {
 	const [status, setStatus] = useState<DcrStatus>('open');
 	const [page, setPage] = useState(1);
 	const [pendingId, setPendingId] = useState<string | null>(null);
+	const [selected, setSelected] = useState<Set<string>>(new Set());
 
 	const { data, error, isLoading } = useSWR<DcrResponse>(
 		['/api/admin/data-change-requests', { status, page, limit: 30 }],
@@ -90,7 +91,21 @@ export default function DataRequestsPage() {
 		finally { setApplyPending(null); }
 	};
 
+	const toggleSel = (id: string) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+	const batch = async (label: string, fn: (id: string) => Promise<unknown>) => {
+		let ok = 0, fail = 0;
+		for (const id of [...selected]) { try { await fn(id); ok++; } catch { fail++; } }
+		if (fail) toast.error(`${label}: ${ok} succeeded, ${fail} failed`); else toast.success(`${label}: ${ok}`);
+		setSelected(new Set());
+		void refresh();
+	};
+	// Batch apply uses each row's submitted value as-is (apply-as-submitted).
+	const batchApply = () => batch('Applied', (id) => api('POST', `/api/admin/data-change-requests/${id}/apply`, {}));
+	const batchReject = () => batch('Rejected', (id) => api('POST', `/api/admin/data-change-requests/${id}/status`, { status: 'rejected' }));
+
 	const items = data?.data ?? [];
+	const allSelected = items.length > 0 && items.every((r) => selected.has(r.id));
+	const toggleAll = () => setSelected(allSelected ? new Set() : new Set(items.map((r) => r.id)));
 	return (
 		<div>
 			<PageHeader kicker={`Queues · ${(data?.total ?? 0).toLocaleString()} in ${status}`} title="Data change requests" />
@@ -121,11 +136,22 @@ export default function DataRequestsPage() {
 				))}
 			</div>
 
+			{selected.size > 0 && (
+				<div className="card" style={{ padding: 12, marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+					<strong>{selected.size} selected</strong>
+					<button className="btn" onClick={() => void batchApply()}>Apply selected (as submitted)</button>
+					<button className="btn ghost" onClick={() => void batchReject()}>Reject selected</button>
+					<div style={{ flex: 1 }} />
+					<button className="btn ghost" onClick={() => setSelected(new Set())}>Clear</button>
+				</div>
+			)}
+
 			<div className="card">
 				<AsyncState loading={isLoading} error={error} empty={items.length === 0} emptyMsg={`Nothing in ${status}.`} onRetry={() => void refresh()}>
 				<table className="data-table">
 					<thead>
 						<tr>
+							<th style={{ width: 28 }}><input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all" /></th>
 							<th>Created</th>
 							<th>Target</th>
 							<th>Requested change</th>
@@ -138,6 +164,7 @@ export default function DataRequestsPage() {
 						{items.map((r) => (
 							<Fragment key={r.id}>
 							<tr>
+								<td><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSel(r.id)} aria-label="Select row" /></td>
 								<td className="num">{new Date(r.created_at).toLocaleDateString()}</td>
 								<td>
 									<button className="btn ghost" style={{ padding: '2px 4px', marginRight: 4 }} onClick={() => toggleExpand(r)} aria-label="Toggle details">
@@ -180,7 +207,7 @@ export default function DataRequestsPage() {
 							</tr>
 							{expandedId === r.id && (
 								<tr>
-									<td colSpan={6} style={{ background: 'var(--bg-2)' }}>
+									<td colSpan={7} style={{ background: 'var(--bg-2)' }}>
 										<div style={{ display: 'grid', gap: 10, padding: '4px 4px 10px' }}>
 											<div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, fontSize: 12 }}>
 												<div><div className="co-stat-label">Entity</div>{r.entity_type ?? '—'}</div>

@@ -9,6 +9,8 @@ import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, Section } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
+import { CsvImportButton } from '@/components/csv-import';
+import { YearSelect } from '@/components/year-select';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import {
 	SectorCascade, SportsPicker, TechTagsPicker, LocationFields, SocialLinks,
@@ -117,6 +119,7 @@ export default function CompaniesAdminPage() {
 				<FilterSelect ariaLabel="Sector" value={sector} onChange={(v) => { setSector(v); setPage(1); }} options={(sectorOpts.data ?? []).map((s) => ({ value: s.slug, label: s.name }))} allLabel="All sectors" />
 				<FilterSelect ariaLabel="Verified" value={verified} onChange={(v) => { setVerified(v); setPage(1); }} options={[{ value: 'true', label: 'Verified' }, { value: 'false', label: 'Unverified' }]} allLabel="Any verification" />
 				<div style={{ flex: 1 }} />
+				<CsvImportButton entity="companies" onDone={() => void refresh()} />
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add company</button>
 			</FilterBar>
 
@@ -174,6 +177,8 @@ interface CompanyForm {
 	social: SocialValue;
 	sport_ids: string[];
 	tech_tag_ids: string[];
+	poc_first_name: string; poc_last_name: string; poc_job_position: string; poc_email: string; poc_linkedin: string;
+	accelerator: string; cohort: string;
 }
 
 const EMPTY_COMPANY: CompanyForm = {
@@ -182,6 +187,7 @@ const EMPTY_COMPANY: CompanyForm = {
 	founded_year: '', ipo_date: '', status: 'active',
 	is_verified: false, is_unicorn: false, is_actively_raising: false,
 	social: { ...EMPTY_SOCIAL }, sport_ids: [], tech_tag_ids: [],
+	poc_first_name: '', poc_last_name: '', poc_job_position: '', poc_email: '', poc_linkedin: '', accelerator: '', cohort: '',
 };
 
 interface CompanyEdit extends Company {
@@ -193,7 +199,9 @@ interface CompanyEdit extends Company {
 	is_actively_raising?: boolean;
 	twitter_url?: string | null; instagram_url?: string | null; facebook_url?: string | null;
 	linkedin_url?: string | null; youtube_url?: string | null; email?: string | null;
-	hq_continent?: string | null; hq_region?: string | null; hq_state?: string | null;
+	hq_continent?: string | null; hq_region?: string | null; hq_state?: string | null; hq_report_region?: string | null;
+	poc_first_name?: string | null; poc_last_name?: string | null; poc_job_position?: string | null; poc_email?: string | null; poc_linkedin?: string | null;
+	accelerator?: string | null; cohort?: string | null;
 	sport_ids?: string[]; tech_tag_ids?: string[];
 }
 
@@ -201,7 +209,7 @@ function toCompanyForm(h: CompanyEdit): CompanyForm {
 	return {
 		name: h.name ?? '', website: h.website ?? '', slug: h.slug ?? '', description: h.description ?? '',
 		custom_logo_url: h.custom_logo_url ?? '', sector_id: h.sector_id ?? '', business_model: h.business_model ?? '',
-		hq: { country: h.hq_country ?? '', city: h.hq_city ?? '', continent: h.hq_continent ?? '', region: h.hq_region ?? '', state: h.hq_state ?? '' },
+		hq: { country: h.hq_country ?? '', city: h.hq_city ?? '', continent: h.hq_continent ?? '', region: h.hq_region ?? '', state: h.hq_state ?? '', report_region: h.hq_report_region ?? '' },
 		founded_year: h.founded_year ? String(h.founded_year) : '',
 		ipo_date: h.ipo_date ? String(h.ipo_date).slice(0, 10) : '',
 		status: h.status ?? 'active', is_verified: !!h.is_verified, is_unicorn: !!h.is_unicorn, is_actively_raising: !!h.is_actively_raising,
@@ -210,6 +218,8 @@ function toCompanyForm(h: CompanyEdit): CompanyForm {
 			linkedin_url: h.linkedin_url ?? '', youtube_url: h.youtube_url ?? '', email: h.email ?? '',
 		},
 		sport_ids: h.sport_ids ?? [], tech_tag_ids: h.tech_tag_ids ?? [],
+		poc_first_name: h.poc_first_name ?? '', poc_last_name: h.poc_last_name ?? '', poc_job_position: h.poc_job_position ?? '',
+		poc_email: h.poc_email ?? '', poc_linkedin: h.poc_linkedin ?? '', accelerator: h.accelerator ?? '', cohort: h.cohort ?? '',
 	};
 }
 
@@ -335,6 +345,7 @@ function CompanyForm({ id, initial, onClose, onSaved }: { id: string | null; ini
 				hq_continent: form.hq.continent.trim() || undefined,
 				hq_region: form.hq.region.trim() || undefined,
 				hq_state: form.hq.state.trim() || undefined,
+					hq_report_region: (form.hq.report_region ?? '').trim() || undefined,
 				founded_year: form.founded_year ? Number(form.founded_year) : undefined,
 				ipo_date: form.ipo_date || undefined,
 				status: form.status,
@@ -344,7 +355,14 @@ function CompanyForm({ id, initial, onClose, onSaved }: { id: string | null; ini
 				social: form.social,
 				sport_ids: form.sport_ids,
 				tech_tag_ids: form.tech_tag_ids,
-			};
+					poc_first_name: form.poc_first_name.trim() || undefined,
+					poc_last_name: form.poc_last_name.trim() || undefined,
+					poc_job_position: form.poc_job_position.trim() || undefined,
+					poc_email: form.poc_email.trim() || undefined,
+					poc_linkedin: form.poc_linkedin.trim() || undefined,
+					accelerator: form.accelerator.trim() || undefined,
+					cohort: form.cohort.trim() || undefined,
+				};
 			if (isEdit) await api('PATCH', `/api/admin/companies/${id}`, body);
 			else await api('POST', '/api/admin/companies', body);
 			toast.success(isEdit ? 'Saved' : 'Created');
@@ -384,7 +402,7 @@ function CompanyForm({ id, initial, onClose, onSaved }: { id: string | null; ini
 									<Field label="Description"><textarea className="search-input" style={{ minHeight: 80, resize: 'vertical' }} value={form.description} onChange={(e) => set('description', e.target.value)} /></Field>
 									<Field label="Logo URL"><input className="search-input" value={form.custom_logo_url} onChange={(e) => set('custom_logo_url', e.target.value)} placeholder="https://" /></Field>
 									<div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 12 }}>
-										<Field label="Founded"><input className="search-input" type="number" value={form.founded_year} onChange={(e) => set('founded_year', e.target.value)} /></Field>
+										<Field label="Founded"><YearSelect value={form.founded_year} onChange={(v) => set('founded_year', v)} /></Field>
 										<Field label="IPO date"><input className="search-input" type="date" value={form.ipo_date} onChange={(e) => set('ipo_date', e.target.value)} /></Field>
 									</div>
 								</>
@@ -407,6 +425,25 @@ function CompanyForm({ id, initial, onClose, onSaved }: { id: string | null; ini
 						},
 						{ key: 'location', label: 'Location', node: <Field label="Headquarters"><LocationFields value={form.hq} onChange={(v) => set('hq', v)} /></Field> },
 						{ key: 'social', label: 'Social', node: <SocialLinks value={form.social} onChange={(v) => set('social', v)} /> },
+						{
+							key: 'contact', label: 'Contact', node: (
+								<>
+									<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+										<Field label="POC first name"><input className="search-input" value={form.poc_first_name} onChange={(e) => set('poc_first_name', e.target.value)} /></Field>
+										<Field label="POC last name"><input className="search-input" value={form.poc_last_name} onChange={(e) => set('poc_last_name', e.target.value)} /></Field>
+									</div>
+									<Field label="POC job position"><input className="search-input" value={form.poc_job_position} onChange={(e) => set('poc_job_position', e.target.value)} /></Field>
+									<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+										<Field label="POC email"><input className="search-input" value={form.poc_email} onChange={(e) => set('poc_email', e.target.value)} placeholder="name@company.com" /></Field>
+										<Field label="POC LinkedIn"><input className="search-input" value={form.poc_linkedin} onChange={(e) => set('poc_linkedin', e.target.value)} placeholder="https://linkedin.com/in/…" /></Field>
+									</div>
+									<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+										<Field label="Accelerator"><input className="search-input" value={form.accelerator} onChange={(e) => set('accelerator', e.target.value)} /></Field>
+										<Field label="Cohort"><input className="search-input" value={form.cohort} onChange={(e) => set('cohort', e.target.value)} /></Field>
+									</div>
+								</>
+							),
+						},
 						...(isEdit && id
 							? [
 								{ key: 'funding', label: 'Funding', node: <CompanyFundingTab companyId={id} /> },

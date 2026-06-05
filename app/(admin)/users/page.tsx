@@ -5,7 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { PageHeader, AsyncState, StatCard, Section } from '@/components/atoms';
-import { ComboBarLine, PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
+import { ComboBarLine, PieDonut, PieLegend, Funnel, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 
 interface UserStats { total: number; admins: number; by_tier: Bucket[]; by_role: Bucket[]; signups_by_month: Bucket[] }
@@ -13,6 +13,12 @@ interface AuthRow { email: string | null; created_at?: string | null; last_sign_
 interface AuthActivity {
 	total: number; signups_7d: number; signups_30d: number; active_7d: number; active_30d: number;
 	recent_signups: AuthRow[]; recent_logins: AuthRow[]; by_provider: Bucket[];
+}
+interface UserAnalytics {
+	conversion: { total: number; trials: number; paid: number; free_to_trial_pct: number; trial_to_paid_pct: number };
+	churn: { churned: number; active: number; churn_rate_pct: number; avg_lifetime_days: number | null };
+	login_recency: Bucket[]; signup_recency: Bucket[]; login_frequency: Bucket[];
+	report_downloads: { total: number; unique_users: number; last_30d: number; top_reports: Bucket[]; daily_trend: Bucket[] };
 }
 const TIERS = ['free', 'growth', 'pro'] as const;
 const ROLES = ['user', 'admin'] as const;
@@ -26,6 +32,9 @@ interface User {
 	company_name: string | null;
 	created_at: string;
 	last_seen_at: string | null;
+	is_trial?: boolean;
+	trial_ends_at?: string | null;
+	active_subscription?: boolean;
 }
 interface UsersResponse { data: User[]; total: number; totalPages: number }
 
@@ -55,10 +64,34 @@ export default function UsersAdminPage() {
 	);
 	const stats = useSWR<UserStats>(['/api/admin/stats/users'], { dedupingInterval: 60_000 });
 	const auth = useSWR<AuthActivity>(['/api/admin/users/auth-activity'], { dedupingInterval: 60_000 });
+	const an = useSWR<UserAnalytics>(['/api/admin/users/analytics'], { dedupingInterval: 60_000 });
 	const tierSegments = toSegments(stats.data?.by_tier ?? []);
 	const providerSegments = toSegments(auth.data?.by_provider ?? []);
 	const signupChart = (stats.data?.signups_by_month ?? []).map((b) => ({ label: b.label.slice(2), amt: b.value, deals: b.value }));
+	const loginRecencySeg = toSegments(an.data?.login_recency ?? []);
+	const freqSeg = toSegments(an.data?.login_frequency ?? []);
+	const topReportsSeg = toSegments(an.data?.report_downloads.top_reports ?? []);
 	const fmtDate = (s?: string | null) => (s ? new Date(s).toLocaleDateString(undefined, { year: '2-digit', month: 'short', day: 'numeric' }) : '—');
+
+	// Export the current (filtered) user set to CSV — fetches up to 5k rows.
+	const [exporting, setExporting] = useState(false);
+	const exportCsv = async () => {
+		setExporting(true);
+		try {
+			const res = await api<UsersResponse>('GET', `/api/admin/users?${new URLSearchParams({
+				...(search ? { q: search } : {}), ...(role ? { role } : {}), ...(tier ? { tier } : {}), limit: '5000',
+			}).toString()}`);
+			const rows = res.data ?? [];
+			const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+			const plan = (u: User) => u.is_trial ? `trial${u.trial_ends_at ? ` until ${u.trial_ends_at.slice(0, 10)}` : ''}` : u.active_subscription ? 'paid' : '';
+			const csv = ['email,name,tier,plan,role,company,joined,last_seen',
+				...rows.map((u) => [u.email, u.display_name, u.user_type, plan(u), u.user_role, u.company_name, u.created_at, u.last_seen_at].map(esc).join(','))].join('\n');
+			const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+			const a = document.createElement('a'); a.href = url; a.download = `users-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
+			toast.success(`Exported ${rows.length} users`);
+		} catch (e) { toast.error((e as Error).message); }
+		finally { setExporting(false); }
+	};
 
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/admin/users');
 
@@ -155,6 +188,47 @@ export default function UsersAdminPage() {
 				</Section>
 			</div>
 
+			{/* Growth analytics — conversions, churn, recency/frequency, report downloads */}
+			<div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 10px' }}>
+				Growth analytics
+			</div>
+			<StatStrip cols={4}>
+				<StatCard label="Free → trial" loading={an.isLoading} value={`${(an.data?.conversion.free_to_trial_pct ?? 0).toFixed(1)}%`} />
+				<StatCard label="Trial → paid" loading={an.isLoading} value={`${(an.data?.conversion.trial_to_paid_pct ?? 0).toFixed(1)}%`} />
+				<StatCard label="Churn rate" loading={an.isLoading} value={`${(an.data?.churn.churn_rate_pct ?? 0).toFixed(1)}%`} urgent={(an.data?.churn.churn_rate_pct ?? 0) > 0} />
+				<StatCard label="Avg lifetime" loading={an.isLoading} value={an.data?.churn.avg_lifetime_days != null ? `${Math.round(an.data.churn.avg_lifetime_days)}d` : '—'} />
+			</StatStrip>
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+				<Section title="Conversion funnel" meta="free → trial → paid">
+					<Funnel stages={[
+						{ label: 'Total users', value: an.data?.conversion.total ?? 0 },
+						{ label: 'Started a trial', value: an.data?.conversion.trials ?? 0 },
+						{ label: 'Paying', value: an.data?.conversion.paid ?? 0, color: 'var(--pos)' },
+						{ label: 'Churned', value: an.data?.churn.churned ?? 0, color: 'var(--neg)' },
+					]} />
+				</Section>
+				<Section title="Login frequency" meta="per user">
+					<AsyncState loading={an.isLoading} error={an.error} empty={freqSeg.length === 0} emptyMsg="No data" onRetry={() => void an.mutate()}>
+						<PieDonut segments={freqSeg} mode="bar" />
+					</AsyncState>
+				</Section>
+			</div>
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+				<Section title="Login recency" meta="last seen">
+					<AsyncState loading={an.isLoading} error={an.error} empty={loginRecencySeg.length === 0} emptyMsg="No data" onRetry={() => void an.mutate()}>
+						<div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+							<PieDonut segments={loginRecencySeg} size={160} mode="donut" />
+							<div style={{ flex: 1, minWidth: 150 }}><PieLegend segments={loginRecencySeg} /></div>
+						</div>
+					</AsyncState>
+				</Section>
+				<Section title={`Report downloads · ${(an.data?.report_downloads.total ?? 0).toLocaleString()} total · ${(an.data?.report_downloads.unique_users ?? 0).toLocaleString()} users`} meta="top reports">
+					<AsyncState loading={an.isLoading} error={an.error} empty={topReportsSeg.length === 0} emptyMsg="No downloads yet" onRetry={() => void an.mutate()}>
+						<PieDonut segments={topReportsSeg} mode="bar" />
+					</AsyncState>
+				</Section>
+			</div>
+
 			<FilterBar>
 				<input
 					className="search-input"
@@ -165,6 +239,8 @@ export default function UsersAdminPage() {
 				/>
 				<FilterSelect ariaLabel="Tier" value={tier} onChange={(v) => { setTier(v); setPage(1); }} options={[...TIERS]} allLabel="All tiers" />
 				<FilterSelect ariaLabel="Role" value={role} onChange={(v) => { setRole(v); setPage(1); }} options={[...ROLES]} allLabel="All roles" />
+				<div style={{ flex: 1 }} />
+				<button className="btn ghost" disabled={exporting} onClick={() => void exportCsv()}>{exporting ? 'Exporting…' : 'Export CSV'}</button>
 			</FilterBar>
 
 			<div className="card">
@@ -186,7 +262,12 @@ export default function UsersAdminPage() {
 								<tr>
 									<td>{u.email}</td>
 									<td>{u.display_name ?? '—'}</td>
-									<td><span className="tag">{u.user_type ?? 'free'}</span></td>
+									<td>
+										<span className="tag">{u.user_type ?? 'free'}</span>
+										{u.is_trial
+											? <span className="tag warn" title={u.trial_ends_at ? `Trial ends ${fmtDate(u.trial_ends_at)}` : 'On trial'} style={{ marginLeft: 4 }}>trial{u.trial_ends_at ? ` · ends ${fmtDate(u.trial_ends_at)}` : ''}</span>
+											: u.active_subscription ? <span className="tag pos" style={{ marginLeft: 4 }}>paid</span> : null}
+									</td>
 									<td>{u.user_role === 'admin' ? <span className="tag pos">admin</span> : 'user'}</td>
 									<td className="num">{new Date(u.created_at).toLocaleDateString()}</td>
 									<td style={{ textAlign: 'right' }}>

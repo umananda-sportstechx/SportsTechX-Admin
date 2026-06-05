@@ -8,6 +8,8 @@ import { api } from '@/lib/api';
 import { PageHeader, AsyncState, StatCard, Section } from '@/components/atoms';
 import { Funnel } from '@/components/charts';
 import { StatStrip } from '@/components/filters';
+import { SectorCascade, LocationFields, EMPTY_LOCATION, type LocationValue } from '@/components/entity-pickers';
+import { YearSelect } from '@/components/year-select';
 
 type ClaimStatus = 'pending' | 'picked_up' | 'verified' | 'rejected';
 interface QueueStats { claims: { pending: number; picked_up: number; verified: number; rejected: number } }
@@ -28,6 +30,8 @@ interface Claim {
 	picked_up_at: string | null;
 	verified_at: string | null;
 	rejection_reason?: string | null;
+	new_entry_request?: boolean;
+	target_website_snapshot?: string | null;
 	created_at: string;
 }
 
@@ -188,9 +192,13 @@ export default function ClaimsAdminPage() {
 												<div><div className="co-stat-label">Verified</div>{c.verified_at ? new Date(c.verified_at).toLocaleString() : '—'}</div>
 												{c.rejection_reason && <div style={{ gridColumn: '1 / -1' }}><div className="co-stat-label">Rejection reason</div>{c.rejection_reason}</div>}
 											</div>
-											<div style={{ padding: '0 4px 10px', fontSize: 11, color: 'var(--fg-muted)' }}>
-												Verifying applies the claim to the live {c.entity_type ?? 'record'} (and emails the claimant if enabled). Field-level edits submitted with this claim appear under Data requests.
-											</div>
+											{c.new_entry_request && !c.entity_id ? (
+												<CreateEntityPanel claim={c} onDone={() => void refresh()} />
+											) : (
+												<div style={{ padding: '0 4px 10px', fontSize: 11, color: 'var(--fg-muted)' }}>
+													Verifying applies the claim to the live {c.entity_type ?? 'record'} (and emails the claimant if enabled). Field-level edits submitted with this claim appear under Data requests.
+												</div>
+											)}
 										</td>
 									</tr>
 								)}
@@ -210,6 +218,110 @@ export default function ClaimsAdminPage() {
 					<button className="btn ghost" disabled={page >= data.totalPages} onClick={() => setPage((p) => p + 1)}>Next</button>
 				</div>
 			)}
+		</div>
+	);
+}
+
+const BUSINESS_MODELS = ['b2b', 'b2c', 'b2b2c', 'd2c', 'b2g', 'other'] as const;
+const INVESTOR_CATEGORIES = ['venture_capital', 'private_equity', 'financial_services', 'family_investment_office', 'sovereign_wealth_fund', 'angel', 'other'] as const;
+const ECOSYSTEM_TYPES = ['program', 'event', 'organization', 'initiative'] as const;
+
+/**
+ * Edit-then-create panel for a NEW-entity claim. Name/website come prefilled
+ * from the claim; the admin fills the rest and clicks Create — the server makes
+ * the live record, links it to the claim, and verifies in one call.
+ */
+function CreateEntityPanel({ claim, onDone }: { claim: Claim; onDone: () => void }) {
+	const kind = claim.claim_type; // 'company' | 'investor' | 'ecosystem_entity'
+	const [name, setName] = useState(claim.entity_name ?? '');
+	const [website, setWebsite] = useState(claim.target_website_snapshot ?? '');
+	const [description, setDescription] = useState('');
+	const [sectorId, setSectorId] = useState('');
+	const [businessModel, setBusinessModel] = useState('');
+	const [category, setCategory] = useState('');
+	const [entityType, setEntityType] = useState('program');
+	const [year, setYear] = useState('');
+	const [hq, setHq] = useState<LocationValue>({ ...EMPTY_LOCATION });
+	const [pending, setPending] = useState(false);
+
+	const submit = async () => {
+		if (!name.trim()) { toast.error('Name is required.'); return; }
+		setPending(true);
+		try {
+			const body: Record<string, unknown> = {
+				name: name.trim(),
+				website: website.trim() || undefined,
+				description: description.trim() || undefined,
+				hq_country: hq.country.trim() || undefined,
+				hq_city: hq.city.trim() || undefined,
+				hq_continent: hq.continent.trim() || undefined,
+				hq_region: hq.region.trim() || undefined,
+				hq_state: hq.state.trim() || undefined,
+			};
+			if (kind === 'company') {
+				if (sectorId) body.sector_id = sectorId;
+				if (businessModel) body.business_model = businessModel;
+				if (year) body.founded_year = Number(year);
+			} else if (kind === 'investor') {
+				if (category) body.category = category;
+				if (year) body.year_launched = Number(year);
+			} else {
+				body.entity_type = entityType;
+				if (category) body.category = category;
+				if (year) body.founded_year = Number(year);
+			}
+			await api('POST', `/api/admin/claims/${claim.id}/create-entity`, body);
+			toast.success('Record created, linked & verified');
+			onDone();
+		} catch (e) {
+			toast.error((e as Error).message);
+		} finally {
+			setPending(false);
+		}
+	};
+
+	const L = (label: string, node: React.ReactNode) => (
+		<div><div className="co-stat-label" style={{ marginBottom: 4 }}>{label}</div>{node}</div>
+	);
+
+	return (
+		<div style={{ padding: '4px 4px 12px', display: 'grid', gap: 10 }}>
+			<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
+				This is a <strong>new {kind.replace('_', ' ')}</strong> request — review &amp; edit, then create it as a live record.
+			</div>
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+				{L('Name', <input className="search-input" value={name} onChange={(e) => setName(e.target.value)} />)}
+				{L('Website', <input className="search-input" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://" />)}
+			</div>
+			{L('Description', <textarea className="search-input" style={{ minHeight: 56, resize: 'vertical' }} value={description} onChange={(e) => setDescription(e.target.value)} />)}
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+				{kind === 'company' && L('Sector', <SectorCascade value={sectorId} onChange={setSectorId} />)}
+				{kind === 'company' && L('Business model', (
+					<select className="search-input" value={businessModel} onChange={(e) => setBusinessModel(e.target.value)}>
+						<option value="">—</option>
+						{BUSINESS_MODELS.map((m) => <option key={m} value={m}>{m.toUpperCase()}</option>)}
+					</select>
+				))}
+				{kind === 'investor' && L('Category', (
+					<select className="search-input" value={category} onChange={(e) => setCategory(e.target.value)}>
+						<option value="">—</option>
+						{INVESTOR_CATEGORIES.map((c) => <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>)}
+					</select>
+				))}
+				{kind === 'ecosystem_entity' && L('Type', (
+					<select className="search-input" value={entityType} onChange={(e) => setEntityType(e.target.value)}>
+						{ECOSYSTEM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+					</select>
+				))}
+				{kind === 'ecosystem_entity' && L('Category', <input className="search-input" value={category} onChange={(e) => setCategory(e.target.value)} />)}
+				{L(kind === 'investor' ? 'Year launched' : 'Founded year', <YearSelect value={year} onChange={setYear} />)}
+			</div>
+			{L('Headquarters', <LocationFields value={hq} onChange={setHq} />)}
+			<div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+				<button className="btn" disabled={pending || !name.trim()} onClick={() => void submit()}>
+					{pending ? 'Creating…' : `Create & verify ${kind.replace('_', ' ')}`}
+				</button>
+			</div>
 		</div>
 	);
 }

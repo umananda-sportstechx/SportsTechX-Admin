@@ -29,7 +29,7 @@ interface StripeAnalytics {
 	topCustomers: Array<{ email: string; name: string; amount: number; count: number }>;
 	failedPayments: { count: number; amount: number };
 	newCustomers: number; dailyVolume: DailyVolume[];
-	trialConversion: { trialsStarted: number; trialsConverted: number; currentlyTrialing: number; conversionRate: number };
+	trialConversion: { trialsStarted: number; trialsConverted: number; currentlyTrialing: number; conversionRate: number; dailyTrend?: Array<{ date: string; started: number; conversions: number }> };
 	previousPeriod: { grossVolume: number; failedPayments: number; newCustomers: number };
 	period: { start: string; end: string };
 }
@@ -129,6 +129,20 @@ export default function SalesAdminPage() {
 							{ label: 'Currently trialing', value: a?.trialConversion.currentlyTrialing ?? 0 },
 							{ label: 'Converted to paid', value: a?.trialConversion.trialsConverted ?? 0, color: 'var(--pos)' },
 						]} />
+						{(a?.trialConversion.dailyTrend?.length ?? 0) > 0 && (
+							<div style={{ marginTop: 16 }}>
+								<div className="co-stat-label" style={{ marginBottom: 6 }}>Daily trend · started vs converted</div>
+								<ComboBarLine
+									data={(a?.trialConversion.dailyTrend ?? []).map((d) => ({
+										label: new Date(d.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+										amt: d.started, deals: d.conversions,
+									}))}
+									height={180}
+									valueFormatter={(v) => String(Math.round(v))}
+									barLabel="Started" lineLabel="converted"
+								/>
+							</div>
+						)}
 					</Section>
 					<Section title={`Outstanding invoices · ${money(a?.outstandingInvoices.total ?? 0)} (${a?.outstandingInvoices.count ?? 0})`}>
 						{agingSegments.length === 0

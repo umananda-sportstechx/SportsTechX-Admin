@@ -4,7 +4,18 @@ import { Fragment, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
-import { PageHeader, AsyncState } from '@/components/atoms';
+import { PageHeader, AsyncState, StatCard, Section } from '@/components/atoms';
+import { ComboBarLine, PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
+import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
+
+interface UserStats { total: number; admins: number; by_tier: Bucket[]; by_role: Bucket[]; signups_by_month: Bucket[] }
+interface AuthRow { email: string | null; created_at?: string | null; last_sign_in_at?: string | null; provider?: string | null }
+interface AuthActivity {
+	total: number; signups_7d: number; signups_30d: number; active_7d: number; active_30d: number;
+	recent_signups: AuthRow[]; recent_logins: AuthRow[]; by_provider: Bucket[];
+}
+const TIERS = ['free', 'growth', 'pro'] as const;
+const ROLES = ['user', 'admin'] as const;
 
 interface User {
 	id: string;
@@ -32,14 +43,22 @@ interface FeatureCatalogRow { id: string; slug: string; name: string }
 export default function UsersAdminPage() {
 	const { mutate } = useSWRConfig();
 	const [search, setSearch] = useState('');
+	const [role, setRole] = useState('');
+	const [tier, setTier] = useState('');
 	const [page, setPage] = useState(1);
 	const [expandedId, setExpandedId] = useState<string | null>(null);
 	const [rolePending, setRolePending] = useState<string | null>(null);
 
 	const { data, error, isLoading } = useSWR<UsersResponse>(
-		['/api/admin/users', { q: search || undefined, page, limit: 30 }],
+		['/api/admin/users', { q: search || undefined, role: role || undefined, tier: tier || undefined, page, limit: 30 }],
 		{ dedupingInterval: 15_000 },
 	);
+	const stats = useSWR<UserStats>(['/api/admin/stats/users'], { dedupingInterval: 60_000 });
+	const auth = useSWR<AuthActivity>(['/api/admin/users/auth-activity'], { dedupingInterval: 60_000 });
+	const tierSegments = toSegments(stats.data?.by_tier ?? []);
+	const providerSegments = toSegments(auth.data?.by_provider ?? []);
+	const signupChart = (stats.data?.signups_by_month ?? []).map((b) => ({ label: b.label.slice(2), amt: b.value, deals: b.value }));
+	const fmtDate = (s?: string | null) => (s ? new Date(s).toLocaleDateString(undefined, { year: '2-digit', month: 'short', day: 'numeric' }) : '—');
 
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/admin/users');
 
@@ -65,17 +84,88 @@ export default function UsersAdminPage() {
 	const users = data?.data ?? [];
 	return (
 		<div>
-			<PageHeader kicker={`Identity · ${(data?.total ?? 0).toLocaleString()} total`} title="Users" />
+			<PageHeader kicker={`Identity · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} total`} title="Users" />
 
-			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)' }}>
+			<StatStrip cols={4}>
+				<StatCard label="Total users" loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()} />
+				<StatCard label="Admins" loading={stats.isLoading} value={(stats.data?.admins ?? 0).toLocaleString()} />
+				{(stats.data?.by_tier ?? []).slice(0, 2).map((b) => (
+					<StatCard key={b.label} label={`${b.label} tier`} loading={stats.isLoading} value={b.value.toLocaleString()} />
+				))}
+			</StatStrip>
+
+			<div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+				<Section title="Signups by month" meta="last 12 months">
+					<AsyncState loading={stats.isLoading} error={stats.error} empty={signupChart.length === 0} emptyMsg="No signups" onRetry={() => void stats.mutate()}>
+						<ComboBarLine data={signupChart} height={240} valueFormatter={(v) => String(Math.round(v))} barLabel="Signups" lineLabel="signups" />
+					</AsyncState>
+				</Section>
+				<Section title="By tier" meta="users">
+					<AsyncState loading={stats.isLoading} error={stats.error} empty={tierSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
+						<div style={{ display: 'grid', placeItems: 'center', gap: 12 }}>
+							<PieDonut segments={tierSegments} size={170} mode="donut" />
+							<PieLegend segments={tierSegments} />
+						</div>
+					</AsyncState>
+				</Section>
+			</div>
+
+			{/* Sign-in / sign-up activity — straight from Supabase auth */}
+			<div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 10px' }}>
+				Sign-in / sign-up activity · Supabase auth
+			</div>
+			<StatStrip cols={4}>
+				<StatCard label="Auth users" loading={auth.isLoading} value={(auth.data?.total ?? 0).toLocaleString()} />
+				<StatCard label="Signups · 7d" loading={auth.isLoading} value={(auth.data?.signups_7d ?? 0).toLocaleString()} />
+				<StatCard label="Active · 7d" loading={auth.isLoading} value={(auth.data?.active_7d ?? 0).toLocaleString()} />
+				<StatCard label="Active · 30d" loading={auth.isLoading} value={(auth.data?.active_30d ?? 0).toLocaleString()} />
+			</StatStrip>
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+				<Section title="Recent signups" meta="newest first" padded={false}>
+					<AsyncState loading={auth.isLoading} error={auth.error} empty={(auth.data?.recent_signups?.length ?? 0) === 0} emptyMsg="No signups" onRetry={() => void auth.mutate()}>
+						<table className="data-table">
+							<thead><tr><th>Email</th><th>Joined</th><th>Via</th></tr></thead>
+							<tbody>
+								{(auth.data?.recent_signups ?? []).map((r, i) => (
+									<tr key={`${r.email}-${i}`}><td>{r.email ?? '—'}</td><td className="num">{fmtDate(r.created_at)}</td><td>{r.provider ?? 'email'}</td></tr>
+								))}
+							</tbody>
+						</table>
+					</AsyncState>
+				</Section>
+				<Section title="Recent logins" meta="last sign-in" padded={false}>
+					<AsyncState loading={auth.isLoading} error={auth.error} empty={(auth.data?.recent_logins?.length ?? 0) === 0} emptyMsg="No logins" onRetry={() => void auth.mutate()}>
+						<table className="data-table">
+							<thead><tr><th>Email</th><th>Last sign-in</th><th>Via</th></tr></thead>
+							<tbody>
+								{(auth.data?.recent_logins ?? []).map((r, i) => (
+									<tr key={`${r.email}-${i}`}><td>{r.email ?? '—'}</td><td className="num">{fmtDate(r.last_sign_in_at)}</td><td>{r.provider ?? 'email'}</td></tr>
+								))}
+							</tbody>
+						</table>
+					</AsyncState>
+				</Section>
+				<Section title="Login method" meta="all auth users">
+					<AsyncState loading={auth.isLoading} error={auth.error} empty={providerSegments.length === 0} emptyMsg="No data" onRetry={() => void auth.mutate()}>
+						<div style={{ display: 'grid', placeItems: 'center', gap: 12 }}>
+							<PieDonut segments={providerSegments} size={150} mode="donut" />
+							<PieLegend segments={providerSegments} />
+						</div>
+					</AsyncState>
+				</Section>
+			</div>
+
+			<FilterBar>
 				<input
 					className="search-input"
-					style={{ flex: '0 0 320px', height: 32 }}
+					style={{ flex: '0 0 280px', height: 32 }}
 					placeholder="Search email or name…"
 					value={search}
 					onChange={(e) => { setSearch(e.target.value); setPage(1); }}
 				/>
-			</div>
+				<FilterSelect ariaLabel="Tier" value={tier} onChange={(v) => { setTier(v); setPage(1); }} options={[...TIERS]} allLabel="All tiers" />
+				<FilterSelect ariaLabel="Role" value={role} onChange={(v) => { setRole(v); setPage(1); }} options={[...ROLES]} allLabel="All roles" />
+			</FilterBar>
 
 			<div className="card">
 				<AsyncState loading={isLoading} error={error} empty={users.length === 0} emptyMsg={search ? 'No users match.' : 'No users yet.'} onRetry={() => void refresh()}>

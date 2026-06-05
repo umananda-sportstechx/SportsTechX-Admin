@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { InvestorSelectOne } from '@/components/entity-pickers';
 
 type EndpointKey = 'apolloBatch' | 'attioSync' | 'recommendations' | 'apolloEnrich';
 
@@ -16,7 +17,7 @@ const ENDPOINTS: Array<{ key: EndpointKey; label: string; desc: string; path: st
 	{
 		key: 'apolloEnrich',
 		label: 'Apollo enrich investor',
-		desc: 'Manually enrich a single investor by UUID.',
+		desc: 'Manually enrich a single investor — search and pick below.',
 		path: '/api/admin/integrations/apollo/enrich',
 		needsId: true,
 	},
@@ -66,13 +67,9 @@ export default function JobsPage() {
 						<div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6 }}>{e.label}</div>
 						<div style={{ fontSize: 13, color: 'var(--fg-2)', marginBottom: 14 }}>{e.desc}</div>
 						{e.needsId && (
-							<input
-								className="search-input"
-								style={{ width: '100%', marginBottom: 10 }}
-								placeholder="Investor UUID…"
-								value={enrichId}
-								onChange={(ev) => setEnrichId(ev.target.value)}
-							/>
+							<div style={{ marginBottom: 10 }}>
+								<InvestorSelectOne value={enrichId} onChange={setEnrichId} />
+							</div>
 						)}
 						<button
 							className="btn"

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Upload, Link2, Trash2, Loader2, Image as ImageIcon, Check } from 'lucide-react';
 import { getSupabaseBrowser } from '@/lib/supabase';
@@ -58,9 +58,14 @@ export function ImageInput({
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	// Resync local draft when `value` changes from outside (upload completed,
-	// parent reloaded, etc). This is what keeps the URL input from showing a
-	// stale URL after the Upload tab succeeds.
-	useEffect(() => { setDraftUrl(value); }, [value]);
+	// parent reloaded, etc) using React's adjust-state-during-render pattern —
+	// keeps the URL input from showing a stale URL after the Upload tab succeeds,
+	// without a cascading-render effect.
+	const [prevValue, setPrevValue] = useState(value);
+	if (value !== prevValue) {
+		setPrevValue(value);
+		setDraftUrl(value);
+	}
 
 	const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? '';
 	const uploadsDisabled =

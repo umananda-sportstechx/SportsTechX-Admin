@@ -6,9 +6,11 @@ import { toast } from 'sonner';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading } from '@/components/atoms';
+import { PageHeader, AsyncState, Loading, StatCard, Section } from '@/components/atoms';
+import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
+import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
-import { SportsPicker, LocationFields, SocialLinks, EMPTY_SOCIAL, type SocialValue, type LocationValue } from '@/components/entity-pickers';
+import { SportsPicker, LocationFields, SocialLinks, EMPTY_SOCIAL, EMPTY_LOCATION, type SocialValue, type LocationValue } from '@/components/entity-pickers';
 
 interface Entity {
 	id: string;
@@ -20,6 +22,7 @@ interface Entity {
 	hq_country?: string | null;
 }
 interface Response { data: Entity[]; total: number; totalPages: number }
+interface EcoStats { total: number; by_type: Bucket[]; by_status: Bucket[] }
 
 const STATUSES = ['active', 'inactive', 'paused'] as const;
 const ENTITY_TYPES = ['program', 'event', 'organization', 'initiative'] as const;
@@ -28,15 +31,20 @@ const EVENT_MODES = ['in_person', 'virtual', 'hybrid'] as const;
 export default function EcosystemAdminPage() {
 	const { mutate } = useSWRConfig();
 	const [type, setType] = useState<'program' | 'event'>('program');
+	const [search, setSearch] = useState('');
+	const [status, setStatus] = useState('');
 	const [page, setPage] = useState(1);
 	const [creating, setCreating] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [removePending, setRemovePending] = useState(false);
 
 	const { data, error, isLoading } = useSWR<Response>(
-		['/api/ecosystem-entities', { type, page, limit: 30 }],
+		['/api/ecosystem-entities', { entity_type: type, q: search || undefined, status: status || undefined, page, limit: 30 }],
 		{ dedupingInterval: 30_000 },
 	);
+	const stats = useSWR<EcoStats>(['/api/admin/stats/ecosystem'], { dedupingInterval: 60_000 });
+	const typeSegments = toSegments(stats.data?.by_type ?? []);
+	const statusSegments = toSegments(stats.data?.by_status ?? []);
 
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/ecosystem-entities');
 
@@ -57,14 +65,39 @@ export default function EcosystemAdminPage() {
 	const entities = data?.data ?? [];
 	return (
 		<div>
-			<PageHeader kicker={`Ecosystem · ${(data?.total ?? 0).toLocaleString()} ${type}s`} title="Programs & events" />
+			<PageHeader kicker={`Ecosystem · ${(stats.data?.total ?? 0).toLocaleString()} entities`} title="Programs & events" />
 
-			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)' }}>
+			<StatStrip cols={4}>
+				<StatCard label="Total entities" loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()} />
+				{(stats.data?.by_type ?? []).slice(0, 3).map((b) => (
+					<StatCard key={b.label} label={b.label} loading={stats.isLoading} value={b.value.toLocaleString()} />
+				))}
+			</StatStrip>
+
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+				<Section title="By type" meta="entities">
+					<AsyncState loading={stats.isLoading} error={stats.error} empty={typeSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
+						<div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+							<PieDonut segments={typeSegments} size={170} mode="donut" />
+							<div style={{ flex: 1, minWidth: 160 }}><PieLegend segments={typeSegments} /></div>
+						</div>
+					</AsyncState>
+				</Section>
+				<Section title="By status" meta="entities">
+					<AsyncState loading={stats.isLoading} error={stats.error} empty={statusSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
+						<PieDonut segments={statusSegments} mode="bar" />
+					</AsyncState>
+				</Section>
+			</div>
+
+			<FilterBar>
 				<button className={`chip ${type === 'program' ? 'on' : ''}`} onClick={() => { setType('program'); setPage(1); }}>Programs</button>
 				<button className={`chip ${type === 'event' ? 'on' : ''}`} onClick={() => { setType('event'); setPage(1); }}>Events</button>
+				<input className="search-input" style={{ flex: '0 0 240px', height: 32 }} placeholder="Search…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+				<FilterSelect ariaLabel="Status" value={status} onChange={(v) => { setStatus(v); setPage(1); }} options={[...STATUSES]} allLabel="All statuses" />
 				<div style={{ flex: 1 }} />
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add {type}</button>
-			</div>
+			</FilterBar>
 
 			{(creating || editingId) && (
 				<EntityModal
@@ -128,12 +161,12 @@ const EMPTY_EVENT: EventDetails = {
 };
 const emptyEntity = (type: string): EntityForm => ({
 	name: '', slug: '', entity_type: type, description: '', website: '', category: '', founded_year: '', status: 'active',
-	hq: { country: '', city: '' }, social: { ...EMPTY_SOCIAL }, sport_ids: [], program: { ...EMPTY_PROGRAM }, event: { ...EMPTY_EVENT },
+	hq: { ...EMPTY_LOCATION }, social: { ...EMPTY_SOCIAL }, sport_ids: [], program: { ...EMPTY_PROGRAM }, event: { ...EMPTY_EVENT },
 });
 
 interface EntityEdit extends Entity {
 	description?: string | null; website?: string | null; founded_year?: number | null;
-	hq_city?: string | null;
+	hq_city?: string | null; hq_continent?: string | null; hq_region?: string | null; hq_state?: string | null;
 	twitter_url?: string | null; instagram_url?: string | null; facebook_url?: string | null;
 	linkedin_url?: string | null; youtube_url?: string | null; email?: string | null;
 	sport_ids?: string[];
@@ -150,7 +183,7 @@ function toEntityForm(h: EntityEdit, defaultType: string): EntityForm {
 		name: h.name ?? '', slug: h.slug ?? '', entity_type: h.entity_type ?? defaultType,
 		description: h.description ?? '', website: h.website ?? '', category: h.category ?? '',
 		founded_year: h.founded_year ? String(h.founded_year) : '', status: h.status ?? 'active',
-		hq: { country: h.hq_country ?? '', city: h.hq_city ?? '' },
+		hq: { country: h.hq_country ?? '', city: h.hq_city ?? '', continent: h.hq_continent ?? '', region: h.hq_region ?? '', state: h.hq_state ?? '' },
 		social: {
 			twitter_url: h.twitter_url ?? '', instagram_url: h.instagram_url ?? '', facebook_url: h.facebook_url ?? '',
 			linkedin_url: h.linkedin_url ?? '', youtube_url: h.youtube_url ?? '', email: h.email ?? '',
@@ -199,6 +232,9 @@ function EntityForm({ id, initial, onClose, onSaved }: { id: string | null; init
 				status: form.status,
 				hq_country: form.hq.country.trim() || undefined,
 				hq_city: form.hq.city.trim() || undefined,
+				hq_continent: form.hq.continent.trim() || undefined,
+				hq_region: form.hq.region.trim() || undefined,
+				hq_state: form.hq.state.trim() || undefined,
 				social: form.social,
 				sport_ids: form.sport_ids,
 			};

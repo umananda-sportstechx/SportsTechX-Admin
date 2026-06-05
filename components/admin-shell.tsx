@@ -58,7 +58,7 @@ const NAV_GROUPS: NavGroup[] = [
 			{ href: '/users', label: 'Users', Icon: Users },
 			{ href: '/billing', label: 'Billing tools', Icon: CreditCard },
 			{ href: '/subscription-plans', label: 'Plans', Icon: Tag },
-			{ href: '/features', label: 'Features', Icon: ToggleLeft },
+			{ href: '/features', label: 'Feature flags', Icon: ToggleLeft },
 		],
 	},
 	{

@@ -3,6 +3,14 @@
 import Link from 'next/link';
 import useSWR from 'swr';
 import { PageHeader, Section, AsyncState, StatCard, Tag } from '@/components/atoms';
+import { ComboBarLine, PieDonut, PieLegend, toSegments } from '@/components/charts';
+
+const fmtMoney = (n: number): string =>
+	n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : `$${Math.round(n).toLocaleString()}`;
+
+interface AnnualRow { year: number; total_amount: number | string; deal_count: number }
+interface SectorHeatRow { sector_name: string; deal_count: number; total_amount: number | string }
+interface InvestorTypeRow { category: string; count: number }
 
 interface ClaimRow {
 	id: string;
@@ -42,6 +50,15 @@ export default function AdminDashboard() {
 	const acquisitions = useSWR<CountResp>(['/api/acquisitions', { limit: 1 }]);
 	const users       = useSWR<CountResp>(['/api/admin/users', { limit: 1 }]);
 
+	// Warehouse trend + mix — reuses the public, cached analytics endpoints.
+	const annual      = useSWR<AnnualRow[]>(['/api/analytics/annual-funding']);
+	const sectorHeat  = useSWR<SectorHeatRow[]>(['/api/analytics/sector-heat']);
+	const invByType   = useSWR<InvestorTypeRow[]>(['/api/analytics/investors-by-type']);
+
+	const annualChart = (annual.data ?? []).map((r) => ({ year: r.year, amt: Number(r.total_amount), deals: r.deal_count }));
+	const sectorSegments = toSegments((sectorHeat.data ?? []).slice(0, 8).map((r) => ({ label: r.sector_name, value: r.deal_count })));
+	const investorSegments = toSegments((invByType.data ?? []).map((r) => ({ label: r.category, value: r.count })));
+
 	const claimsTotal = claims.data?.total ?? 0;
 	const dcrTotal = dcr.data?.total ?? 0;
 
@@ -79,6 +96,39 @@ export default function AdminDashboard() {
 				{stats.map((s) => (
 					<StatCard key={s.label} label={s.label} href={s.href} loading={s.q.isLoading} value={(s.q.data?.total ?? 0).toLocaleString()} />
 				))}
+			</div>
+
+			{/* Funding trend + ecosystem mix */}
+			<div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+				<Section title="Funding by year" meta="amount · rounds">
+					<AsyncState loading={annual.isLoading} error={annual.error} empty={annualChart.length === 0} emptyMsg="No funding data" onRetry={() => void annual.mutate()}>
+						<ComboBarLine data={annualChart} height={260} valueFormatter={fmtMoney} barLabel="Funding" lineLabel="rounds" />
+					</AsyncState>
+				</Section>
+				<Section title="Top sectors" meta="by rounds">
+					<AsyncState loading={sectorHeat.isLoading} error={sectorHeat.error} empty={sectorSegments.length === 0} emptyMsg="No sector data" onRetry={() => void sectorHeat.mutate()}>
+						<div style={{ display: 'grid', placeItems: 'center', gap: 12 }}>
+							<PieDonut segments={sectorSegments} size={180} mode="donut" />
+							<PieLegend segments={sectorSegments} />
+						</div>
+					</AsyncState>
+				</Section>
+			</div>
+
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+				<Section title="Investors by type" meta="count">
+					<AsyncState loading={invByType.isLoading} error={invByType.error} empty={investorSegments.length === 0} emptyMsg="No investor data" onRetry={() => void invByType.mutate()}>
+						<div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+							<PieDonut segments={investorSegments} size={180} mode="donut" />
+							<div style={{ flex: 1, minWidth: 180 }}><PieLegend segments={investorSegments} /></div>
+						</div>
+					</AsyncState>
+				</Section>
+				<Section title="Funding mix" meta="rounds by sector">
+					<AsyncState loading={sectorHeat.isLoading} error={sectorHeat.error} empty={sectorSegments.length === 0} emptyMsg="No data" onRetry={() => void sectorHeat.mutate()}>
+						<PieDonut segments={sectorSegments} mode="bar" />
+					</AsyncState>
+				</Section>
 			</div>
 
 			{/* Recent activity panels */}

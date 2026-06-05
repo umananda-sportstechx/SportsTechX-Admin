@@ -77,8 +77,8 @@ export default function FeaturesAdminPage() {
 	return (
 		<div>
 			<PageHeader
-				kicker="Feature catalog"
-				title="Tier × feature matrix"
+				kicker="Feature flags · tier gating"
+				title="Feature flags"
 				subtitle="Edits go live on the public /api/features response on the next request (5-min cache, invalidated on write). Per-user overrides live separately in profile_feature_grants."
 			/>
 

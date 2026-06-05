@@ -6,7 +6,8 @@ import { toast } from 'sonner';
 import { Plus, Trash2, Check, SkipForward, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Modal } from '@/components/modal';
-import { PageHeader, StatCard, AsyncState, Tag, Chip } from '@/components/atoms';
+import { PageHeader, StatCard, AsyncState, Tag, Chip, Section } from '@/components/atoms';
+import { Funnel, PieDonut, toSegments } from '@/components/charts';
 
 interface QueueRow {
 	id: string; name: string; website: string | null; category: string | null; country: string | null;
@@ -70,6 +71,26 @@ export default function InvestorReviewPage() {
 				<StatCard label="Completed" value={(stats?.counts.completed ?? 0).toLocaleString()} />
 				<StatCard label="Skipped" value={(stats?.counts.skipped ?? 0).toLocaleString()} />
 				<StatCard label="Total" value={(stats?.counts.total ?? 0).toLocaleString()} />
+			</div>
+
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+				<Section title="Review funnel" meta="pending → completed">
+					<Funnel stages={[
+						{ label: 'Pending', value: stats?.counts.pending ?? 0 },
+						{ label: 'Completed', value: stats?.counts.completed ?? 0, color: 'var(--pos)' },
+						{ label: 'Skipped', value: stats?.counts.skipped ?? 0, color: 'var(--warn)' },
+					]} />
+				</Section>
+				<Section title="Reviewer workload" meta="pending per reviewer">
+					{(() => {
+						const seg = toSegments((stats?.byAdmin ?? [])
+							.filter((a) => a.pending > 0)
+							.map((a) => ({ label: a.full_name ?? (a.assigned_to ? `${a.assigned_to.slice(0, 8)}…` : 'Unassigned'), value: a.pending })));
+						return seg.length === 0
+							? <div style={{ color: 'var(--fg-muted)', fontSize: 13 }}>Nothing pending.</div>
+							: <PieDonut segments={seg} mode="bar" />;
+					})()}
+				</Section>
 			</div>
 
 			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)', gap: 8, flexWrap: 'wrap' }}>

@@ -6,9 +6,11 @@ import { toast } from 'sonner';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading } from '@/components/atoms';
+import { PageHeader, AsyncState, Loading, StatCard, Section } from '@/components/atoms';
+import { ComboBarLine, PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
+import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
-import { CompanySelectOne, SectorCascade, SportsPicker, CurrencySelect, LocationFields, type LocationValue } from '@/components/entity-pickers';
+import { CompanySelectOne, SectorCascade, SportsPicker, CurrencySelect, LocationFields, EMPTY_LOCATION, type LocationValue } from '@/components/entity-pickers';
 
 interface Acquisition {
 	id: string;
@@ -20,6 +22,7 @@ interface Acquisition {
 	primary_sector?: string | null;
 }
 interface AcqResponse { data: Acquisition[]; total: number; totalPages: number }
+interface AcqStats { total: number; total_amount: number; sportstech: number; by_year: Array<{ year: number; deals: number; amt: number }>; by_type: Bucket[] }
 
 const TYPES = ['acquisition', 'merger', 'asset_purchase'] as const;
 const BUSINESS_MODELS = ['b2b', 'b2c', 'b2b2c', 'd2c', 'b2g', 'other'] as const;
@@ -32,18 +35,28 @@ function fmtAmount(v?: string | null): string {
 	if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
 	return `$${n.toLocaleString()}`;
 }
+const fmtMoney = (n: number): string => n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : `$${(n / 1e6).toFixed(1)}M`;
 
 export default function AcquisitionsAdminPage() {
 	const { mutate } = useSWRConfig();
 	const [search, setSearch] = useState('');
+	const [type, setType] = useState('');
+	const [year, setYear] = useState('');
 	const [page, setPage] = useState(1);
 	const [creating, setCreating] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 
 	const { data, error, isLoading } = useSWR<AcqResponse>(
-		['/api/acquisitions', { q: search || undefined, page, limit: 30, sort: '-acquisition_date' }],
+		['/api/acquisitions', {
+			q: search || undefined, acquisition_type: type || undefined, year: year || undefined,
+			page, limit: 30, sort: '-acquisition_date',
+		}],
 		{ dedupingInterval: 30_000 },
 	);
+	const stats = useSWR<AcqStats>(['/api/admin/stats/acquisitions'], { dedupingInterval: 60_000 });
+	const yearChart = (stats.data?.by_year ?? []).map((r) => ({ year: r.year, amt: Number(r.amt), deals: Number(r.deals) }));
+	const typeSegments = toSegments(stats.data?.by_type ?? []);
+	const yearOpts = (stats.data?.by_year ?? []).map((r) => String(r.year)).reverse();
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/acquisitions');
 
 	const remove = async (id: string) => {
@@ -58,13 +71,37 @@ export default function AcquisitionsAdminPage() {
 	const rows = data?.data ?? [];
 	return (
 		<div>
-			<PageHeader kicker={`M&A · ${(data?.total ?? 0).toLocaleString()} deals`} title="Acquisitions" />
+			<PageHeader kicker={`M&A · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} deals`} title="Acquisitions" />
 
-			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)' }}>
-				<input className="search-input" style={{ flex: '0 0 320px', height: 32 }} placeholder="Search acquiree / acquirer…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+			<StatStrip cols={3}>
+				<StatCard label="Total acquisitions" loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()} />
+				<StatCard label="Total value (disclosed)" loading={stats.isLoading} value={fmtMoney(stats.data?.total_amount ?? 0)} />
+				<StatCard label="SportsTech acquirees" loading={stats.isLoading} value={(stats.data?.sportstech ?? 0).toLocaleString()} />
+			</StatStrip>
+
+			<div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+				<Section title="Acquisitions by year" meta="value · count">
+					<AsyncState loading={stats.isLoading} error={stats.error} empty={yearChart.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
+						<ComboBarLine data={yearChart} height={240} valueFormatter={fmtMoney} barLabel="Value" lineLabel="deals" />
+					</AsyncState>
+				</Section>
+				<Section title="By type" meta="deals">
+					<AsyncState loading={stats.isLoading} error={stats.error} empty={typeSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
+						<div style={{ display: 'grid', placeItems: 'center', gap: 12 }}>
+							<PieDonut segments={typeSegments} size={170} mode="donut" />
+							<PieLegend segments={typeSegments} />
+						</div>
+					</AsyncState>
+				</Section>
+			</div>
+
+			<FilterBar>
+				<input className="search-input" style={{ flex: '0 0 280px', height: 32 }} placeholder="Search acquiree / acquirer…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+				<FilterSelect ariaLabel="Type" value={type} onChange={(v) => { setType(v); setPage(1); }} options={[...TYPES]} allLabel="All types" />
+				<FilterSelect ariaLabel="Year" value={year} onChange={(v) => { setYear(v); setPage(1); }} options={yearOpts} allLabel="All years" />
 				<div style={{ flex: 1 }} />
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add acquisition</button>
-			</div>
+			</FilterBar>
 
 			{(creating || editingId) && (
 				<AcquisitionModal id={editingId} onClose={() => { setCreating(false); setEditingId(null); }} onSaved={() => { setCreating(false); setEditingId(null); void refresh(); }} />
@@ -106,7 +143,7 @@ interface AcqForm {
 	acquisition_date: string; amount_usd: string; currency_code: string; acquisition_type: string; source_url: string;
 	acquiree: PartyForm; acquirer: PartyForm;
 }
-const emptyParty = (): PartyForm => ({ is_sportstech: false, sector_id: '', business_model: '', hq: { country: '', city: '' }, sport_ids: [] });
+const emptyParty = (): PartyForm => ({ is_sportstech: false, sector_id: '', business_model: '', hq: { ...EMPTY_LOCATION }, sport_ids: [] });
 const EMPTY_ACQ: AcqForm = {
 	acquiree_company_id: '', acquirer_company_id: '', acquirer_name: '',
 	acquisition_date: '', amount_usd: '', currency_code: '', acquisition_type: 'acquisition', source_url: '',
@@ -120,8 +157,8 @@ interface AcqEdit {
 	acquiree_is_sportstech?: boolean | null; acquirer_is_sportstech?: boolean | null;
 	acquiree_sector_id?: string | null; acquirer_sector_id?: string | null;
 	acquiree_business_model?: string | null; acquirer_business_model?: string | null;
-	acquiree_hq_country?: string | null; acquiree_hq_city?: string | null;
-	acquirer_hq_country?: string | null; acquirer_hq_city?: string | null;
+	acquiree_hq_country?: string | null; acquiree_hq_city?: string | null; acquiree_hq_continent?: string | null; acquiree_hq_region?: string | null; acquiree_hq_state?: string | null;
+	acquirer_hq_country?: string | null; acquirer_hq_city?: string | null; acquirer_hq_continent?: string | null; acquirer_hq_region?: string | null; acquirer_hq_state?: string | null;
 	acquiree_sport_ids?: string[]; acquirer_sport_ids?: string[];
 }
 
@@ -133,16 +170,16 @@ function toAcqForm(h: AcqEdit): AcqForm {
 		acquisition_type: h.acquisition_type ?? 'acquisition', source_url: h.source_url ?? '',
 		acquiree: {
 			is_sportstech: !!h.acquiree_is_sportstech, sector_id: h.acquiree_sector_id ?? '', business_model: h.acquiree_business_model ?? '',
-			hq: { country: h.acquiree_hq_country ?? '', city: h.acquiree_hq_city ?? '' }, sport_ids: h.acquiree_sport_ids ?? [],
+			hq: { country: h.acquiree_hq_country ?? '', city: h.acquiree_hq_city ?? '', continent: h.acquiree_hq_continent ?? '', region: h.acquiree_hq_region ?? '', state: h.acquiree_hq_state ?? '' }, sport_ids: h.acquiree_sport_ids ?? [],
 		},
 		acquirer: {
 			is_sportstech: !!h.acquirer_is_sportstech, sector_id: h.acquirer_sector_id ?? '', business_model: h.acquirer_business_model ?? '',
-			hq: { country: h.acquirer_hq_country ?? '', city: h.acquirer_hq_city ?? '' }, sport_ids: h.acquirer_sport_ids ?? [],
+			hq: { country: h.acquirer_hq_country ?? '', city: h.acquirer_hq_city ?? '', continent: h.acquirer_hq_continent ?? '', region: h.acquirer_hq_region ?? '', state: h.acquirer_hq_state ?? '' }, sport_ids: h.acquirer_sport_ids ?? [],
 		},
 	};
 }
 
-function AcquisitionModal({ id, onClose, onSaved }: { id: string | null; onClose: () => void; onSaved: () => void }) {
+export function AcquisitionModal({ id, onClose, onSaved }: { id: string | null; onClose: () => void; onSaved: () => void }) {
 	const isEdit = !!id;
 	const { data: hydrated } = useSWR<AcqEdit>(isEdit ? [`/api/admin/acquisitions/${id}/edit`] : null, { revalidateOnFocus: false });
 	if (isEdit && !hydrated) return <Modal title="Edit acquisition" onClose={onClose}><Loading msg="Loading acquisition…" /></Modal>;
@@ -179,8 +216,14 @@ function AcquisitionForm({ id, initial, onClose, onSaved }: { id: string | null;
 				acquirer_business_model: form.acquirer.business_model || undefined,
 				acquiree_hq_country: form.acquiree.hq.country.trim() || undefined,
 				acquiree_hq_city: form.acquiree.hq.city.trim() || undefined,
+				acquiree_hq_continent: form.acquiree.hq.continent.trim() || undefined,
+				acquiree_hq_region: form.acquiree.hq.region.trim() || undefined,
+				acquiree_hq_state: form.acquiree.hq.state.trim() || undefined,
 				acquirer_hq_country: form.acquirer.hq.country.trim() || undefined,
 				acquirer_hq_city: form.acquirer.hq.city.trim() || undefined,
+				acquirer_hq_continent: form.acquirer.hq.continent.trim() || undefined,
+				acquirer_hq_region: form.acquirer.hq.region.trim() || undefined,
+				acquirer_hq_state: form.acquirer.hq.state.trim() || undefined,
 				acquiree_sport_ids: form.acquiree.sport_ids,
 				acquirer_sport_ids: form.acquirer.sport_ids,
 			};

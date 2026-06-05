@@ -575,3 +575,56 @@ function HBarChild({
 		</div>
 	);
 }
+
+// ─── Palette + bucket helpers ───────────────────────────────────────────────
+
+/** Deterministic categorical palette (oklch, theme-agnostic). */
+export const CHART_COLORS = [
+	'oklch(58% 0.22 14)', 'oklch(62% 0.16 235)', 'oklch(70% 0.16 145)',
+	'oklch(72% 0.15 75)', 'oklch(58% 0.20 300)', 'oklch(65% 0.18 25)',
+	'oklch(60% 0.14 190)', 'oklch(68% 0.15 110)', 'oklch(55% 0.16 265)',
+	'oklch(70% 0.12 50)',
+];
+
+export interface Bucket { label: string; value: number }
+
+/** Map `{label,value}` buckets to pie segments with the categorical palette. */
+export function toSegments(buckets: Bucket[], opts?: { format?: (v: number) => string }): PieSegment[] {
+	return buckets
+		.filter((b) => b.value > 0)
+		.map((b, i) => ({
+			name: b.label,
+			v: b.value,
+			color: CHART_COLORS[i % CHART_COLORS.length]!,
+			label: opts?.format ? opts.format(b.value) : String(b.value),
+		}));
+}
+
+// ─── Funnel ─────────────────────────────────────────────────────────────────
+// Ordered stages with a bar proportional to the largest stage. Used for queue
+// status funnels (pending → picked up → verified / rejected).
+
+export interface FunnelStage { label: string; value: number; color?: string }
+
+export function Funnel({ stages }: { stages: FunnelStage[] }) {
+	const max = Math.max(1, ...stages.map((s) => s.value));
+	return (
+		<div style={{ display: 'grid', gap: 10 }}>
+			{stages.map((s, i) => {
+				const pct = (s.value / max) * 100;
+				const color = s.color ?? CHART_COLORS[i % CHART_COLORS.length]!;
+				return (
+					<div key={s.label}>
+						<div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 4 }}>
+							<span style={{ fontSize: 13, fontWeight: 600, textTransform: 'capitalize' }}>{s.label.replace(/_/g, ' ')}</span>
+							<span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700 }}>{s.value.toLocaleString()}</span>
+						</div>
+						<div className="hb-bar" style={{ height: 8 }}>
+							<div className="hb-bar-fill" style={{ width: `${pct}%`, background: color }} />
+						</div>
+					</div>
+				);
+			})}
+		</div>
+	);
+}

@@ -1,12 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
-import { PageHeader, AsyncState } from '@/components/atoms';
+import { PageHeader, AsyncState, StatCard, Section } from '@/components/atoms';
+import { Funnel } from '@/components/charts';
+import { StatStrip } from '@/components/filters';
 
 type DcrStatus = 'open' | 'picked_up' | 'resolved' | 'rejected';
+interface QueueStats { data_requests: Array<{ label: string; value: number }> }
 
 interface Dcr {
 	id: string;
@@ -19,9 +23,11 @@ interface Dcr {
 	change_type: string | null;
 	user_email: string | null;
 	resolution_notes: string | null;
+	context: Record<string, unknown> | null;
 	status: DcrStatus;
 	created_at: string;
 }
+const APPLYABLE = new Set(['company', 'investor', 'deal', 'ecosystem']);
 interface DcrResponse { data: Dcr[]; total: number; totalPages: number }
 
 const TABS: Array<{ label: string; key: DcrStatus }> = [
@@ -41,6 +47,8 @@ export default function DataRequestsPage() {
 		['/api/admin/data-change-requests', { status, page, limit: 30 }],
 		{ dedupingInterval: 15_000 },
 	);
+	const stats = useSWR<QueueStats>(['/api/admin/stats/queues'], { dedupingInterval: 60_000 });
+	const dq: Record<string, number> = Object.fromEntries((stats.data?.data_requests ?? []).map((b) => [b.label, b.value]));
 
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/admin/data-change-requests');
 
@@ -63,10 +71,47 @@ export default function DataRequestsPage() {
 		void update(id, next, notes);
 	};
 
+	const [expandedId, setExpandedId] = useState<string | null>(null);
+	const [editVal, setEditVal] = useState('');
+	const [applyPending, setApplyPending] = useState<string | null>(null);
+	const toggleExpand = (r: Dcr) => {
+		if (expandedId === r.id) { setExpandedId(null); return; }
+		setExpandedId(r.id);
+		setEditVal(r.requested_value ?? '');
+	};
+	const applyChange = async (r: Dcr) => {
+		setApplyPending(r.id);
+		try {
+			await api('POST', `/api/admin/data-change-requests/${r.id}/apply`, { value: editVal, field: r.field_change ?? undefined });
+			toast.success('Applied to the record');
+			setExpandedId(null);
+			void refresh();
+		} catch (e) { toast.error((e as Error).message); }
+		finally { setApplyPending(null); }
+	};
+
 	const items = data?.data ?? [];
 	return (
 		<div>
 			<PageHeader kicker={`Queues · ${(data?.total ?? 0).toLocaleString()} in ${status}`} title="Data change requests" />
+
+			<StatStrip cols={4}>
+				<StatCard label="Open" loading={stats.isLoading} value={(dq.open ?? 0).toLocaleString()} urgent={(dq.open ?? 0) > 0} />
+				<StatCard label="Picked up" loading={stats.isLoading} value={(dq.picked_up ?? 0).toLocaleString()} />
+				<StatCard label="Resolved" loading={stats.isLoading} value={(dq.resolved ?? 0).toLocaleString()} />
+				<StatCard label="Rejected" loading={stats.isLoading} value={(dq.rejected ?? 0).toLocaleString()} />
+			</StatStrip>
+
+			<Section title="Request funnel" meta="open → resolved">
+				<Funnel stages={[
+					{ label: 'Open', value: dq.open ?? 0 },
+					{ label: 'Picked up', value: dq.picked_up ?? 0 },
+					{ label: 'Resolved', value: dq.resolved ?? 0, color: 'var(--pos)' },
+					{ label: 'Rejected', value: dq.rejected ?? 0, color: 'var(--neg)' },
+				]} />
+			</Section>
+
+			<div style={{ height: 'var(--space-4)' }} />
 
 			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)' }}>
 				{TABS.map((t) => (
@@ -91,11 +136,15 @@ export default function DataRequestsPage() {
 					</thead>
 					<tbody>
 						{items.map((r) => (
-							<tr key={r.id}>
+							<Fragment key={r.id}>
+							<tr>
 								<td className="num">{new Date(r.created_at).toLocaleDateString()}</td>
 								<td>
-									<div style={{ fontWeight: 600 }}>{r.target_name_snapshot ?? '—'}</div>
-									<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{r.entity_type ?? ''}{r.entity_id ? ` · ${r.entity_id.slice(0, 8)}…` : ''}</div>
+									<button className="btn ghost" style={{ padding: '2px 4px', marginRight: 4 }} onClick={() => toggleExpand(r)} aria-label="Toggle details">
+										{expandedId === r.id ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+									</button>
+									<span style={{ fontWeight: 600 }}>{r.target_name_snapshot ?? '—'}</span>
+									<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{r.entity_type ?? ''}</div>
 								</td>
 								<td style={{ maxWidth: 320 }}>
 									{r.field_change ? (
@@ -129,6 +178,43 @@ export default function DataRequestsPage() {
 									</div>
 								</td>
 							</tr>
+							{expandedId === r.id && (
+								<tr>
+									<td colSpan={6} style={{ background: 'var(--bg-2)' }}>
+										<div style={{ display: 'grid', gap: 10, padding: '4px 4px 10px' }}>
+											<div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, fontSize: 12 }}>
+												<div><div className="co-stat-label">Entity</div>{r.entity_type ?? '—'}</div>
+												<div><div className="co-stat-label">Field</div>{r.field_change ?? '—'}</div>
+												<div><div className="co-stat-label">Change type</div>{r.change_type ?? 'edit'}</div>
+												<div><div className="co-stat-label">Current value</div><span style={{ color: 'var(--fg-muted)' }}>{r.old_value || '∅'}</span></div>
+												<div><div className="co-stat-label">Requested by</div>{r.user_email ?? '—'}</div>
+												<div><div className="co-stat-label">Submitted</div>{new Date(r.created_at).toLocaleString()}</div>
+											</div>
+											{r.context && Object.keys(r.context).length > 0 && (
+												<div style={{ fontSize: 12 }}>
+													<div className="co-stat-label">Extra context</div>
+													<pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-2)' }}>{JSON.stringify(r.context, null, 2)}</pre>
+												</div>
+											)}
+											{APPLYABLE.has(r.entity_type ?? '') ? (
+												<div style={{ display: 'grid', gap: 6 }}>
+													<div className="co-stat-label">Value to apply (edit before applying if needed)</div>
+													<div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+														<textarea className="search-input" style={{ flex: 1, minHeight: 38, resize: 'vertical' }} value={editVal} onChange={(e) => setEditVal(e.target.value)} />
+														<button className="btn" disabled={applyPending === r.id || r.status === 'resolved'} onClick={() => void applyChange(r)}>
+															{applyPending === r.id ? 'Applying…' : 'Apply to record'}
+														</button>
+													</div>
+													<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Writes <code>{r.field_change ?? '—'}</code> on the {r.entity_type} and marks this request resolved.</div>
+												</div>
+											) : (
+												<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>This request type can’t be auto-applied — review and resolve manually.</div>
+											)}
+										</div>
+									</td>
+								</tr>
+							)}
+							</Fragment>
 						))}
 					</tbody>
 				</table>

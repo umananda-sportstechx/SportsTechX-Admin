@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { PageHeader, StatCard, AsyncState, Section, Tag } from '@/components/atoms';
-import { ComboBarLine, PieDonut, PieLegend, type PieSegment } from '@/components/charts';
+import { ComboBarLine, PieDonut, PieLegend, Funnel, toSegments, type PieSegment } from '@/components/charts';
 
 interface Sale {
 	id: string;
@@ -72,6 +72,10 @@ export default function SalesAdminPage() {
 		['Not yet due', 'notYetDue'], ['1–30 days', 'days1_30'], ['31–60 days', 'days31_60'],
 		['61–90 days', 'days61_90'], ['91+ days', 'days91Plus'],
 	];
+	const agingSegments = toSegments(agingRows.map(([label, key]) => ({ label, value: aging[key] ?? 0 })), { format: money });
+	const paymentSegments = a
+		? toSegments((['succeeded', 'refunded', 'failed', 'uncaptured', 'blocked'] as const).map((k) => ({ label: k, value: a.payments[k].count })))
+		: [];
 
 	return (
 		<div>
@@ -119,35 +123,30 @@ export default function SalesAdminPage() {
 				</div>
 
 				<div className="grid-2" style={{ marginBottom: 'var(--space-5)' }}>
-					<Section title="Trial funnel">
-						<div className="grid-2" style={{ gap: 12 }}>
-							<MiniStat label="Trials started" value={(a?.trialConversion.trialsStarted ?? 0).toLocaleString()} />
-							<MiniStat label="Converted" value={(a?.trialConversion.trialsConverted ?? 0).toLocaleString()} />
-							<MiniStat label="Currently trialing" value={(a?.trialConversion.currentlyTrialing ?? 0).toLocaleString()} />
-							<MiniStat label="Conversion rate" value={`${(a?.trialConversion.conversionRate ?? 0).toFixed(1)}%`} />
-						</div>
+					<Section title="Trial funnel" meta={`${(a?.trialConversion.conversionRate ?? 0).toFixed(1)}% conversion`}>
+						<Funnel stages={[
+							{ label: 'Trials started', value: a?.trialConversion.trialsStarted ?? 0 },
+							{ label: 'Currently trialing', value: a?.trialConversion.currentlyTrialing ?? 0 },
+							{ label: 'Converted to paid', value: a?.trialConversion.trialsConverted ?? 0, color: 'var(--pos)' },
+						]} />
 					</Section>
 					<Section title={`Outstanding invoices · ${money(a?.outstandingInvoices.total ?? 0)} (${a?.outstandingInvoices.count ?? 0})`}>
-						<table className="data-table">
-							<tbody>
-								{agingRows.map(([label, key]) => (
-									<tr key={key}><td>{label}</td><td className="num">{money(aging[key] ?? 0)}</td></tr>
-								))}
-							</tbody>
-						</table>
+						{agingSegments.length === 0
+							? <div style={{ color: 'var(--fg-muted)', fontSize: 13 }}>No outstanding invoices.</div>
+							: <PieDonut segments={agingSegments} mode="bar" />}
 					</Section>
 				</div>
 
 				<div className="grid-2" style={{ marginBottom: 'var(--space-5)' }}>
-					<Section title="Payments breakdown">
-						<table className="data-table">
-							<thead><tr><th>Outcome</th><th>Count</th><th>Amount</th></tr></thead>
-							<tbody>
-								{a && (['succeeded', 'uncaptured', 'refunded', 'blocked', 'failed'] as const).map((k) => (
-									<tr key={k}><td style={{ textTransform: 'capitalize' }}>{k}</td><td className="num">{a.payments[k].count}</td><td className="num">{money(a.payments[k].amount)}</td></tr>
-								))}
-							</tbody>
-						</table>
+					<Section title="Payments breakdown" meta="by outcome count">
+						{paymentSegments.length === 0
+							? <div style={{ color: 'var(--fg-muted)', fontSize: 13 }}>No payments in this period.</div>
+							: (
+								<div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+									<PieDonut segments={paymentSegments} size={170} mode="donut" />
+									<div style={{ flex: 1, minWidth: 160 }}><PieLegend segments={paymentSegments} /></div>
+								</div>
+							)}
 					</Section>
 					<Section title="Top customers">
 						<table className="data-table">
@@ -164,15 +163,6 @@ export default function SalesAdminPage() {
 			</AsyncState>
 
 			<BillingLog />
-		</div>
-	);
-}
-
-function MiniStat({ label, value }: { label: string; value: string }) {
-	return (
-		<div>
-			<div className="co-stat-label">{label}</div>
-			<div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, marginTop: 2 }}>{value}</div>
 		</div>
 	);
 }

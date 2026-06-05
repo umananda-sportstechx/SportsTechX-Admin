@@ -6,11 +6,13 @@ import { toast } from 'sonner';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading } from '@/components/atoms';
+import { PageHeader, AsyncState, Loading, StatCard, Section } from '@/components/atoms';
+import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
+import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import {
 	SectorCascade, SportsPicker, TechTagsPicker, RoundTypeSelect, LocationFields, SocialLinks,
-	EMPTY_SOCIAL, type SocialValue, type LocationValue,
+	EMPTY_SOCIAL, EMPTY_LOCATION, type SocialValue, type LocationValue,
 } from '@/components/entity-pickers';
 
 interface Investor {
@@ -25,23 +27,34 @@ interface Investor {
 }
 
 interface InvestorsResponse { data: Investor[]; total: number; totalPages: number }
+interface InvestorStats { total: number; verified: number; active: number; by_category: Bucket[]; by_status: Bucket[] }
 
 const CATEGORIES = [
 	'venture_capital', 'private_equity', 'financial_services',
 	'family_investment_office', 'sovereign_wealth_fund', 'angel', 'other',
 ] as const;
+const STATUSES = ['active', 'inactive', 'paused'] as const;
 
 export default function InvestorsAdminPage() {
 	const { mutate } = useSWRConfig();
 	const [search, setSearch] = useState('');
+	const [category, setCategory] = useState('');
+	const [status, setStatus] = useState('');
+	const [verified, setVerified] = useState('');
 	const [page, setPage] = useState(1);
 	const [creating, setCreating] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 
 	const { data, error, isLoading } = useSWR<InvestorsResponse>(
-		['/api/investors', { search: search || undefined, page, limit: 30 }],
+		['/api/investors', {
+			search: search || undefined, category: category || undefined, status: status || undefined,
+			is_verified: verified || undefined, page, limit: 30,
+		}],
 		{ dedupingInterval: 30_000 },
 	);
+	const stats = useSWR<InvestorStats>(['/api/admin/stats/investors'], { dedupingInterval: 60_000 });
+	const categorySegments = toSegments(stats.data?.by_category ?? []);
+	const statusSegments = toSegments(stats.data?.by_status ?? []);
 
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/investors');
 
@@ -59,19 +72,45 @@ export default function InvestorsAdminPage() {
 	const rows = data?.data ?? [];
 	return (
 		<div>
-			<PageHeader kicker={`Capital · ${(data?.total ?? 0).toLocaleString()} investors`} title="Investors" />
+			<PageHeader kicker={`Capital · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} investors`} title="Investors" />
 
-			<div className="filter-bar" style={{ marginBottom: 12 }}>
+			<StatStrip cols={4}>
+				<StatCard label="Total" loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()} />
+				<StatCard label="Verified" loading={stats.isLoading} value={(stats.data?.verified ?? 0).toLocaleString()} />
+				<StatCard label="Actively investing" loading={stats.isLoading} value={(stats.data?.active ?? 0).toLocaleString()} />
+				<StatCard label="Categories" loading={stats.isLoading} value={(stats.data?.by_category?.length ?? 0).toLocaleString()} />
+			</StatStrip>
+
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+				<Section title="By category" meta="investors">
+					<AsyncState loading={stats.isLoading} error={stats.error} empty={categorySegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
+						<div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+							<PieDonut segments={categorySegments} size={170} mode="donut" />
+							<div style={{ flex: 1, minWidth: 160 }}><PieLegend segments={categorySegments} /></div>
+						</div>
+					</AsyncState>
+				</Section>
+				<Section title="By status" meta="investors">
+					<AsyncState loading={stats.isLoading} error={stats.error} empty={statusSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
+						<PieDonut segments={statusSegments} mode="bar" />
+					</AsyncState>
+				</Section>
+			</div>
+
+			<FilterBar>
 				<input
 					className="search-input"
-					style={{ flex: '0 0 320px', height: 32 }}
+					style={{ flex: '0 0 260px', height: 32 }}
 					placeholder="Search investors…"
 					value={search}
 					onChange={(e) => { setSearch(e.target.value); setPage(1); }}
 				/>
+				<FilterSelect ariaLabel="Category" value={category} onChange={(v) => { setCategory(v); setPage(1); }} options={[...CATEGORIES]} allLabel="All categories" />
+				<FilterSelect ariaLabel="Status" value={status} onChange={(v) => { setStatus(v); setPage(1); }} options={[...STATUSES]} allLabel="All statuses" />
+				<FilterSelect ariaLabel="Verified" value={verified} onChange={(v) => { setVerified(v); setPage(1); }} options={[{ value: 'true', label: 'Verified' }, { value: 'false', label: 'Unverified' }]} allLabel="Any verification" />
 				<div style={{ flex: 1 }} />
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add investor</button>
-			</div>
+			</FilterBar>
 
 			{(creating || editingId) && (
 				<InvestorModal
@@ -123,7 +162,7 @@ interface InvestorForm {
 
 const EMPTY_INVESTOR: InvestorForm = {
 	name: '', slug: '', website: '', description: '', category: '', year_launched: '', status: 'active',
-	is_verified: false, actively_investing: false, hq: { country: '', city: '' }, social: { ...EMPTY_SOCIAL },
+	is_verified: false, actively_investing: false, hq: { ...EMPTY_LOCATION }, social: { ...EMPTY_SOCIAL },
 	keywords: '', logo_url: '', num_employees: '', num_investments: '', num_exits: '',
 	total_funding: '', annual_revenue: '', analyst_notes: '',
 	thesis_sector_ids: [], thesis_sport_ids: [], thesis_tech_tag_ids: [], thesis_round_type_ids: [],
@@ -131,6 +170,7 @@ const EMPTY_INVESTOR: InvestorForm = {
 
 interface InvestorEdit extends Investor {
 	description?: string | null; hq_country?: string | null; hq_city?: string | null;
+	hq_continent?: string | null; hq_region?: string | null; hq_state?: string | null;
 	keywords?: string | null; logo_url?: string | null; analyst_notes?: string | null;
 	num_employees?: number | null; num_investments?: number | null; num_exits?: number | null;
 	total_funding?: string | null; annual_revenue?: string | null; actively_investing?: boolean | null;
@@ -144,7 +184,7 @@ function toInvestorForm(h: InvestorEdit): InvestorForm {
 		name: h.name ?? '', slug: h.slug ?? '', website: h.website ?? '', description: h.description ?? '',
 		category: h.category ?? '', year_launched: h.year_launched ? String(h.year_launched) : '',
 		status: h.status ?? 'active', is_verified: !!h.is_verified, actively_investing: !!h.actively_investing,
-		hq: { country: h.hq_country ?? '', city: h.hq_city ?? '' },
+		hq: { country: h.hq_country ?? '', city: h.hq_city ?? '', continent: h.hq_continent ?? '', region: h.hq_region ?? '', state: h.hq_state ?? '' },
 		social: {
 			twitter_url: h.twitter_url ?? '', instagram_url: h.instagram_url ?? '', facebook_url: h.facebook_url ?? '',
 			linkedin_url: h.linkedin_url ?? '', youtube_url: h.youtube_url ?? '', email: h.email ?? '',
@@ -190,6 +230,9 @@ function InvestorForm({ id, initial, onClose, onSaved }: { id: string | null; in
 				actively_investing: form.actively_investing,
 				hq_country: form.hq.country.trim() || undefined,
 				hq_city: form.hq.city.trim() || undefined,
+				hq_continent: form.hq.continent.trim() || undefined,
+				hq_region: form.hq.region.trim() || undefined,
+				hq_state: form.hq.state.trim() || undefined,
 				keywords: form.keywords.trim() || null,
 				logo_url: form.logo_url.trim() || null,
 				num_employees: numOrNull(form.num_employees),

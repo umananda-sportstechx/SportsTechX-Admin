@@ -5,9 +5,12 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Check, X, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { PageHeader, AsyncState } from '@/components/atoms';
+import { PageHeader, AsyncState, StatCard, Section } from '@/components/atoms';
+import { Funnel } from '@/components/charts';
+import { StatStrip } from '@/components/filters';
 
 type Status = 'new' | 'reviewing' | 'added' | 'rejected';
+interface QueueStats { pipeline: Array<{ label: string; value: number }> }
 
 interface Entry {
 	id: string;
@@ -41,6 +44,8 @@ export default function StartupsPipelinePage() {
 		['/api/admin/startups-pipeline', { status, limit: 50 }],
 		{ dedupingInterval: 15_000 },
 	);
+	const stats = useSWR<QueueStats>(['/api/admin/stats/queues'], { dedupingInterval: 60_000 });
+	const pl: Record<string, number> = Object.fromEntries((stats.data?.pipeline ?? []).map((b) => [b.label, b.value]));
 
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/admin/startups-pipeline');
 
@@ -86,6 +91,24 @@ export default function StartupsPipelinePage() {
 	return (
 		<div>
 			<PageHeader kicker={`Pipeline · ${(data?.total ?? 0).toLocaleString()} in ${status}`} title="Startups to add" />
+
+			<StatStrip cols={4}>
+				<StatCard label="New" loading={stats.isLoading} value={(pl.new ?? 0).toLocaleString()} urgent={(pl.new ?? 0) > 0} />
+				<StatCard label="Reviewing" loading={stats.isLoading} value={(pl.reviewing ?? 0).toLocaleString()} />
+				<StatCard label="Added" loading={stats.isLoading} value={(pl.added ?? 0).toLocaleString()} />
+				<StatCard label="Rejected" loading={stats.isLoading} value={(pl.rejected ?? 0).toLocaleString()} />
+			</StatStrip>
+
+			<Section title="Pipeline funnel" meta="new → added">
+				<Funnel stages={[
+					{ label: 'New', value: pl.new ?? 0 },
+					{ label: 'Reviewing', value: pl.reviewing ?? 0 },
+					{ label: 'Added', value: pl.added ?? 0, color: 'var(--pos)' },
+					{ label: 'Rejected', value: pl.rejected ?? 0, color: 'var(--neg)' },
+				]} />
+			</Section>
+
+			<div style={{ height: 'var(--space-4)' }} />
 
 			<div className="card" style={{ padding: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
 				<div style={{ fontWeight: 700, marginBottom: 12 }}>Submit a startup candidate</div>

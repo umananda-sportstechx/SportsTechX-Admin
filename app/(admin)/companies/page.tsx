@@ -6,12 +6,16 @@ import { toast } from 'sonner';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading } from '@/components/atoms';
+import { PageHeader, AsyncState, Loading, StatCard, Section } from '@/components/atoms';
+import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
+import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import {
 	SectorCascade, SportsPicker, TechTagsPicker, LocationFields, SocialLinks,
-	EMPTY_SOCIAL, type SocialValue, type LocationValue,
+	EMPTY_SOCIAL, EMPTY_LOCATION, type SocialValue, type LocationValue,
 } from '@/components/entity-pickers';
+import { DealModal } from '../deals/page';
+import { AcquisitionModal } from '../acquisitions/page';
 
 interface Company {
 	id: string;
@@ -27,6 +31,8 @@ interface Company {
 	status?: string | null;
 }
 interface CompaniesResponse { data: Company[]; total: number; totalPages: number }
+interface CompanyStats { total: number; verified: number; unicorn: number; raising: number; by_status: Bucket[]; by_sector: Bucket[]; by_business_model: Bucket[] }
+interface SectorRow { id: string; name: string; slug: string }
 
 const STATUSES = ['active', 'inactive', 'needs_review', 'dead', 'acquired', 'ipo', 'not_sportstech'] as const;
 const BUSINESS_MODELS = ['b2b', 'b2c', 'b2b2c', 'd2c', 'b2g', 'other'] as const;
@@ -34,15 +40,25 @@ const BUSINESS_MODELS = ['b2b', 'b2c', 'b2b2c', 'd2c', 'b2g', 'other'] as const;
 export default function CompaniesAdminPage() {
 	const { mutate } = useSWRConfig();
 	const [search, setSearch] = useState('');
+	const [status, setStatus] = useState('');
+	const [sector, setSector] = useState('');
+	const [verified, setVerified] = useState('');
 	const [page, setPage] = useState(1);
 	const [creating, setCreating] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [removePending, setRemovePending] = useState(false);
 
 	const { data, error, isLoading } = useSWR<CompaniesResponse>(
-		['/api/companies', { search: search || undefined, page, limit: 30 }],
+		['/api/companies', {
+			search: search || undefined, status: status || undefined, sector: sector || undefined,
+			is_verified: verified || undefined, page, limit: 30,
+		}],
 		{ dedupingInterval: 30_000 },
 	);
+	const stats = useSWR<CompanyStats>(['/api/admin/stats/companies'], { dedupingInterval: 60_000 });
+	const sectorOpts = useSWR<SectorRow[]>(['/api/sectors'], { dedupingInterval: 60 * 60_000 });
+	const statusSegments = toSegments(stats.data?.by_status ?? []);
+	const sectorSegments = toSegments(stats.data?.by_sector ?? []);
 
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/companies');
 
@@ -63,19 +79,46 @@ export default function CompaniesAdminPage() {
 	const companies = data?.data ?? [];
 	return (
 		<div>
-			<PageHeader kicker={`Database · ${(data?.total ?? 0).toLocaleString()} companies`} title="Companies" />
+			<PageHeader kicker={`Database · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} companies`} title="Companies" />
 
-			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)' }}>
+			<StatStrip cols={5}>
+				<StatCard label="Total" loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()} />
+				<StatCard label="Verified" loading={stats.isLoading} value={(stats.data?.verified ?? 0).toLocaleString()} />
+				<StatCard label="Unicorns" loading={stats.isLoading} value={(stats.data?.unicorn ?? 0).toLocaleString()} />
+				<StatCard label="Actively raising" loading={stats.isLoading} value={(stats.data?.raising ?? 0).toLocaleString()} urgent={(stats.data?.raising ?? 0) > 0} />
+				<StatCard label="Sectors covered" loading={stats.isLoading} value={(stats.data?.by_sector?.length ?? 0).toLocaleString()} />
+			</StatStrip>
+
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+				<Section title="By status" meta="companies">
+					<AsyncState loading={stats.isLoading} error={stats.error} empty={statusSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
+						<div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+							<PieDonut segments={statusSegments} size={170} mode="donut" />
+							<div style={{ flex: 1, minWidth: 160 }}><PieLegend segments={statusSegments} /></div>
+						</div>
+					</AsyncState>
+				</Section>
+				<Section title="Top sectors" meta="companies">
+					<AsyncState loading={stats.isLoading} error={stats.error} empty={sectorSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
+						<PieDonut segments={sectorSegments} mode="bar" />
+					</AsyncState>
+				</Section>
+			</div>
+
+			<FilterBar>
 				<input
 					className="search-input"
-					style={{ flex: '0 0 320px', height: 32 }}
+					style={{ flex: '0 0 280px', height: 32 }}
 					placeholder="Search…"
 					value={search}
 					onChange={(e) => { setSearch(e.target.value); setPage(1); }}
 				/>
+				<FilterSelect ariaLabel="Status" value={status} onChange={(v) => { setStatus(v); setPage(1); }} options={[...STATUSES]} allLabel="All statuses" />
+				<FilterSelect ariaLabel="Sector" value={sector} onChange={(v) => { setSector(v); setPage(1); }} options={(sectorOpts.data ?? []).map((s) => ({ value: s.slug, label: s.name }))} allLabel="All sectors" />
+				<FilterSelect ariaLabel="Verified" value={verified} onChange={(v) => { setVerified(v); setPage(1); }} options={[{ value: 'true', label: 'Verified' }, { value: 'false', label: 'Unverified' }]} allLabel="Any verification" />
 				<div style={{ flex: 1 }} />
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add company</button>
-			</div>
+			</FilterBar>
 
 			{(creating || editingId) && (
 				<CompanyModal
@@ -135,7 +178,7 @@ interface CompanyForm {
 
 const EMPTY_COMPANY: CompanyForm = {
 	name: '', website: '', slug: '', description: '', custom_logo_url: '',
-	sector_id: '', business_model: '', hq: { country: '', city: '' },
+	sector_id: '', business_model: '', hq: { ...EMPTY_LOCATION },
 	founded_year: '', ipo_date: '', status: 'active',
 	is_verified: false, is_unicorn: false, is_actively_raising: false,
 	social: { ...EMPTY_SOCIAL }, sport_ids: [], tech_tag_ids: [],
@@ -150,6 +193,7 @@ interface CompanyEdit extends Company {
 	is_actively_raising?: boolean;
 	twitter_url?: string | null; instagram_url?: string | null; facebook_url?: string | null;
 	linkedin_url?: string | null; youtube_url?: string | null; email?: string | null;
+	hq_continent?: string | null; hq_region?: string | null; hq_state?: string | null;
 	sport_ids?: string[]; tech_tag_ids?: string[];
 }
 
@@ -157,7 +201,7 @@ function toCompanyForm(h: CompanyEdit): CompanyForm {
 	return {
 		name: h.name ?? '', website: h.website ?? '', slug: h.slug ?? '', description: h.description ?? '',
 		custom_logo_url: h.custom_logo_url ?? '', sector_id: h.sector_id ?? '', business_model: h.business_model ?? '',
-		hq: { country: h.hq_country ?? '', city: h.hq_city ?? '' },
+		hq: { country: h.hq_country ?? '', city: h.hq_city ?? '', continent: h.hq_continent ?? '', region: h.hq_region ?? '', state: h.hq_state ?? '' },
 		founded_year: h.founded_year ? String(h.founded_year) : '',
 		ipo_date: h.ipo_date ? String(h.ipo_date).slice(0, 10) : '',
 		status: h.status ?? 'active', is_verified: !!h.is_verified, is_unicorn: !!h.is_unicorn, is_actively_raising: !!h.is_actively_raising,
@@ -177,6 +221,94 @@ function CompanyModal({ id, onClose, onSaved }: { id: string | null; onClose: ()
 	const { data: hydrated } = useSWR<CompanyEdit>(isEdit ? [`/api/admin/companies/${id}/edit`] : null, { revalidateOnFocus: false });
 	if (isEdit && !hydrated) return <Modal title="Edit company" onClose={onClose}><Loading msg="Loading company…" /></Modal>;
 	return <CompanyForm id={id} initial={hydrated ? toCompanyForm(hydrated) : EMPTY_COMPANY} onClose={onClose} onSaved={onSaved} />;
+}
+
+// ── Funding tab: a company's deals, managed inline via the shared DealModal ──
+function CompanyFundingTab({ companyId }: { companyId: string }) {
+	const { mutate } = useSWRConfig();
+	const { data, isLoading, error } = useSWR<{ data: Array<{ id: string; round_type_name?: string | null; announced_year?: number | null; amount_usd?: string | null; status?: string | null }> }>(
+		['/api/deals', { company_id: companyId, limit: 100, sort: '-announced_date' }], { dedupingInterval: 15_000 },
+	);
+	const [modal, setModal] = useState<{ id: string | null } | null>(null);
+	const refresh = () => mutate((k) => Array.isArray(k) && k[0] === '/api/deals');
+	const rows = data?.data ?? [];
+	const remove = async (dealId: string) => {
+		if (!confirm('Delete this funding round?')) return;
+		try { await api('DELETE', `/api/admin/deals/${dealId}`); toast.success('Deleted'); refresh(); }
+		catch (e) { toast.error((e as Error).message); }
+	};
+	const amt = (v?: string | null) => { const n = Number(v); return v && Number.isFinite(n) && n > 0 ? (n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : `$${n.toLocaleString()}`) : 'Undisclosed'; };
+	return (
+		<div style={{ display: 'grid', gap: 10 }}>
+			<div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+				<button className="btn" onClick={() => setModal({ id: null })}><Plus size={12} /> Add funding round</button>
+			</div>
+			<AsyncState loading={isLoading} error={error} empty={rows.length === 0} emptyMsg="No funding rounds yet." onRetry={() => void refresh()}>
+				<table className="data-table">
+					<thead><tr><th>Round</th><th>Year</th><th>Amount</th><th>Status</th><th /></tr></thead>
+					<tbody>
+						{rows.map((d) => (
+							<tr key={d.id}>
+								<td>{d.round_type_name ?? '—'}</td>
+								<td className="num">{d.announced_year ?? '—'}</td>
+								<td className="num">{amt(d.amount_usd)}</td>
+								<td>{d.status ?? '—'}</td>
+								<td style={{ textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+									<button className="btn ghost" onClick={() => setModal({ id: d.id })}>Edit</button>
+									<button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => void remove(d.id)}><Trash2 size={12} /></button>
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</AsyncState>
+			{modal && <DealModal id={modal.id} lockedCompanyId={companyId} onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} />}
+		</div>
+	);
+}
+
+// ── M&A tab: acquisitions where this company is acquiree or acquirer ──
+function CompanyMaTab({ companyId }: { companyId: string }) {
+	const { mutate } = useSWRConfig();
+	type Row = { id: string; acquiree_name?: string | null; acquirer_name?: string | null; acquiree_company_id?: string | null; acquisition_year?: number | null; acquisition_type?: string | null };
+	const asTarget = useSWR<{ data: Row[] }>(['/api/acquisitions', { acquiree_company_id: companyId, limit: 50 }], { dedupingInterval: 15_000 });
+	const asBuyer = useSWR<{ data: Row[] }>(['/api/acquisitions', { acquirer_company_id: companyId, limit: 50 }], { dedupingInterval: 15_000 });
+	const [modal, setModal] = useState<{ id: string | null } | null>(null);
+	const refresh = () => mutate((k) => Array.isArray(k) && k[0] === '/api/acquisitions');
+	const seen = new Set<string>();
+	const rows = [...(asTarget.data?.data ?? []), ...(asBuyer.data?.data ?? [])].filter((r) => (seen.has(r.id) ? false : seen.add(r.id)));
+	const remove = async (acqId: string) => {
+		if (!confirm('Delete this acquisition?')) return;
+		try { await api('DELETE', `/api/admin/acquisitions/${acqId}`); toast.success('Deleted'); refresh(); }
+		catch (e) { toast.error((e as Error).message); }
+	};
+	return (
+		<div style={{ display: 'grid', gap: 10 }}>
+			<div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+				<button className="btn" onClick={() => setModal({ id: null })}><Plus size={12} /> Add acquisition</button>
+			</div>
+			<AsyncState loading={asTarget.isLoading || asBuyer.isLoading} error={asTarget.error || asBuyer.error} empty={rows.length === 0} emptyMsg="No acquisitions involving this company." onRetry={() => void refresh()}>
+				<table className="data-table">
+					<thead><tr><th>Role</th><th>Acquiree</th><th>Acquirer</th><th>Year</th><th /></tr></thead>
+					<tbody>
+						{rows.map((a) => (
+							<tr key={a.id}>
+								<td>{a.acquiree_company_id === companyId ? 'Target' : 'Acquirer'}</td>
+								<td>{a.acquiree_name ?? '—'}</td>
+								<td>{a.acquirer_name ?? '—'}</td>
+								<td className="num">{a.acquisition_year ?? '—'}</td>
+								<td style={{ textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+									<button className="btn ghost" onClick={() => setModal({ id: a.id })}>Edit</button>
+									<button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => void remove(a.id)}><Trash2 size={12} /></button>
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</AsyncState>
+			{modal && <AcquisitionModal id={modal.id} onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} />}
+		</div>
+	);
 }
 
 function CompanyForm({ id, initial, onClose, onSaved }: { id: string | null; initial: CompanyForm; onClose: () => void; onSaved: () => void }) {
@@ -200,6 +332,9 @@ function CompanyForm({ id, initial, onClose, onSaved }: { id: string | null; ini
 				business_model: form.business_model || undefined,
 				hq_country: form.hq.country.trim() || undefined,
 				hq_city: form.hq.city.trim() || undefined,
+				hq_continent: form.hq.continent.trim() || undefined,
+				hq_region: form.hq.region.trim() || undefined,
+				hq_state: form.hq.state.trim() || undefined,
 				founded_year: form.founded_year ? Number(form.founded_year) : undefined,
 				ipo_date: form.ipo_date || undefined,
 				status: form.status,
@@ -272,6 +407,15 @@ function CompanyForm({ id, initial, onClose, onSaved }: { id: string | null; ini
 						},
 						{ key: 'location', label: 'Location', node: <Field label="Headquarters"><LocationFields value={form.hq} onChange={(v) => set('hq', v)} /></Field> },
 						{ key: 'social', label: 'Social', node: <SocialLinks value={form.social} onChange={(v) => set('social', v)} /> },
+						...(isEdit && id
+							? [
+								{ key: 'funding', label: 'Funding', node: <CompanyFundingTab companyId={id} /> },
+								{ key: 'ma', label: 'M&A', node: <CompanyMaTab companyId={id} /> },
+							]
+							: [
+								{ key: 'funding', label: 'Funding', node: <div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>Save the company first, then add funding rounds here.</div> },
+								{ key: 'ma', label: 'M&A', node: <div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>Save the company first, then add acquisitions here.</div> },
+							]),
 						{
 							key: 'status', label: 'Status', node: (
 								<>

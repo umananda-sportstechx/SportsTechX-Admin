@@ -6,11 +6,13 @@ import { toast } from 'sonner';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading } from '@/components/atoms';
+import { PageHeader, AsyncState, Loading, StatCard, Section } from '@/components/atoms';
+import { ComboBarLine, PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
+import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import {
 	CompanySelectOne, SectorCascade, SportsPicker, RoundTypeSelect, CurrencySelect, InvestorPicker, LocationFields,
-	type DealInvestor, type LocationValue,
+	EMPTY_LOCATION, type DealInvestor, type LocationValue,
 } from '@/components/entity-pickers';
 
 interface Deal {
@@ -25,6 +27,7 @@ interface Deal {
 	primary_sector?: string | null;
 }
 interface DealsResponse { data: Deal[]; total: number; totalPages: number }
+interface DealStats { total: number; total_amount: number; by_year: Array<{ year: number; deals: number; amt: number }>; by_round_type: Bucket[]; by_size_bucket: Bucket[] }
 
 const STATUSES = ['active', 'inactive', 'not_sportstech', 'website_error'] as const;
 const BUSINESS_MODELS = ['b2b', 'b2c', 'b2b2c', 'd2c', 'b2g', 'other'] as const;
@@ -39,18 +42,30 @@ function fmtAmount(v?: string | null): string {
 	if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}K`;
 	return `$${n}`;
 }
+const fmtMoney = (n: number): string => n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : `$${(n / 1e6).toFixed(1)}M`;
 
 export default function DealsAdminPage() {
 	const { mutate } = useSWRConfig();
 	const [search, setSearch] = useState('');
+	const [status, setStatus] = useState('');
+	const [businessModel, setBusinessModel] = useState('');
+	const [sizeBucket, setSizeBucket] = useState('');
+	const [year, setYear] = useState('');
 	const [page, setPage] = useState(1);
 	const [creating, setCreating] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 
 	const { data, error, isLoading } = useSWR<DealsResponse>(
-		['/api/deals', { q: search || undefined, page, limit: 30, sort: '-announced_date' }],
+		['/api/deals', {
+			q: search || undefined, status: status || undefined, business_model: businessModel || undefined,
+			deal_size_bucket: sizeBucket || undefined, year: year || undefined, page, limit: 30, sort: '-announced_date',
+		}],
 		{ dedupingInterval: 30_000 },
 	);
+	const stats = useSWR<DealStats>(['/api/admin/stats/deals'], { dedupingInterval: 60_000 });
+	const yearChart = (stats.data?.by_year ?? []).map((r) => ({ year: r.year, amt: Number(r.amt), deals: Number(r.deals) }));
+	const sizeSegments = toSegments(stats.data?.by_size_bucket ?? []);
+	const yearOpts = (stats.data?.by_year ?? []).map((r) => String(r.year)).reverse();
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/deals');
 
 	const remove = async (id: string) => {
@@ -65,13 +80,39 @@ export default function DealsAdminPage() {
 	const deals = data?.data ?? [];
 	return (
 		<div>
-			<PageHeader kicker={`Funding · ${(data?.total ?? 0).toLocaleString()} deals`} title="Deals" />
+			<PageHeader kicker={`Funding · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} deals`} title="Deals" />
 
-			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)' }}>
-				<input className="search-input" style={{ flex: '0 0 320px', height: 32 }} placeholder="Search by company…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+			<StatStrip cols={3}>
+				<StatCard label="Total deals" loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()} />
+				<StatCard label="Total funding (disclosed)" loading={stats.isLoading} value={fmtMoney(stats.data?.total_amount ?? 0)} />
+				<StatCard label="Latest year deals" loading={stats.isLoading} value={(yearChart[yearChart.length - 1]?.deals ?? 0).toLocaleString()} />
+			</StatStrip>
+
+			<div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+				<Section title="Funding by year" meta="amount · deals">
+					<AsyncState loading={stats.isLoading} error={stats.error} empty={yearChart.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
+						<ComboBarLine data={yearChart} height={240} valueFormatter={fmtMoney} barLabel="Funding" lineLabel="deals" />
+					</AsyncState>
+				</Section>
+				<Section title="By deal size" meta="deals">
+					<AsyncState loading={stats.isLoading} error={stats.error} empty={sizeSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
+						<div style={{ display: 'grid', placeItems: 'center', gap: 12 }}>
+							<PieDonut segments={sizeSegments} size={170} mode="donut" />
+							<PieLegend segments={sizeSegments} />
+						</div>
+					</AsyncState>
+				</Section>
+			</div>
+
+			<FilterBar>
+				<input className="search-input" style={{ flex: '0 0 260px', height: 32 }} placeholder="Search by company…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+				<FilterSelect ariaLabel="Status" value={status} onChange={(v) => { setStatus(v); setPage(1); }} options={[...STATUSES]} allLabel="All statuses" />
+				<FilterSelect ariaLabel="Business model" value={businessModel} onChange={(v) => { setBusinessModel(v); setPage(1); }} options={[...BUSINESS_MODELS]} allLabel="All models" />
+				<FilterSelect ariaLabel="Deal size" value={sizeBucket} onChange={(v) => { setSizeBucket(v); setPage(1); }} options={SIZE_BUCKETS.map((s) => ({ value: s, label: s.replace(/_/g, ' ').replace('from ', '').replace('to', '–') }))} allLabel="Any size" />
+				<FilterSelect ariaLabel="Year" value={year} onChange={(v) => { setYear(v); setPage(1); }} options={yearOpts} allLabel="All years" />
 				<div style={{ flex: 1 }} />
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add deal</button>
-			</div>
+			</FilterBar>
 
 			{(creating || editingId) && (
 				<DealModal id={editingId} onClose={() => { setCreating(false); setEditingId(null); }} onSaved={() => { setCreating(false); setEditingId(null); void refresh(); }} />
@@ -112,14 +153,14 @@ interface DealForm {
 const EMPTY_DEAL: DealForm = {
 	company_id: '', round_type_id: '', announced_date: '', amount_usd: '', currency_code: '',
 	deal_size_bucket: '', status: 'active', sector_id: '', business_model: '', source_url: '', transaction_url: '',
-	hq: { country: '', city: '' }, sport_ids: [], investors: [],
+	hq: { ...EMPTY_LOCATION }, sport_ids: [], investors: [],
 };
 
 interface DealEdit {
 	company_id?: string; round_type_id?: string | null; announced_date?: string | null; amount_usd?: string | null;
 	currency_code?: string | null; deal_size_bucket?: string | null; status?: string | null; sector_id?: string | null;
 	business_model?: string | null; source_url?: string | null; transaction_url?: string | null;
-	hq_country?: string | null; hq_city?: string | null; sport_ids?: string[]; investors?: DealInvestor[];
+	hq_country?: string | null; hq_city?: string | null; hq_continent?: string | null; hq_region?: string | null; hq_state?: string | null; sport_ids?: string[]; investors?: DealInvestor[];
 }
 
 function toDealForm(h: DealEdit): DealForm {
@@ -130,16 +171,17 @@ function toDealForm(h: DealEdit): DealForm {
 		deal_size_bucket: h.deal_size_bucket ?? '', status: h.status ?? 'active',
 		sector_id: h.sector_id ?? '', business_model: h.business_model ?? '',
 		source_url: h.source_url ?? '', transaction_url: h.transaction_url ?? '',
-		hq: { country: h.hq_country ?? '', city: h.hq_city ?? '' },
+		hq: { country: h.hq_country ?? '', city: h.hq_city ?? '', continent: h.hq_continent ?? '', region: h.hq_region ?? '', state: h.hq_state ?? '' },
 		sport_ids: h.sport_ids ?? [], investors: h.investors ?? [],
 	};
 }
 
-function DealModal({ id, onClose, onSaved }: { id: string | null; onClose: () => void; onSaved: () => void }) {
+export function DealModal({ id, onClose, onSaved, lockedCompanyId }: { id: string | null; onClose: () => void; onSaved: () => void; lockedCompanyId?: string }) {
 	const isEdit = !!id;
 	const { data: hydrated } = useSWR<DealEdit>(isEdit ? [`/api/admin/deals/${id}/edit`] : null, { revalidateOnFocus: false });
 	if (isEdit && !hydrated) return <Modal title="Edit deal" onClose={onClose}><Loading msg="Loading deal…" /></Modal>;
-	return <DealForm id={id} initial={hydrated ? toDealForm(hydrated) : EMPTY_DEAL} onClose={onClose} onSaved={onSaved} />;
+	const initial = hydrated ? toDealForm(hydrated) : { ...EMPTY_DEAL, company_id: lockedCompanyId ?? '' };
+	return <DealForm id={id} initial={initial} onClose={onClose} onSaved={onSaved} />;
 }
 
 function DealForm({ id, initial, onClose, onSaved }: { id: string | null; initial: DealForm; onClose: () => void; onSaved: () => void }) {
@@ -167,6 +209,9 @@ function DealForm({ id, initial, onClose, onSaved }: { id: string | null; initia
 				transaction_url: form.transaction_url.trim() || undefined,
 				hq_country: form.hq.country.trim() || undefined,
 				hq_city: form.hq.city.trim() || undefined,
+				hq_continent: form.hq.continent.trim() || undefined,
+				hq_region: form.hq.region.trim() || undefined,
+				hq_state: form.hq.state.trim() || undefined,
 				sport_ids: form.sport_ids,
 				investors: form.investors,
 			};

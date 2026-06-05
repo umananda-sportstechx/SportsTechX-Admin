@@ -1,12 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
-import { PageHeader, AsyncState } from '@/components/atoms';
+import { PageHeader, AsyncState, StatCard, Section } from '@/components/atoms';
+import { Funnel } from '@/components/charts';
+import { StatStrip } from '@/components/filters';
 
 type ClaimStatus = 'pending' | 'picked_up' | 'verified' | 'rejected';
+interface QueueStats { claims: { pending: number; picked_up: number; verified: number; rejected: number } }
 
 interface Claim {
 	id: string;
@@ -42,11 +46,14 @@ export default function ClaimsAdminPage() {
 	const [page, setPage] = useState(1);
 	const [pendingId, setPendingId] = useState<string | null>(null);
 	const [sendEmail, setSendEmail] = useState(true);
+	const [expandedId, setExpandedId] = useState<string | null>(null);
 
 	const { data, error, isLoading } = useSWR<ClaimsResponse>(
 		['/api/admin/claims', { status, page, limit: 30 }],
 		{ dedupingInterval: 30_000 },
 	);
+	const stats = useSWR<QueueStats>(['/api/admin/stats/queues'], { dedupingInterval: 60_000 });
+	const c = stats.data?.claims;
 
 	const claims = data?.data ?? [];
 
@@ -78,6 +85,24 @@ export default function ClaimsAdminPage() {
 		<div>
 			<PageHeader kicker={`Queues · ${(data?.total ?? 0).toLocaleString()} in ${status}`} title="Claims" />
 
+			<StatStrip cols={4}>
+				<StatCard label="Pending" loading={stats.isLoading} value={(c?.pending ?? 0).toLocaleString()} urgent={(c?.pending ?? 0) > 0} />
+				<StatCard label="Picked up" loading={stats.isLoading} value={(c?.picked_up ?? 0).toLocaleString()} />
+				<StatCard label="Verified" loading={stats.isLoading} value={(c?.verified ?? 0).toLocaleString()} />
+				<StatCard label="Rejected" loading={stats.isLoading} value={(c?.rejected ?? 0).toLocaleString()} />
+			</StatStrip>
+
+			<Section title="Claim funnel" meta="pending → verified">
+				<Funnel stages={[
+					{ label: 'Pending', value: c?.pending ?? 0 },
+					{ label: 'Picked up', value: c?.picked_up ?? 0 },
+					{ label: 'Verified', value: c?.verified ?? 0, color: 'var(--pos)' },
+					{ label: 'Rejected', value: c?.rejected ?? 0, color: 'var(--neg)' },
+				]} />
+			</Section>
+
+			<div style={{ height: 'var(--space-4)' }} />
+
 			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)', alignItems: 'center' }}>
 				{STATUS_TABS.map((t) => (
 					<button key={t.key} className={`chip ${status === t.key ? 'on' : ''}`} onClick={() => { setStatus(t.key); setPage(1); }}>
@@ -105,8 +130,14 @@ export default function ClaimsAdminPage() {
 						</thead>
 						<tbody>
 							{claims.map((c) => (
-								<tr key={c.id}>
-									<td className="num">{new Date(c.created_at).toLocaleDateString()}</td>
+								<Fragment key={c.id}>
+								<tr>
+									<td className="num">
+										<button className="btn ghost" style={{ padding: '2px 4px', marginRight: 4 }} onClick={() => setExpandedId(expandedId === c.id ? null : c.id)} aria-label="Toggle details">
+											{expandedId === c.id ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+										</button>
+										{new Date(c.created_at).toLocaleDateString()}
+									</td>
 									<td>{c.entity_type ?? c.claim_type}</td>
 									<td>
 										<div style={{ fontWeight: 600 }}>{c.entity_name ?? c.entity_id ?? '—'}</div>
@@ -142,6 +173,28 @@ export default function ClaimsAdminPage() {
 										</div>
 									</td>
 								</tr>
+								{expandedId === c.id && (
+									<tr>
+										<td colSpan={6} style={{ background: 'var(--bg-2)' }}>
+											<div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, padding: '4px 4px 10px', fontSize: 12 }}>
+												<div><div className="co-stat-label">Claim type</div>{c.claim_type}</div>
+												<div><div className="co-stat-label">Target</div>{c.entity_name ?? c.entity_id ?? '—'}</div>
+												<div><div className="co-stat-label">Position</div>{c.position_at_company ?? '—'}</div>
+												<div><div className="co-stat-label">Claimant</div>{c.claimant_name ?? '—'}</div>
+												<div><div className="co-stat-label">Claimant email</div>{c.claimant_email ?? '—'}</div>
+												<div><div className="co-stat-label">Company email</div>{c.company_email ?? '—'}</div>
+												<div><div className="co-stat-label">Submitted</div>{new Date(c.created_at).toLocaleString()}</div>
+												<div><div className="co-stat-label">Picked up</div>{c.picked_up_at ? new Date(c.picked_up_at).toLocaleString() : '—'}</div>
+												<div><div className="co-stat-label">Verified</div>{c.verified_at ? new Date(c.verified_at).toLocaleString() : '—'}</div>
+												{c.rejection_reason && <div style={{ gridColumn: '1 / -1' }}><div className="co-stat-label">Rejection reason</div>{c.rejection_reason}</div>}
+											</div>
+											<div style={{ padding: '0 4px 10px', fontSize: 11, color: 'var(--fg-muted)' }}>
+												Verifying applies the claim to the live {c.entity_type ?? 'record'} (and emails the claimant if enabled). Field-level edits submitted with this claim appear under Data requests.
+											</div>
+										</td>
+									</tr>
+								)}
+								</Fragment>
 							))}
 						</tbody>
 					</table>

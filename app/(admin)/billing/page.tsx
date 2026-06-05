@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { CalendarPlus, Coins, KeyRound } from 'lucide-react';
 import { api } from '@/lib/api';
+import { UserSelectOne, UserMultiPicker } from '@/components/entity-pickers';
 
 interface TrialGrantResponse {
 	id: string;
@@ -35,7 +36,7 @@ export default function BillingAdminPage() {
 	const [trialProfile, setTrialProfile] = useState('');
 	const [trialDays, setTrialDays] = useState(14);
 
-	const [bulkIds, setBulkIds] = useState('');
+	const [bulkUsers, setBulkUsers] = useState<string[]>([]);
 	const [bulkCredits, setBulkCredits] = useState(50);
 	const [bulkType, setBulkType] = useState<'ai' | 'integration'>('ai');
 	const [bulkReason, setBulkReason] = useState('');
@@ -71,18 +72,14 @@ export default function BillingAdminPage() {
 	const bulkCredit = async () => {
 		setCreditPending(true);
 		try {
-			const profile_ids = bulkIds
-				.split(/[\s,]+/)
-				.map((s) => s.trim())
-				.filter(Boolean);
 			const res = await api<BulkCreditResponse>('POST', '/api/admin/billing/bulk-credit-grant', {
-				profile_ids,
+				profile_ids: bulkUsers,
 				credits: bulkCredits,
 				credit_type: bulkType,
 				reason: bulkReason || undefined,
 			});
 			toast.success(`Granted ${bulkCredits} ${bulkType} credit(s) to ${res.granted} user(s)`);
-			setBulkIds('');
+			setBulkUsers([]);
 		} catch (e) {
 			toast.error((e as Error).message ?? 'Could not grant credits');
 		} finally {
@@ -90,10 +87,7 @@ export default function BillingAdminPage() {
 		}
 	};
 
-	const parsedIdCount = bulkIds
-		.split(/[\s,]+/)
-		.map((s) => s.trim())
-		.filter(Boolean).length;
+	const parsedIdCount = bulkUsers.length;
 
 	const parsedEmailCount = accessEmails
 		.split(/[\n,;]+/)
@@ -171,14 +165,8 @@ export default function BillingAdminPage() {
 					</p>
 
 					<div style={{ marginBottom: 12 }}>
-						<div className="co-stat-label" style={{ marginBottom: 6 }}>Profile UUID</div>
-						<input
-							className="search-input"
-							style={{ width: '100%', fontFamily: 'var(--font-mono)', fontSize: 12 }}
-							placeholder="00000000-0000-0000-0000-000000000000"
-							value={trialProfile}
-							onChange={(e) => setTrialProfile(e.target.value)}
-						/>
+						<div className="co-stat-label" style={{ marginBottom: 6 }}>User</div>
+						<UserSelectOne value={trialProfile} onChange={setTrialProfile} />
 					</div>
 					<div style={{ marginBottom: 16 }}>
 						<div className="co-stat-label" style={{ marginBottom: 6 }}>Trial length (days)</div>
@@ -218,16 +206,10 @@ export default function BillingAdminPage() {
 							className="co-stat-label"
 							style={{ marginBottom: 6, display: 'flex', justifyContent: 'space-between' }}
 						>
-							<span>Profile UUIDs (one per line)</span>
-							<span style={{ color: 'var(--fg-muted)' }}>{parsedIdCount} parsed</span>
+							<span>Users</span>
+							<span style={{ color: 'var(--fg-muted)' }}>{parsedIdCount} selected</span>
 						</div>
-						<textarea
-							className="search-input"
-							style={{ width: '100%', minHeight: 96, fontFamily: 'var(--font-mono)', fontSize: 12, resize: 'vertical' }}
-							placeholder={'aaaaaaaa-...\nbbbbbbbb-...\ncccccccc-...'}
-							value={bulkIds}
-							onChange={(e) => setBulkIds(e.target.value)}
-						/>
+						<UserMultiPicker value={bulkUsers} onChange={setBulkUsers} />
 					</div>
 					<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
 						<div>

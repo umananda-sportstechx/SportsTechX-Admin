@@ -1,9 +1,62 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import useSWR from 'swr';
-import { ChevronDown, Search, Star, X } from 'lucide-react';
+import useSWR, { useSWRConfig } from 'swr';
+import { toast } from 'sonner';
+import { ChevronDown, Plus, Search, Star, X } from 'lucide-react';
 import { qk } from '@/lib/query-keys';
+import { api } from '@/lib/api';
+
+// ─── inline reference creation ───────────────────────────────────────────────
+// Lets admins create a sector / sport / tech-tag / round-type in place instead
+// of leaving the form to manage reference data. POSTs to the admin reference
+// endpoint and returns the new row so the caller can select it immediately.
+
+function slugify(s: string): string {
+	return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
+async function createRef(kind: string, name: string, parentId?: string | null): Promise<{ id: string; name: string } | null> {
+	const n = name.trim();
+	if (!n) return null;
+	try {
+		return await api<{ id: string; name: string }>('POST', `/api/admin/reference/${kind}`, {
+			name: n, slug: slugify(n), ...(parentId ? { parent_id: parentId } : {}),
+		});
+	} catch (e) {
+		toast.error((e as Error).message);
+		return null;
+	}
+}
+
+/** Small "+ add new" inline input shown at the foot of a picker dropdown. */
+function InlineCreate({ label, onCreate }: { label: string; onCreate: (name: string) => Promise<void> }) {
+	const [name, setName] = useState('');
+	const [busy, setBusy] = useState(false);
+	const submit = async () => {
+		if (!name.trim() || busy) return;
+		setBusy(true);
+		await onCreate(name);
+		setName('');
+		setBusy(false);
+	};
+	return (
+		<div style={{ display: 'flex', gap: 6, padding: 8, borderTop: '1px solid var(--border)', background: 'var(--bg-2)' }}>
+			<input
+				className="search-input"
+				style={{ flex: 1, height: 28, fontSize: 12 }}
+				placeholder={label}
+				value={name}
+				onChange={(e) => setName(e.target.value)}
+				onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void submit(); } }}
+				onMouseDown={(e) => e.stopPropagation()}
+			/>
+			<button type="button" className="btn" style={{ height: 28 }} disabled={busy || !name.trim()} onClick={(e) => { e.preventDefault(); void submit(); }}>
+				<Plus size={12} /> Add
+			</button>
+		</div>
+	);
+}
 
 /**
  * Reference-data pickers for the rich admin entity forms (company / deal /
@@ -46,13 +99,15 @@ interface RefRow { id: string; name: string; slug: string; parent_id: string | n
 // ─── generic multi-select checkbox dropdown ──────────────────────────────────
 
 function MultiCheckPicker({
-	rows, value, onChange, placeholder, loadingMsg,
+	rows, value, onChange, placeholder, loadingMsg, onCreate, createLabel,
 }: {
 	rows: RefRow[];
 	value: string[];
 	onChange: (ids: string[]) => void;
 	placeholder: string;
 	loadingMsg: string;
+	onCreate?: (name: string) => Promise<void>;
+	createLabel?: string;
 }) {
 	const [open, setOpen] = useState(false);
 	const ref = useClickOutside<HTMLDivElement>(() => setOpen(false));
@@ -100,6 +155,7 @@ function MultiCheckPicker({
 							</label>
 						);
 					})}
+					{onCreate && <InlineCreate label={createLabel ?? 'New item name…'} onCreate={onCreate} />}
 				</div>
 			)}
 		</div>
@@ -110,23 +166,57 @@ function MultiCheckPicker({
 
 export function SportsPicker({ value, onChange }: { value: string[]; onChange: (ids: string[]) => void }) {
 	const { data } = useSWR<RefRow[]>(qk.reference.sports(), { dedupingInterval: 60 * 60_000 });
-	return <MultiCheckPicker rows={data ?? []} value={value} onChange={onChange} placeholder="No sports — select…" loadingMsg="Loading sports…" />;
+	const { mutate } = useSWRConfig();
+	const onCreate = async (name: string) => {
+		const row = await createRef('sports', name);
+		if (!row) return;
+		await mutate(qk.reference.sports());
+		onChange([...value, row.id]);
+		toast.success(`Added sport “${row.name}”`);
+	};
+	return <MultiCheckPicker rows={data ?? []} value={value} onChange={onChange} placeholder="No sports — select…" loadingMsg="Loading sports…" onCreate={onCreate} createLabel="New sport name…" />;
 }
 
 export function TechTagsPicker({ value, onChange }: { value: string[]; onChange: (ids: string[]) => void }) {
 	const { data } = useSWR<RefRow[]>(qk.reference.techTags(), { dedupingInterval: 60 * 60_000 });
-	return <MultiCheckPicker rows={data ?? []} value={value} onChange={onChange} placeholder="No tech tags — select…" loadingMsg="Loading tech tags…" />;
+	const { mutate } = useSWRConfig();
+	const onCreate = async (name: string) => {
+		const row = await createRef('tech-tags', name);
+		if (!row) return;
+		await mutate(qk.reference.techTags());
+		onChange([...value, row.id]);
+		toast.success(`Added tech tag “${row.name}”`);
+	};
+	return <MultiCheckPicker rows={data ?? []} value={value} onChange={onChange} placeholder="No tech tags — select…" loadingMsg="Loading tech tags…" onCreate={onCreate} createLabel="New tech tag name…" />;
 }
 
 // ─── Round type / currency single selects ────────────────────────────────────
 
 export function RoundTypeSelect({ value, onChange }: { value: string; onChange: (id: string) => void }) {
 	const { data } = useSWR<RefRow[]>(qk.reference.roundTypes(), { dedupingInterval: 60 * 60_000 });
+	const { mutate } = useSWRConfig();
+	const [adding, setAdding] = useState(false);
+	const onCreate = async (name: string) => {
+		const row = await createRef('round-types', name);
+		if (!row) return;
+		await mutate(qk.reference.roundTypes());
+		onChange(row.id);
+		setAdding(false);
+		toast.success(`Added round “${row.name}”`);
+	};
 	return (
-		<select className="search-input" style={{ width: '100%' }} value={value} onChange={(e) => onChange(e.target.value)}>
-			<option value="">— round —</option>
-			{(data ?? []).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-		</select>
+		<div style={{ display: 'grid', gap: 6 }}>
+			<div style={{ display: 'flex', gap: 6 }}>
+				<select className="search-input" style={{ flex: 1 }} value={value} onChange={(e) => onChange(e.target.value)}>
+					<option value="">— round —</option>
+					{(data ?? []).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+				</select>
+				<button type="button" className="btn ghost" style={{ flex: '0 0 auto' }} onClick={() => setAdding((v) => !v)} title="Add a new round type">
+					<Plus size={12} />
+				</button>
+			</div>
+			{adding && <InlineCreate label="New round type name…" onCreate={onCreate} />}
+		</div>
 	);
 }
 
@@ -148,9 +238,24 @@ export function CurrencySelect({ value, onChange }: { value: string; onChange: (
 
 export function SectorCascade({ value, onChange }: { value: string; onChange: (sectorId: string) => void }) {
 	const { data } = useSWR<RefRow[]>(qk.reference.sectors(), { dedupingInterval: 60 * 60_000 });
+	const { mutate } = useSWRConfig();
+	const [adding, setAdding] = useState(false);
+	const [q, setQ] = useState('');
+	const [searchOpen, setSearchOpen] = useState(false);
+	const searchRef = useClickOutside<HTMLDivElement>(() => setSearchOpen(false));
 	const all = data ?? [];
 	const byId = new Map(all.map((s) => [s.id, s] as const));
 	const childrenOf = (pid: string | null) => all.filter((s) => s.parent_id === pid);
+	// Full "Sector › Sub › Sub-sub" label so a search hit shows its whole chain.
+	const pathLabel = (id: string): string => {
+		const parts: string[] = [];
+		let n = byId.get(id);
+		while (n) { parts.unshift(n.name); n = n.parent_id ? byId.get(n.parent_id) : undefined; }
+		return parts.join(' › ');
+	};
+	const matches = q.trim().length >= 1
+		? all.filter((s) => s.name.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 25)
+		: [];
 
 	// Reconstruct the chosen path (root → … → value) from the flat list.
 	const path: string[] = [];
@@ -177,8 +282,40 @@ export function SectorCascade({ value, onChange }: { value: string; onChange: (s
 		onChange(id);
 	};
 
+	// New node is created as a child of the deepest selected node (so "+ new"
+	// under a chosen sector adds a sub-sector); with nothing selected it adds a
+	// top-level sector.
+	const onCreate = async (name: string) => {
+		const row = await createRef('sectors', name, value || null);
+		if (!row) return;
+		await mutate(qk.reference.sectors());
+		onChange(row.id);
+		setAdding(false);
+		toast.success(`Added sector “${row.name}”`);
+	};
+
 	return (
 		<div style={{ display: 'grid', gap: 6 }}>
+			{/* Jump straight to any sub-sector / sub-sub-sector — picking it fills the
+			    parent chain in the dropdowns below. */}
+			<div ref={searchRef} style={{ position: 'relative' }}>
+				<div style={{ position: 'relative' }}>
+					<Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--fg-muted)' }} />
+					<input className="search-input" style={{ width: '100%', paddingLeft: 26 }} placeholder="Find a sector / sub-sector…"
+						value={q} onChange={(e) => { setQ(e.target.value); setSearchOpen(true); }} onFocus={() => setSearchOpen(true)} />
+				</div>
+				{searchOpen && matches.length > 0 && (
+					<div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, marginTop: 2, maxHeight: 240, overflowY: 'auto', background: 'var(--bg-1)', border: '1px solid var(--border)', borderRadius: 4, boxShadow: '0 6px 24px rgba(0,0,0,0.15)' }}>
+						{matches.map((m) => (
+							<button key={m.id} type="button" onClick={() => { onChange(m.id); setQ(''); setSearchOpen(false); }}
+								style={{ display: 'block', width: '100%', padding: '7px 10px', textAlign: 'left', background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--fg)', fontSize: 13 }}
+								onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-3)')} onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
+								{pathLabel(m.id)}
+							</button>
+						))}
+					</div>
+				)}
+			</div>
 			{levels.map((lvl, depth) => (
 				<select
 					key={depth}
@@ -191,23 +328,81 @@ export function SectorCascade({ value, onChange }: { value: string; onChange: (s
 					{lvl.options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
 				</select>
 			))}
+			<button type="button" className="btn ghost" style={{ justifySelf: 'start', height: 28 }} onClick={() => setAdding((v) => !v)}>
+				<Plus size={12} /> {value ? 'New sub-sector here' : 'New sector'}
+			</button>
+			{adding && <InlineCreate label={value ? 'New sub-sector name…' : 'New sector name…'} onCreate={onCreate} />}
 		</div>
 	);
 }
 
-// ─── Location fields (country + city; backend resolves to location_id) ───────
+// ─── Location fields — city typeahead auto-fills country/continent/region ─────
+// Picking a known city back-fills country, continent, region and state from the
+// locations table; everything stays editable for custom entries. The backend
+// persists all of these to the locations row.
 
-export interface LocationValue { country: string; city: string }
+export interface LocationValue { country: string; city: string; continent: string; region: string; state: string }
+export const EMPTY_LOCATION: LocationValue = { country: '', city: '', continent: '', region: '', state: '' };
+
+interface LocHit { city: string | null; state: string | null; country: string | null; continent: string | null; region: string | null }
+
 export function LocationFields({ value, onChange, prefix }: { value: LocationValue; onChange: (v: LocationValue) => void; prefix?: string }) {
+	const [q, setQ] = useState(value.city);
+	const [open, setOpen] = useState(false);
+	const debouncedQ = useDebounced(q, 200);
+	const ref = useClickOutside<HTMLDivElement>(() => setOpen(false));
+	const { data } = useSWR<LocHit[]>(
+		open && debouncedQ.length >= 2 ? ['/api/locations/search', { q: debouncedQ }] : null,
+		{ dedupingInterval: 30_000, keepPreviousData: true },
+	);
+	const hits = data ?? [];
+	const lbl = (s: string) => (prefix ? `${prefix} ${s}` : s.charAt(0).toUpperCase() + s.slice(1));
+	const field = (key: keyof LocationValue, label: string) => (
+		<div>
+			<div className="co-stat-label" style={{ marginBottom: 6 }}>{lbl(label)}</div>
+			<input className="search-input" value={value[key]} onChange={(e) => onChange({ ...value, [key]: e.target.value })} />
+		</div>
+	);
+	const pickCity = (h: LocHit) => {
+		onChange({
+			city: h.city ?? '',
+			country: h.country ?? value.country,
+			continent: h.continent ?? value.continent,
+			region: h.region ?? value.region,
+			state: h.state ?? value.state,
+		});
+		setQ(h.city ?? '');
+		setOpen(false);
+	};
 	return (
-		<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-			<div>
-				<div className="co-stat-label" style={{ marginBottom: 6 }}>{prefix ? `${prefix} country` : 'Country'}</div>
-				<input className="search-input" value={value.country} onChange={(e) => onChange({ ...value, country: e.target.value })} />
+		<div style={{ display: 'grid', gap: 12 }}>
+			<div ref={ref} style={{ position: 'relative' }}>
+				<div className="co-stat-label" style={{ marginBottom: 6 }}>{lbl('city')} <span style={{ textTransform: 'none', letterSpacing: 0, color: 'var(--fg-muted)', fontWeight: 400 }}>· pick to auto-fill country/region/continent</span></div>
+				<div style={{ position: 'relative' }}>
+					<Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--fg-muted)' }} />
+					<input className="search-input" style={{ width: '100%', paddingLeft: 26 }} placeholder="Search a city…"
+						value={q}
+						onChange={(e) => { setQ(e.target.value); onChange({ ...value, city: e.target.value }); setOpen(true); }}
+						onFocus={() => setOpen(true)} />
+				</div>
+				{open && debouncedQ.length >= 2 && hits.length > 0 && (
+					<div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, marginTop: 2, maxHeight: 240, overflowY: 'auto', background: 'var(--bg-1)', border: '1px solid var(--border)', borderRadius: 4, boxShadow: '0 6px 24px rgba(0,0,0,0.15)' }}>
+						{hits.map((h, i) => (
+							<button key={`${h.city}-${h.country}-${i}`} type="button" onClick={() => pickCity(h)}
+								style={{ display: 'block', width: '100%', padding: '7px 10px', textAlign: 'left', background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--fg)', fontSize: 13 }}
+								onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-3)')} onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
+								<span style={{ fontWeight: 500 }}>{h.city}</span>
+								<span style={{ color: 'var(--fg-muted)' }}>{h.country ? ` · ${h.country}` : ''}{h.region ? ` · ${h.region}` : ''}</span>
+							</button>
+						))}
+					</div>
+				)}
 			</div>
-			<div>
-				<div className="co-stat-label" style={{ marginBottom: 6 }}>{prefix ? `${prefix} city` : 'City'}</div>
-				<input className="search-input" value={value.city} onChange={(e) => onChange({ ...value, city: e.target.value })} />
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+				{field('country', 'country')}
+				{field('state', 'state')}
+				{field('region', 'region')}
+				{field('continent', 'continent')}
 			</div>
 		</div>
 	);
@@ -407,6 +602,162 @@ export function InvestorPicker({ value, onChange }: { value: DealInvestor[]; onC
 				)}
 			</div>
 			<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{value.length} investor(s) · star marks the lead</div>
+		</div>
+	);
+}
+
+// ─── User pickers (search by name/email → profile_id) ────────────────────────
+// Admins never type UUIDs — they search a person and we hand back the id(s).
+
+interface UserHit { id: string; email: string | null; display_name: string | null }
+const userLabel = (u: UserHit): string => u.display_name || u.email || `${u.id.slice(0, 8)}…`;
+
+export function UserSelectOne({
+	value, onChange, placeholder = 'Search users by name or email…',
+}: { value: string; onChange: (id: string) => void; placeholder?: string }) {
+	const [q, setQ] = useState('');
+	const [open, setOpen] = useState(false);
+	const debouncedQ = useDebounced(q, 200);
+	const ref = useClickOutside<HTMLDivElement>(() => setOpen(false));
+
+	// Remember the label of the picked user so the chosen state reads as a name,
+	// not a UUID (the admin users list has no by-id lookup).
+	const [pickedLabel, setPickedLabel] = useState<string | null>(null);
+	const { data: searchResp, isLoading } = useSWR<{ data: UserHit[] }>(
+		debouncedQ.length >= 2 ? ['/api/admin/users', { q: debouncedQ, limit: 12 }] : null,
+		{ dedupingInterval: 30_000, keepPreviousData: true },
+	);
+	const hits = searchResp?.data ?? [];
+
+	if (value && !open) {
+		return (
+			<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+				<div className="search-input" style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+					<span style={{ fontWeight: 500 }}>{pickedLabel ?? `${value.slice(0, 8)}…`}</span>
+				</div>
+				<button type="button" className="btn ghost" onClick={() => { onChange(''); setPickedLabel(null); setOpen(true); }}><X size={12} /></button>
+			</div>
+		);
+	}
+	return (
+		<div ref={ref} style={{ position: 'relative' }}>
+			<div style={{ position: 'relative' }}>
+				<Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--fg-muted)' }} />
+				<input className="search-input" placeholder={placeholder} value={q} onChange={(e) => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} style={{ width: '100%', paddingLeft: 26 }} />
+			</div>
+			{open && q.length >= 2 && (
+				<div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, marginTop: 2, maxHeight: 280, overflowY: 'auto', background: 'var(--bg-1)', border: '1px solid var(--border)', borderRadius: 4, boxShadow: '0 6px 24px rgba(0,0,0,0.15)' }}>
+					{isLoading && <div style={{ padding: 10, fontSize: 12, color: 'var(--fg-muted)' }}>Searching…</div>}
+					{hits.map((h) => (
+						<button key={h.id} type="button" onClick={() => { onChange(h.id); setPickedLabel(userLabel(h)); setQ(''); setOpen(false); }}
+							style={{ display: 'block', width: '100%', padding: '8px 10px', textAlign: 'left', background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--fg)', fontSize: 13 }}
+							onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-3)')} onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
+							<span style={{ fontWeight: 500 }}>{h.display_name || h.email}</span>
+							{h.display_name && h.email && <span style={{ color: 'var(--fg-muted)' }}> · {h.email}</span>}
+						</button>
+					))}
+					{!isLoading && hits.length === 0 && <div style={{ padding: 10, fontSize: 12, color: 'var(--fg-muted)' }}>No matches.</div>}
+				</div>
+			)}
+		</div>
+	);
+}
+
+export function UserMultiPicker({ value, onChange }: { value: string[]; onChange: (ids: string[]) => void }) {
+	const [q, setQ] = useState('');
+	const [open, setOpen] = useState(false);
+	const debouncedQ = useDebounced(q, 200);
+	const ref = useClickOutside<HTMLDivElement>(() => setOpen(false));
+
+	// Labels captured at pick time (admin users list has no by-id lookup).
+	const [labels, setLabels] = useState<Record<string, string>>({});
+	const { data: searchResp, isLoading } = useSWR<{ data: UserHit[] }>(
+		debouncedQ.length >= 2 ? ['/api/admin/users', { q: debouncedQ, limit: 12 }] : null,
+		{ dedupingInterval: 30_000, keepPreviousData: true },
+	);
+	const hits = (searchResp?.data ?? []).filter((h) => !value.includes(h.id));
+	const remove = (id: string) => onChange(value.filter((x) => x !== id));
+
+	return (
+		<div ref={ref} style={{ display: 'grid', gap: 6 }}>
+			{value.length > 0 && (
+				<div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+					{value.map((id) => (
+						<div key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 6px', background: 'var(--bg-2)', border: '1px solid var(--border)', fontSize: 12 }}>
+							<span style={{ fontWeight: 500 }}>{labels[id] ?? `${id.slice(0, 8)}…`}</span>
+							<button type="button" onClick={() => remove(id)} style={{ background: 'none', border: 0, color: 'var(--fg-muted)', cursor: 'pointer', padding: 2, display: 'inline-flex' }}><X size={12} /></button>
+						</div>
+					))}
+				</div>
+			)}
+			<div style={{ position: 'relative' }}>
+				<Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--fg-muted)' }} />
+				<input className="search-input" placeholder="Search users to add…" value={q} onChange={(e) => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} style={{ width: '100%', paddingLeft: 26 }} />
+				{open && q.length >= 2 && (
+					<div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, marginTop: 2, maxHeight: 280, overflowY: 'auto', background: 'var(--bg-1)', border: '1px solid var(--border)', borderRadius: 4, boxShadow: '0 6px 24px rgba(0,0,0,0.15)' }}>
+						{isLoading && <div style={{ padding: 10, fontSize: 12, color: 'var(--fg-muted)' }}>Searching…</div>}
+						{hits.map((h) => (
+							<button key={h.id} type="button" onClick={() => { onChange([...value, h.id]); setLabels((m) => ({ ...m, [h.id]: userLabel(h) })); setQ(''); setOpen(false); }}
+								style={{ display: 'block', width: '100%', padding: '8px 10px', textAlign: 'left', background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--fg)', fontSize: 13 }}
+								onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-3)')} onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
+								<span style={{ fontWeight: 500 }}>{h.display_name || h.email}</span>
+								{h.display_name && h.email && <span style={{ color: 'var(--fg-muted)' }}> · {h.email}</span>}
+							</button>
+						))}
+						{!isLoading && hits.length === 0 && <div style={{ padding: 10, fontSize: 12, color: 'var(--fg-muted)' }}>No matches.</div>}
+					</div>
+				)}
+			</div>
+			<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{value.length} selected</div>
+		</div>
+	);
+}
+
+// ─── Single investor picker (jobs · Apollo enrich) ───────────────────────────
+
+export function InvestorSelectOne({
+	value, onChange, placeholder = 'Search investors…',
+}: { value: string; onChange: (id: string) => void; placeholder?: string }) {
+	const [q, setQ] = useState('');
+	const [open, setOpen] = useState(false);
+	const debouncedQ = useDebounced(q, 200);
+	const ref = useClickOutside<HTMLDivElement>(() => setOpen(false));
+
+	const { data: selResp } = useSWR<{ data: InvestorHit[] }>(value ? ['/api/investors', { ids: value, limit: 1 }] : null, { dedupingInterval: 60_000 });
+	const selected = selResp?.data?.[0];
+	const { data: searchResp, isLoading } = useSWR<{ data: InvestorHit[] }>(
+		debouncedQ.length >= 2 ? ['/api/investors', { q: debouncedQ, limit: 12 }] : null,
+		{ dedupingInterval: 30_000, keepPreviousData: true },
+	);
+	const hits = searchResp?.data ?? [];
+
+	if (value && selected && !open) {
+		return (
+			<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+				<div className="search-input" style={{ flex: 1 }}><span style={{ fontWeight: 500 }}>{selected.name}</span></div>
+				<button type="button" className="btn ghost" onClick={() => { onChange(''); setOpen(true); }}><X size={12} /></button>
+			</div>
+		);
+	}
+	return (
+		<div ref={ref} style={{ position: 'relative' }}>
+			<div style={{ position: 'relative' }}>
+				<Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--fg-muted)' }} />
+				<input className="search-input" placeholder={placeholder} value={q} onChange={(e) => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} style={{ width: '100%', paddingLeft: 26 }} />
+			</div>
+			{open && q.length >= 2 && (
+				<div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, marginTop: 2, maxHeight: 280, overflowY: 'auto', background: 'var(--bg-1)', border: '1px solid var(--border)', borderRadius: 4, boxShadow: '0 6px 24px rgba(0,0,0,0.15)' }}>
+					{isLoading && <div style={{ padding: 10, fontSize: 12, color: 'var(--fg-muted)' }}>Searching…</div>}
+					{hits.map((h) => (
+						<button key={h.id} type="button" onClick={() => { onChange(h.id); setQ(''); setOpen(false); }}
+							style={{ display: 'block', width: '100%', padding: '8px 10px', textAlign: 'left', background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--fg)', fontSize: 13 }}
+							onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-3)')} onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
+							<span style={{ fontWeight: 500 }}>{h.name}</span>
+						</button>
+					))}
+					{!isLoading && hits.length === 0 && <div style={{ padding: 10, fontSize: 12, color: 'var(--fg-muted)' }}>No matches.</div>}
+				</div>
+			)}
 		</div>
 	);
 }

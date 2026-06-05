@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import useSWR from 'swr';
-import { ChevronDown, GripVertical, Search, X } from 'lucide-react';
+import useSWR, { useSWRConfig } from 'swr';
+import { toast } from 'sonner';
+import { ChevronDown, GripVertical, Plus, Search, X } from 'lucide-react';
+import { api } from '@/lib/api';
 
 /**
  * Pickers used in the section editor wherever the underlying data is a list
@@ -283,30 +285,67 @@ interface PollRow {
 export function PollPicker({
 	reportId, value, onChange,
 }: { reportId: string; value: string | null; onChange: (id: string | null) => void }) {
-	const { data, isLoading } = useSWR<PollRow[]>(
-		[`/api/reports/${reportId}/polls`],
-		{ dedupingInterval: 60_000 },
-	);
+	const pollsKey = [`/api/reports/${reportId}/polls`] as const;
+	const { data, isLoading } = useSWR<PollRow[]>(pollsKey, { dedupingInterval: 60_000 });
+	const { mutate } = useSWRConfig();
 	const polls = data ?? [];
+
+	const [adding, setAdding] = useState(false);
+	const [question, setQuestion] = useState('');
+	const [optionsText, setOptionsText] = useState('');
+	const [busy, setBusy] = useState(false);
+
+	const createPoll = async () => {
+		const options = optionsText.split('\n').map((s) => s.trim()).filter(Boolean);
+		if (!question.trim() || options.length < 2) {
+			toast.error('Add a question and at least two options.');
+			return;
+		}
+		setBusy(true);
+		try {
+			const poll = await api<{ id: string }>('POST', '/api/admin/polls', {
+				report_id: reportId, question: question.trim(), is_open: true, options,
+			});
+			await mutate(pollsKey);
+			onChange(poll.id);
+			setQuestion(''); setOptionsText(''); setAdding(false);
+			toast.success('Poll created and linked');
+		} catch (e) {
+			toast.error((e as Error).message);
+		} finally {
+			setBusy(false);
+		}
+	};
+
 	return (
-		<div style={{ display: 'grid', gap: 4 }}>
-			<select
-				className="search-input"
-				value={value ?? ''}
-				onChange={(e) => onChange(e.target.value || null)}
-				disabled={isLoading}
-				style={{ width: '100%' }}
-			>
-				<option value="">— select a poll —</option>
-				{polls.map((p) => (
-					<option key={p.id} value={p.id}>
-						{p.question}{p.is_open ? '' : ' (closed)'} · {p.options.length} options
-					</option>
-				))}
-			</select>
-			{!isLoading && polls.length === 0 && (
-				<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>
-					No polls on this report yet. Create one in the Polls tab first, then link it here.
+		<div style={{ display: 'grid', gap: 6 }}>
+			<div style={{ display: 'flex', gap: 6 }}>
+				<select
+					className="search-input"
+					value={value ?? ''}
+					onChange={(e) => onChange(e.target.value || null)}
+					disabled={isLoading}
+					style={{ flex: 1 }}
+				>
+					<option value="">— select a poll —</option>
+					{polls.map((p) => (
+						<option key={p.id} value={p.id}>
+							{p.question}{p.is_open ? '' : ' (closed)'} · {p.options.length} options
+						</option>
+					))}
+				</select>
+				<button type="button" className="btn ghost" style={{ flex: '0 0 auto' }} onClick={() => setAdding((v) => !v)} title="Create a new poll on this report">
+					<Plus size={12} /> New
+				</button>
+			</div>
+			{adding && (
+				<div style={{ display: 'grid', gap: 6, padding: 10, border: '1px solid var(--border)', background: 'var(--bg-2)', borderRadius: 4 }}>
+					<input className="search-input" placeholder="Poll question…" value={question} onChange={(e) => setQuestion(e.target.value)} />
+					<textarea className="search-input" placeholder={'One option per line\n(min 2)'} style={{ minHeight: 64, resize: 'vertical' }} value={optionsText} onChange={(e) => setOptionsText(e.target.value)} />
+					<div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+						<button type="button" className="btn ghost" onClick={() => setAdding(false)}>Cancel</button>
+						<button type="button" className="btn" disabled={busy} onClick={() => void createPoll()}>{busy ? 'Creating…' : 'Create & link'}</button>
+					</div>
 				</div>
 			)}
 		</div>

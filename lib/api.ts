@@ -37,6 +37,40 @@ function redirectToLogin(): void {
 	window.location.assign('/login');
 }
 
+/**
+ * Turn a failed Response into a single human-readable sentence. The NestJS API
+ * wraps errors as `{ error: { code, message } }`; Nest's own exceptions use
+ * `{ message }` (string or string[]). We surface that message — never the raw
+ * JSON envelope or a bare status code — and fall back to a friendly default
+ * keyed off the HTTP status so the admin never sees machine noise in a toast.
+ */
+async function friendlyError(res: Response): Promise<string> {
+	const fallback: Record<number, string> = {
+		400: 'That didn’t look right — please check the form and try again.',
+		401: 'Your session expired — please sign in again.',
+		403: 'You don’t have permission to do that.',
+		404: 'We couldn’t find that record — it may have been deleted.',
+		409: 'That conflicts with an existing record (a duplicate, perhaps).',
+		422: 'Some fields are invalid — please review and try again.',
+		429: 'Too many requests — give it a moment and try again.',
+	};
+	let body: unknown;
+	try { body = await res.json(); } catch { body = null; }
+	const pick = (v: unknown): string | null => {
+		if (!v) return null;
+		if (typeof v === 'string') return v;
+		if (Array.isArray(v)) return v.filter((x) => typeof x === 'string').join(', ') || null;
+		if (typeof v === 'object') {
+			const o = v as Record<string, unknown>;
+			return pick(o.message) ?? pick((o.error as Record<string, unknown>)?.message) ?? pick(o.error);
+		}
+		return null;
+	};
+	const msg = pick(body);
+	if (msg) return msg;
+	return fallback[res.status] ?? `Something went wrong (${res.status}). Please try again.`;
+}
+
 async function doFetch(method: string, url: string, body: unknown, forceRefresh: boolean): Promise<Response> {
 	const auth = await getAuthHeader(forceRefresh);
 	return fetch(url, {
@@ -70,8 +104,7 @@ export async function api<T = unknown>(
 	}
 
 	if (!res.ok) {
-		const text = await res.text().catch(() => res.statusText);
-		throw new ApiError(res.status, `${res.status} ${res.statusText}: ${text}`);
+		throw new ApiError(res.status, await friendlyError(res));
 	}
 	const ct = res.headers.get('content-type') ?? '';
 	if (ct.includes('application/json')) return (await res.json()) as T;

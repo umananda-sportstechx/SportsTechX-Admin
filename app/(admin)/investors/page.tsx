@@ -200,14 +200,14 @@ function toInvestorForm(h: InvestorEdit): InvestorForm {
 	};
 }
 
-function InvestorModal({ id, onClose, onSaved }: { id: string | null; onClose: () => void; onSaved: () => void }) {
+export function InvestorModal({ id, onClose, onSaved, seed }: { id: string | null; onClose: () => void; onSaved: (createdId?: string) => void; seed?: Partial<InvestorForm> }) {
 	const isEdit = !!id;
 	const { data: hydrated } = useSWR<InvestorEdit>(isEdit ? [`/api/admin/investors/${id}/edit`] : null, { revalidateOnFocus: false });
 	if (isEdit && !hydrated) return <Modal title="Edit investor" onClose={onClose}><Loading msg="Loading investor…" /></Modal>;
-	return <InvestorForm id={id} initial={hydrated ? toInvestorForm(hydrated) : EMPTY_INVESTOR} onClose={onClose} onSaved={onSaved} />;
+	return <InvestorForm id={id} initial={hydrated ? toInvestorForm(hydrated) : { ...EMPTY_INVESTOR, ...seed }} onClose={onClose} onSaved={onSaved} />;
 }
 
-function InvestorForm({ id, initial, onClose, onSaved }: { id: string | null; initial: InvestorForm; onClose: () => void; onSaved: () => void }) {
+function InvestorForm({ id, initial, onClose, onSaved }: { id: string | null; initial: InvestorForm; onClose: () => void; onSaved: (createdId?: string) => void }) {
 	const isEdit = !!id;
 	const [tab, setTab] = useTabs('profile');
 	const [form, setForm] = useState<InvestorForm>(initial);
@@ -248,10 +248,11 @@ function InvestorForm({ id, initial, onClose, onSaved }: { id: string | null; in
 				thesis_tech_tag_ids: form.thesis_tech_tag_ids,
 				thesis_round_type_ids: form.thesis_round_type_ids,
 			};
+			let createdId: string | undefined;
 			if (isEdit) await api('PATCH', `/api/admin/investors/${id}`, body);
-			else await api('POST', '/api/admin/investors', body);
+			else { const created = await api<{ id: string }>('POST', '/api/admin/investors', body); createdId = created?.id; }
 			toast.success(isEdit ? 'Saved' : 'Created');
-			onSaved();
+			onSaved(createdId);
 		} catch (e) {
 			toast.error((e as Error).message);
 		} finally {

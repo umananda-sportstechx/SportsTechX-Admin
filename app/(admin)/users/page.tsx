@@ -4,6 +4,7 @@ import { Fragment, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, StatCard, Section } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, Funnel, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
@@ -12,14 +13,16 @@ interface UserStats { total: number; admins: number; by_tier: Bucket[]; by_role:
 interface AuthRow { email: string | null; created_at?: string | null; last_sign_in_at?: string | null; provider?: string | null }
 interface AuthActivity {
 	total: number; signups_7d: number; signups_30d: number; active_7d: number; active_30d: number;
+	signups_in_range?: number; active_in_range?: number;
 	recent_signups: AuthRow[]; recent_logins: AuthRow[]; by_provider: Bucket[];
 }
 interface UserAnalytics {
 	conversion: { total: number; trials: number; paid: number; free_to_trial_pct: number; trial_to_paid_pct: number };
 	churn: { churned: number; active: number; churn_rate_pct: number; avg_lifetime_days: number | null };
 	login_recency: Bucket[]; signup_recency: Bucket[]; login_frequency: Bucket[];
-	report_downloads: { total: number; unique_users: number; last_30d: number; top_reports: Bucket[]; daily_trend: Bucket[] };
+	report_downloads: { total: number; unique_users: number; last_30d: number; in_range?: number; top_reports: Bucket[]; daily_trend: Bucket[]; weekly_trend?: Bucket[]; by_day_of_week?: Bucket[] };
 }
+const FREQ_BUCKETS: Record<string, 'never' | 'once' | '2-5' | '6+'> = { 'never (0)': 'never', once: 'once', '2-5': '2-5', '6+': '6+' };
 const TIERS = ['free', 'growth', 'pro'] as const;
 const ROLES = ['user', 'admin'] as const;
 
@@ -57,20 +60,28 @@ export default function UsersAdminPage() {
 	const [page, setPage] = useState(1);
 	const [expandedId, setExpandedId] = useState<string | null>(null);
 	const [rolePending, setRolePending] = useState<string | null>(null);
+	const [from, setFrom] = useState('');
+	const [to, setTo] = useState('');
+	const [freqBucket, setFreqBucket] = useState<'never' | 'once' | '2-5' | '6+' | null>(null);
+	const [reportUsersOpen, setReportUsersOpen] = useState(false);
 
 	const { data, error, isLoading } = useSWR<UsersResponse>(
 		['/api/admin/users', { q: search || undefined, role: role || undefined, tier: tier || undefined, page, limit: 30 }],
 		{ dedupingInterval: 15_000 },
 	);
 	const stats = useSWR<UserStats>(['/api/admin/stats/users'], { dedupingInterval: 60_000 });
-	const auth = useSWR<AuthActivity>(['/api/admin/users/auth-activity'], { dedupingInterval: 60_000 });
-	const an = useSWR<UserAnalytics>(['/api/admin/users/analytics'], { dedupingInterval: 60_000 });
+	const range = { from: from || undefined, to: to || undefined };
+	const auth = useSWR<AuthActivity>(['/api/admin/users/auth-activity', range], { dedupingInterval: 60_000 });
+	const an = useSWR<UserAnalytics>(['/api/admin/users/analytics', range], { dedupingInterval: 60_000 });
 	const tierSegments = toSegments(stats.data?.by_tier ?? []);
 	const providerSegments = toSegments(auth.data?.by_provider ?? []);
 	const signupChart = (stats.data?.signups_by_month ?? []).map((b) => ({ label: b.label.slice(2), amt: b.value, deals: b.value }));
 	const loginRecencySeg = toSegments(an.data?.login_recency ?? []);
+	const signupRecencySeg = toSegments(an.data?.signup_recency ?? []);
 	const freqSeg = toSegments(an.data?.login_frequency ?? []);
 	const topReportsSeg = toSegments(an.data?.report_downloads.top_reports ?? []);
+	const dlWeeklyChart = (an.data?.report_downloads.weekly_trend ?? []).map((b) => ({ label: b.label.slice(5), amt: b.value, deals: b.value }));
+	const dowSeg = toSegments(an.data?.report_downloads.by_day_of_week ?? []);
 	const fmtDate = (s?: string | null) => (s ? new Date(s).toLocaleDateString(undefined, { year: '2-digit', month: 'short', day: 'numeric' }) : '—');
 
 	// Export the current (filtered) user set to CSV — fetches up to 5k rows.
@@ -143,6 +154,16 @@ export default function UsersAdminPage() {
 				</Section>
 			</div>
 
+			{/* Analytics date-range — windows provider mix, in-range counts, and report-download trends */}
+			<div className="card" style={{ padding: 12, marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+				<span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>Analytics window</span>
+				<input className="search-input" type="date" style={{ height: 30 }} value={from} onChange={(e) => setFrom(e.target.value)} title="From" />
+				<span style={{ color: 'var(--fg-muted)' }}>→</span>
+				<input className="search-input" type="date" style={{ height: 30 }} value={to} onChange={(e) => setTo(e.target.value)} title="To" />
+				{(from || to) && <button className="btn ghost" onClick={() => { setFrom(''); setTo(''); }}>Clear (last 30d)</button>}
+				{(from || to) && <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>· {(auth.data?.signups_in_range ?? 0).toLocaleString()} signups · {(auth.data?.active_in_range ?? 0).toLocaleString()} active · {(an.data?.report_downloads.in_range ?? 0).toLocaleString()} downloads in range</span>}
+			</div>
+
 			{/* Sign-in / sign-up activity — straight from Supabase auth */}
 			<div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 10px' }}>
 				Sign-in / sign-up activity · Supabase auth
@@ -207,9 +228,30 @@ export default function UsersAdminPage() {
 						{ label: 'Churned', value: an.data?.churn.churned ?? 0, color: 'var(--neg)' },
 					]} />
 				</Section>
-				<Section title="Login frequency" meta="per user">
+				<Section title="Login frequency" meta="per user · click to drill in">
 					<AsyncState loading={an.isLoading} error={an.error} empty={freqSeg.length === 0} emptyMsg="No data" onRetry={() => void an.mutate()}>
 						<PieDonut segments={freqSeg} mode="bar" />
+						<div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+							{(an.data?.login_frequency ?? []).map((b) => {
+								const bucket = FREQ_BUCKETS[b.label];
+								return bucket ? <button key={b.label} className="chip" onClick={() => setFreqBucket(bucket)}>{b.label}: {b.value.toLocaleString()}</button> : null;
+							})}
+						</div>
+					</AsyncState>
+				</Section>
+			</div>
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+				<Section title="Signup recency" meta="account age">
+					<AsyncState loading={an.isLoading} error={an.error} empty={signupRecencySeg.length === 0} emptyMsg="No data" onRetry={() => void an.mutate()}>
+						<div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+							<PieDonut segments={signupRecencySeg} size={160} mode="donut" />
+							<div style={{ flex: 1, minWidth: 150 }}><PieLegend segments={signupRecencySeg} /></div>
+						</div>
+					</AsyncState>
+				</Section>
+				<Section title="Downloads · weekly trend" meta="downloads per week">
+					<AsyncState loading={an.isLoading} error={an.error} empty={dlWeeklyChart.length === 0} emptyMsg="No downloads yet" onRetry={() => void an.mutate()}>
+						<ComboBarLine data={dlWeeklyChart} height={200} valueFormatter={(v) => String(Math.round(v))} barLabel="Downloads" lineLabel="downloads" />
 					</AsyncState>
 				</Section>
 			</div>
@@ -225,6 +267,13 @@ export default function UsersAdminPage() {
 				<Section title={`Report downloads · ${(an.data?.report_downloads.total ?? 0).toLocaleString()} total · ${(an.data?.report_downloads.unique_users ?? 0).toLocaleString()} users`} meta="top reports">
 					<AsyncState loading={an.isLoading} error={an.error} empty={topReportsSeg.length === 0} emptyMsg="No downloads yet" onRetry={() => void an.mutate()}>
 						<PieDonut segments={topReportsSeg} mode="bar" />
+						{dowSeg.length > 0 && (
+							<>
+								<div style={{ fontSize: 11, color: 'var(--fg-muted)', margin: '12px 0 6px' }}>By day of week</div>
+								<PieDonut segments={dowSeg} mode="bar" />
+							</>
+						)}
+						<button className="btn ghost" style={{ marginTop: 10 }} onClick={() => setReportUsersOpen(true)}>View per-user downloads →</button>
 					</AsyncState>
 				</Section>
 			</div>
@@ -309,7 +358,71 @@ export default function UsersAdminPage() {
 					<button className="btn ghost" disabled={page >= data.totalPages} onClick={() => setPage((p) => p + 1)}>Next</button>
 				</div>
 			)}
+
+			{freqBucket && <LoginUsersModal bucket={freqBucket} onClose={() => setFreqBucket(null)} />}
+			{reportUsersOpen && <ReportUsersModal onClose={() => setReportUsersOpen(false)} />}
 		</div>
+	);
+}
+
+// ─── Drill-down: users in a login-frequency bucket ───────────────────────────
+interface LoginUser { id: string; email: string | null; display_name: string | null; login_count: number; last_seen_at: string | null; created_at: string }
+function LoginUsersModal({ bucket, onClose }: { bucket: string; onClose: () => void }) {
+	const [q, setQ] = useState('');
+	const { data, isLoading } = useSWR<{ users: LoginUser[] }>([`/api/admin/users/analytics/login-users`, { bucket, q: q || undefined }], { dedupingInterval: 10_000 });
+	const users = data?.users ?? [];
+	const exportCsv = () => {
+		const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+		const csv = ['email,name,login_count,last_seen,joined', ...users.map((u) => [u.email, u.display_name, u.login_count, u.last_seen_at, u.created_at].map(esc).join(','))].join('\n');
+		const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+		const a = document.createElement('a'); a.href = url; a.download = `login-${bucket}.csv`; a.click(); URL.revokeObjectURL(url);
+	};
+	return (
+		<Modal title={`Users · login frequency “${bucket}”`} onClose={onClose} width={620} footer={<><button className="btn ghost" onClick={onClose}>Close</button><button className="btn" disabled={!users.length} onClick={exportCsv}>Export CSV</button></>}>
+			<input className="search-input" style={{ marginBottom: 10 }} placeholder="Search email or name…" value={q} onChange={(e) => setQ(e.target.value)} />
+			<AsyncState loading={isLoading} empty={users.length === 0} emptyMsg="No users in this bucket.">
+				<table className="data-table">
+					<thead><tr><th>Email</th><th>Name</th><th>Logins</th><th>Last seen</th></tr></thead>
+					<tbody>
+						{users.map((u) => (
+							<tr key={u.id}><td>{u.email ?? '—'}</td><td>{u.display_name ?? '—'}</td><td className="num">{u.login_count}</td><td className="num">{u.last_seen_at ? new Date(u.last_seen_at).toLocaleDateString() : '—'}</td></tr>
+						))}
+					</tbody>
+				</table>
+			</AsyncState>
+		</Modal>
+	);
+}
+
+// ─── Drill-down: per-user report downloads ───────────────────────────────────
+interface ReportUser { id: string; email: string | null; display_name: string | null; downloads: number; last_download: string | null }
+function ReportUsersModal({ onClose }: { onClose: () => void }) {
+	const [q, setQ] = useState('');
+	const [page, setPage] = useState(1);
+	const { data, isLoading } = useSWR<{ data: ReportUser[]; total: number; totalPages: number }>(
+		[`/api/admin/users/analytics/report-users`, { q: q || undefined, page, limit: 25 }], { dedupingInterval: 10_000 },
+	);
+	const rows = data?.data ?? [];
+	return (
+		<Modal title={`Per-user report downloads · ${(data?.total ?? 0).toLocaleString()} users`} onClose={onClose} width={620} footer={<button className="btn ghost" onClick={onClose}>Close</button>}>
+			<input className="search-input" style={{ marginBottom: 10 }} placeholder="Search email or name…" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} />
+			<AsyncState loading={isLoading} empty={rows.length === 0} emptyMsg="No downloads yet.">
+				<table className="data-table">
+					<thead><tr><th>Email</th><th>Name</th><th>Downloads</th><th>Last</th></tr></thead>
+					<tbody>
+						{rows.map((u) => (
+							<tr key={u.id}><td>{u.email ?? '—'}</td><td>{u.display_name ?? '—'}</td><td className="num">{u.downloads}</td><td className="num">{u.last_download ? new Date(u.last_download).toLocaleDateString() : '—'}</td></tr>
+						))}
+					</tbody>
+				</table>
+			</AsyncState>
+			{data && data.totalPages > 1 && (
+				<div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+					<button className="btn ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
+					<button className="btn ghost" disabled={page >= data.totalPages} onClick={() => setPage((p) => p + 1)}>Next</button>
+				</div>
+			)}
+		</Modal>
 	);
 }
 

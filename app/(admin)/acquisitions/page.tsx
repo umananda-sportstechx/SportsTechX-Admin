@@ -142,19 +142,19 @@ interface AcqForm {
 	acquiree_company_id: string;
 	acquirer_company_id: string;
 	acquirer_name: string;
-	acquisition_date: string; amount_usd: string; currency_code: string; acquisition_type: string; source_url: string;
+	acquisition_date: string; amount: string; currency_code: string; acquisition_type: string; source_url: string;
 	acquiree: PartyForm; acquirer: PartyForm;
 }
 const emptyParty = (): PartyForm => ({ is_sportstech: false, sector_id: '', business_model: '', hq: { ...EMPTY_LOCATION }, sport_ids: [] });
 const EMPTY_ACQ: AcqForm = {
 	acquiree_company_id: '', acquirer_company_id: '', acquirer_name: '',
-	acquisition_date: '', amount_usd: '', currency_code: '', acquisition_type: 'acquisition', source_url: '',
+	acquisition_date: '', amount: '', currency_code: '', acquisition_type: 'acquisition', source_url: '',
 	acquiree: emptyParty(), acquirer: emptyParty(),
 };
 
 interface AcqEdit {
 	acquiree_company_id?: string | null; acquirer_company_id?: string | null; acquirer_name?: string | null;
-	acquisition_date?: string | null; amount_usd?: string | null; currency_code?: string | null;
+	acquisition_date?: string | null; amount?: string | null; amount_usd?: string | null; currency_code?: string | null;
 	acquisition_type?: string | null; source_url?: string | null;
 	acquiree_is_sportstech?: boolean | null; acquirer_is_sportstech?: boolean | null;
 	acquiree_sector_id?: string | null; acquirer_sector_id?: string | null;
@@ -168,7 +168,7 @@ function toAcqForm(h: AcqEdit): AcqForm {
 	return {
 		acquiree_company_id: h.acquiree_company_id ?? '', acquirer_company_id: h.acquirer_company_id ?? '', acquirer_name: h.acquirer_name ?? '',
 		acquisition_date: h.acquisition_date ? String(h.acquisition_date).slice(0, 10) : '',
-		amount_usd: h.amount_usd ?? '', currency_code: h.currency_code ?? '',
+		amount: h.amount ?? h.amount_usd ?? '', currency_code: h.currency_code ?? '',
 		acquisition_type: h.acquisition_type ?? 'acquisition', source_url: h.source_url ?? '',
 		acquiree: {
 			is_sportstech: !!h.acquiree_is_sportstech, sector_id: h.acquiree_sector_id ?? '', business_model: h.acquiree_business_model ?? '',
@@ -181,15 +181,20 @@ function toAcqForm(h: AcqEdit): AcqForm {
 	};
 }
 
-export function AcquisitionModal({ id, onClose, onSaved }: { id: string | null; onClose: () => void; onSaved: () => void }) {
+// A staged M&A draft = the POST body minus acquiree_company_id (the new company),
+// plus a small label snapshot for rendering the row before the company exists.
+export interface StagedAcq { body: Record<string, unknown>; label: { acquirer?: string; amount?: string; year?: string } }
+
+export function AcquisitionModal({ id, onClose, onSaved, onStage }: { id: string | null; onClose: () => void; onSaved: () => void; onStage?: (a: StagedAcq) => void }) {
 	const isEdit = !!id;
 	const { data: hydrated } = useSWR<AcqEdit>(isEdit ? [`/api/admin/acquisitions/${id}/edit`] : null, { revalidateOnFocus: false });
 	if (isEdit && !hydrated) return <Modal title="Edit acquisition" onClose={onClose}><Loading msg="Loading acquisition…" /></Modal>;
-	return <AcquisitionForm id={id} initial={hydrated ? toAcqForm(hydrated) : EMPTY_ACQ} onClose={onClose} onSaved={onSaved} />;
+	return <AcquisitionForm id={id} initial={hydrated ? toAcqForm(hydrated) : EMPTY_ACQ} onClose={onClose} onSaved={onSaved} onStage={onStage} />;
 }
 
-function AcquisitionForm({ id, initial, onClose, onSaved }: { id: string | null; initial: AcqForm; onClose: () => void; onSaved: () => void }) {
+function AcquisitionForm({ id, initial, onClose, onSaved, onStage }: { id: string | null; initial: AcqForm; onClose: () => void; onSaved: () => void; onStage?: (a: StagedAcq) => void }) {
 	const isEdit = !!id;
+	const stageMode = !!onStage;
 	const [tab, setTab] = useTabs('acquiree');
 	const [form, setForm] = useState<AcqForm>(initial);
 	const [pending, setPending] = useState(false);
@@ -206,7 +211,7 @@ function AcquisitionForm({ id, initial, onClose, onSaved }: { id: string | null;
 				acquirer_company_id: form.acquirer_company_id || undefined,
 				acquirer_name: !form.acquirer_company_id && form.acquirer_name.trim() ? form.acquirer_name.trim() : undefined,
 				acquisition_date: form.acquisition_date || undefined,
-				amount_usd: form.amount_usd.trim() ? Number(form.amount_usd) : undefined,
+				amount: form.amount.trim() ? Number(form.amount) : undefined,
 				currency_code: form.currency_code || undefined,
 				acquisition_type: form.acquisition_type,
 				source_url: form.source_url.trim() || undefined,
@@ -229,6 +234,15 @@ function AcquisitionForm({ id, initial, onClose, onSaved }: { id: string | null;
 				acquiree_sport_ids: form.acquiree.sport_ids,
 				acquirer_sport_ids: form.acquirer.sport_ids,
 			};
+			if (onStage) {
+				// New (unsaved) company is the acquiree — hand the draft to the parent;
+				// the server fills acquiree_company_id on save.
+				const { acquiree_company_id, ...rest } = body;
+				void acquiree_company_id;
+				onStage({ body: rest, label: { acquirer: form.acquirer_name.trim() || undefined, amount: fmtAmount(form.amount || null), year: form.acquisition_date ? form.acquisition_date.slice(0, 4) : undefined } });
+				onSaved();
+				return;
+			}
 			if (isEdit) await api('PATCH', `/api/admin/acquisitions/${id}`, body);
 			else await api('POST', '/api/admin/acquisitions', body);
 			toast.success(isEdit ? 'Saved' : 'Created');
@@ -241,7 +255,11 @@ function AcquisitionForm({ id, initial, onClose, onSaved }: { id: string | null;
 		return (
 			<>
 				{party === 'acquiree' ? (
-					<Field label="Acquiree company"><CompanySelectOne value={form.acquiree_company_id} onChange={(v) => set('acquiree_company_id', v)} /></Field>
+					stageMode ? (
+						<div style={{ fontSize: 13, color: 'var(--fg-muted)', marginBottom: 4 }}>The new company is the acquiree — it will be linked when you save it.</div>
+					) : (
+						<Field label="Acquiree company"><CompanySelectOne value={form.acquiree_company_id} onChange={(v) => set('acquiree_company_id', v)} /></Field>
+					)
 				) : (
 					<>
 						<Field label="Acquirer company (if in DB)"><CompanySelectOne value={form.acquirer_company_id} onChange={(v) => set('acquirer_company_id', v)} /></Field>
@@ -268,14 +286,14 @@ function AcquisitionForm({ id, initial, onClose, onSaved }: { id: string | null;
 
 	return (
 		<Modal
-			title={isEdit ? 'Edit acquisition' : 'New acquisition'}
+			title={isEdit ? 'Edit acquisition' : stageMode ? 'Add acquisition' : 'New acquisition'}
 			onClose={onClose}
 			width={680}
 			footer={
 				<>
 					<button className="btn ghost" onClick={onClose}>Cancel</button>
-					<button className="btn" disabled={!form.acquiree_company_id || pending} onClick={() => void submit()}>
-						<Save size={12} /> {pending ? 'Saving…' : 'Save'}
+					<button className="btn" disabled={(!stageMode && !form.acquiree_company_id) || pending} onClick={() => void submit()}>
+						<Save size={12} /> {pending ? 'Saving…' : stageMode ? 'Add acquisition' : 'Save'}
 					</button>
 				</>
 			}
@@ -298,7 +316,7 @@ function AcquisitionForm({ id, initial, onClose, onSaved }: { id: string | null;
 									</Field>
 								</div>
 								<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>
-									<Field label="Amount (USD)"><input className="search-input" type="number" value={form.amount_usd} onChange={(e) => set('amount_usd', e.target.value)} /></Field>
+									<Field label="Amount"><input className="search-input" type="number" value={form.amount} onChange={(e) => set('amount', e.target.value)} placeholder="in currency" /></Field>
 									<Field label="Currency"><CurrencySelect value={form.currency_code} onChange={(v) => set('currency_code', v)} /></Field>
 								</div>
 								<Field label="Source URL"><input className="search-input" value={form.source_url} onChange={(e) => set('source_url', e.target.value)} placeholder="https://" /></Field>

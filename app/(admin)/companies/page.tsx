@@ -16,8 +16,8 @@ import {
 	SectorCascade, SportsPicker, TechTagsPicker, LocationFields, SocialLinks,
 	EMPTY_SOCIAL, EMPTY_LOCATION, type SocialValue, type LocationValue,
 } from '@/components/entity-pickers';
-import { DealModal } from '../deals/page';
-import { AcquisitionModal } from '../acquisitions/page';
+import { DealModal, type StagedDeal } from '../deals/page';
+import { AcquisitionModal, type StagedAcq } from '../acquisitions/page';
 
 interface Company {
 	id: string;
@@ -226,11 +226,11 @@ function toCompanyForm(h: CompanyEdit): CompanyForm {
 // Outer modal fetches the edit payload (when editing) and only mounts the form
 // once data is ready, so the form can seed useState from props directly — no
 // setState-in-effect, no cascading renders.
-function CompanyModal({ id, onClose, onSaved }: { id: string | null; onClose: () => void; onSaved: () => void }) {
+export function CompanyModal({ id, onClose, onSaved, seed }: { id: string | null; onClose: () => void; onSaved: (createdId?: string) => void; seed?: Partial<CompanyForm> }) {
 	const isEdit = !!id;
 	const { data: hydrated } = useSWR<CompanyEdit>(isEdit ? [`/api/admin/companies/${id}/edit`] : null, { revalidateOnFocus: false });
 	if (isEdit && !hydrated) return <Modal title="Edit company" onClose={onClose}><Loading msg="Loading company…" /></Modal>;
-	return <CompanyForm id={id} initial={hydrated ? toCompanyForm(hydrated) : EMPTY_COMPANY} onClose={onClose} onSaved={onSaved} />;
+	return <CompanyForm id={id} initial={hydrated ? toCompanyForm(hydrated) : { ...EMPTY_COMPANY, ...seed }} onClose={onClose} onSaved={onSaved} />;
 }
 
 // ── Funding tab: a company's deals, managed inline via the shared DealModal ──
@@ -321,10 +321,78 @@ function CompanyMaTab({ companyId }: { companyId: string }) {
 	);
 }
 
-function CompanyForm({ id, initial, onClose, onSaved }: { id: string | null; initial: CompanyForm; onClose: () => void; onSaved: () => void }) {
+// ── Staged Funding tab (NEW company): drafts held in parent form state, created
+//    atomically alongside the company on save. No company_id exists yet. ──
+function StagedFundingTab({ drafts, onChange }: { drafts: StagedDeal[]; onChange: (d: StagedDeal[]) => void }) {
+	const [open, setOpen] = useState(false);
+	return (
+		<div style={{ display: 'grid', gap: 10 }}>
+			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+				<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{drafts.length} round{drafts.length === 1 ? '' : 's'} staged · saved with the company</div>
+				<button className="btn" onClick={() => setOpen(true)}><Plus size={12} /> Add funding round</button>
+			</div>
+			{drafts.length === 0 ? (
+				<div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>No funding rounds yet. Add rounds here — they’ll be created when you save the company.</div>
+			) : (
+				<table className="data-table">
+					<thead><tr><th>Year</th><th>Amount</th><th /></tr></thead>
+					<tbody>
+						{drafts.map((d, i) => (
+							<tr key={i}>
+								<td className="num">{d.label.year ?? '—'}</td>
+								<td className="num">{d.label.amount ?? '—'}</td>
+								<td style={{ textAlign: 'right' }}>
+									<button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => onChange(drafts.filter((_, j) => j !== i))}><Trash2 size={12} /></button>
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			)}
+			{open && <DealModal id={null} onStage={(d) => onChange([...drafts, d])} onClose={() => setOpen(false)} onSaved={() => setOpen(false)} />}
+		</div>
+	);
+}
+
+// ── Staged M&A tab (NEW company): acquisitions with the new company as acquiree. ──
+function StagedMaTab({ drafts, onChange }: { drafts: StagedAcq[]; onChange: (a: StagedAcq[]) => void }) {
+	const [open, setOpen] = useState(false);
+	return (
+		<div style={{ display: 'grid', gap: 10 }}>
+			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+				<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{drafts.length} acquisition{drafts.length === 1 ? '' : 's'} staged · saved with the company</div>
+				<button className="btn" onClick={() => setOpen(true)}><Plus size={12} /> Add acquisition</button>
+			</div>
+			{drafts.length === 0 ? (
+				<div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>No acquisitions yet. Add them here — they’ll be created when you save the company.</div>
+			) : (
+				<table className="data-table">
+					<thead><tr><th>Acquirer</th><th>Year</th><th>Amount</th><th /></tr></thead>
+					<tbody>
+						{drafts.map((a, i) => (
+							<tr key={i}>
+								<td>{a.label.acquirer ?? '—'}</td>
+								<td className="num">{a.label.year ?? '—'}</td>
+								<td className="num">{a.label.amount ?? '—'}</td>
+								<td style={{ textAlign: 'right' }}>
+									<button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => onChange(drafts.filter((_, j) => j !== i))}><Trash2 size={12} /></button>
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			)}
+			{open && <AcquisitionModal id={null} onStage={(a) => onChange([...drafts, a])} onClose={() => setOpen(false)} onSaved={() => setOpen(false)} />}
+		</div>
+	);
+}
+
+function CompanyForm({ id, initial, onClose, onSaved }: { id: string | null; initial: CompanyForm; onClose: () => void; onSaved: (createdId?: string) => void }) {
 	const isEdit = !!id;
 	const [tab, setTab] = useTabs('profile');
 	const [form, setForm] = useState<CompanyForm>(initial);
+	const [stagedDeals, setStagedDeals] = useState<StagedDeal[]>([]);
+	const [stagedAcqs, setStagedAcqs] = useState<StagedAcq[]>([]);
 	const [pending, setPending] = useState(false);
 
 	const set = <K extends keyof CompanyForm>(k: K, v: CompanyForm[K]) => setForm((f) => ({ ...f, [k]: v }));
@@ -363,10 +431,18 @@ function CompanyForm({ id, initial, onClose, onSaved }: { id: string | null; ini
 					accelerator: form.accelerator.trim() || undefined,
 					cohort: form.cohort.trim() || undefined,
 				};
+			let createdId: string | undefined;
 			if (isEdit) await api('PATCH', `/api/admin/companies/${id}`, body);
-			else await api('POST', '/api/admin/companies', body);
+			else {
+				// Carry any funding rounds / acquisitions staged on a brand-new company
+				// so they're created in the same atomic request.
+				if (stagedDeals.length) body.deals = stagedDeals.map((d) => d.body);
+				if (stagedAcqs.length) body.acquisitions = stagedAcqs.map((a) => a.body);
+				const created = await api<{ id: string }>('POST', '/api/admin/companies', body);
+				createdId = created?.id;
+			}
 			toast.success(isEdit ? 'Saved' : 'Created');
-			onSaved();
+			onSaved(createdId);
 		} catch (e) {
 			toast.error((e as Error).message);
 		} finally {
@@ -450,8 +526,8 @@ function CompanyForm({ id, initial, onClose, onSaved }: { id: string | null; ini
 								{ key: 'ma', label: 'M&A', node: <CompanyMaTab companyId={id} /> },
 							]
 							: [
-								{ key: 'funding', label: 'Funding', node: <div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>Save the company first, then add funding rounds here.</div> },
-								{ key: 'ma', label: 'M&A', node: <div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>Save the company first, then add acquisitions here.</div> },
+								{ key: 'funding', label: 'Funding', hint: stagedDeals.length || undefined, node: <StagedFundingTab drafts={stagedDeals} onChange={setStagedDeals} /> },
+								{ key: 'ma', label: 'M&A', hint: stagedAcqs.length || undefined, node: <StagedMaTab drafts={stagedAcqs} onChange={setStagedAcqs} /> },
 							]),
 						{
 							key: 'status', label: 'Status', node: (

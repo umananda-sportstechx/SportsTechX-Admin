@@ -9,6 +9,7 @@ import { api } from '@/lib/api';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading } from '@/components/atoms';
 import { YearSelect } from '@/components/year-select';
+import { ImageInput } from '@/components/image-input';
 
 interface Report {
 	id: string;
@@ -227,7 +228,7 @@ function ReportAnalytics() {
 
 interface ReportEdit {
 	id: string; title: string; short_title?: string | null; report_month?: number | null; report_year?: number | null;
-	show_on_dashboard?: boolean; description?: string | null; summary_points?: string | null; drive_link?: string | null; pdf_url?: string | null;
+	show_on_dashboard?: boolean; description?: string | null; summary_points?: string | null; drive_link?: string | null; pdf_url?: string | null; cover_url?: string | null;
 }
 
 function EditReportModal({ id, onClose, onSaved }: { id: string; onClose: () => void; onSaved: () => void }) {
@@ -242,7 +243,7 @@ function EditReportForm({ id, initial, onClose, onSaved }: { id: string; initial
 		report_month: initial.report_month ? String(initial.report_month) : '',
 		report_year: initial.report_year ? String(initial.report_year) : '',
 		show_on_dashboard: !!initial.show_on_dashboard,
-		drive_link: initial.drive_link ?? '', pdf_url: initial.pdf_url ?? '',
+		drive_link: initial.drive_link ?? '', pdf_url: initial.pdf_url ?? '', cover_url: initial.cover_url ?? '',
 		description: initial.description ?? '', summary_points: initial.summary_points ?? '',
 	});
 	const [pending, setPending] = useState(false);
@@ -258,6 +259,7 @@ function EditReportForm({ id, initial, onClose, onSaved }: { id: string; initial
 				show_on_dashboard: f.show_on_dashboard,
 				drive_link: f.drive_link.trim() || undefined,
 				pdf_url: f.pdf_url.trim() || undefined,
+				cover_url: f.cover_url.trim() || undefined,
 				description: f.description.trim() || undefined,
 				summary_points: f.summary_points.trim() || undefined,
 			});
@@ -291,6 +293,7 @@ function EditReportForm({ id, initial, onClose, onSaved }: { id: string; initial
 					<input className="search-input" placeholder="Drive link" value={f.drive_link} onChange={(e) => set('drive_link', e.target.value)} />
 					<input className="search-input" placeholder="PDF URL" value={f.pdf_url} onChange={(e) => set('pdf_url', e.target.value)} />
 				</div>
+				<div><div className="co-stat-label" style={{ marginBottom: 4 }}>Cover image</div><ImageInput value={f.cover_url} onChange={(u) => set('cover_url', u)} pathPrefix="reports/covers" /></div>
 				<textarea className="search-input" placeholder="Description" value={f.description} onChange={(e) => set('description', e.target.value)} style={{ minHeight: 70, resize: 'vertical' }} />
 				<textarea className="search-input" placeholder="Summary points (one per line)" value={f.summary_points} onChange={(e) => set('summary_points', e.target.value)} style={{ minHeight: 60, resize: 'vertical' }} />
 			</div>

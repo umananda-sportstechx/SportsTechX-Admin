@@ -11,6 +11,7 @@ import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/chart
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 import { CsvImportButton } from '@/components/csv-import';
 import { YearSelect } from '@/components/year-select';
+import { ImageInput } from '@/components/image-input';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import { SportsPicker, LocationFields, SocialLinks, CompanySelectOne, EMPTY_SOCIAL, EMPTY_LOCATION, type SocialValue, type LocationValue } from '@/components/entity-pickers';
 
@@ -362,7 +363,7 @@ function EntityForm({ id, initial, onClose, onSaved }: { id: string | null; init
 												{EVENT_MODES.map((m) => <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>)}
 											</select>
 										</Field>
-										<Field label="Cover image URL"><input className="search-input" value={form.event.cover_url} onChange={(e) => setEvent('cover_url', e.target.value)} placeholder="https://" /></Field>
+										<Field label="Cover image"><ImageInput value={form.event.cover_url} onChange={(u) => setEvent('cover_url', u)} pathPrefix="ecosystem/events" /></Field>
 									</div>
 									<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 										<Field label="Start date"><input className="search-input" type="date" value={form.event.start_date} onChange={(e) => setEvent('start_date', e.target.value)} /></Field>

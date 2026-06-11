@@ -11,6 +11,7 @@ import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/chart
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 import { CsvImportButton } from '@/components/csv-import';
 import { YearSelect } from '@/components/year-select';
+import { ImageInput } from '@/components/image-input';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import {
 	SectorCascade, SportsPicker, TechTagsPicker, LocationFields, SocialLinks,
@@ -477,7 +478,7 @@ function CompanyForm({ id, initial, onClose, onSaved }: { id: string | null; ini
 									<Field label="Website (required, must be unique)"><input className="search-input" type="url" value={form.website} onChange={(e) => set('website', e.target.value)} placeholder="https://" /></Field>
 									<Field label={isEdit ? 'Slug' : 'Slug (optional — auto from name)'}><input className="search-input" style={{ fontFamily: 'var(--font-mono)' }} value={form.slug} onChange={(e) => set('slug', e.target.value)} disabled={isEdit} /></Field>
 									<Field label="Description"><textarea className="search-input" style={{ minHeight: 80, resize: 'vertical' }} value={form.description} onChange={(e) => set('description', e.target.value)} /></Field>
-									<Field label="Logo URL"><input className="search-input" value={form.custom_logo_url} onChange={(e) => set('custom_logo_url', e.target.value)} placeholder="https://" /></Field>
+									<Field label="Logo"><ImageInput value={form.custom_logo_url} onChange={(u) => set('custom_logo_url', u)} pathPrefix="companies/logos" /></Field>
 									<div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 12 }}>
 										<Field label="Founded"><YearSelect value={form.founded_year} onChange={(v) => set('founded_year', v)} /></Field>
 										<Field label="IPO date"><input className="search-input" type="date" value={form.ipo_date} onChange={(e) => set('ipo_date', e.target.value)} /></Field>

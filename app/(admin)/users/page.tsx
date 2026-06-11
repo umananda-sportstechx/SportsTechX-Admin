@@ -38,6 +38,7 @@ interface User {
 	is_trial?: boolean;
 	trial_ends_at?: string | null;
 	active_subscription?: boolean;
+	login_count?: number;
 }
 interface UsersResponse { data: User[]; total: number; totalPages: number }
 
@@ -95,8 +96,8 @@ export default function UsersAdminPage() {
 			const rows = res.data ?? [];
 			const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
 			const plan = (u: User) => u.is_trial ? `trial${u.trial_ends_at ? ` until ${u.trial_ends_at.slice(0, 10)}` : ''}` : u.active_subscription ? 'paid' : '';
-			const csv = ['email,name,tier,plan,role,company,joined,last_seen',
-				...rows.map((u) => [u.email, u.display_name, u.user_type, plan(u), u.user_role, u.company_name, u.created_at, u.last_seen_at].map(esc).join(','))].join('\n');
+			const csv = ['email,name,tier,plan,role,company,logins,joined,last_seen',
+				...rows.map((u) => [u.email, u.display_name, u.user_type, plan(u), u.user_role, u.company_name, u.login_count ?? 0, u.created_at, u.last_seen_at].map(esc).join(','))].join('\n');
 			const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
 			const a = document.createElement('a'); a.href = url; a.download = `users-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
 			toast.success(`Exported ${rows.length} users`);
@@ -299,8 +300,11 @@ export default function UsersAdminPage() {
 						<tr>
 							<th>Email</th>
 							<th>Name</th>
+							<th>Company</th>
 							<th>Tier</th>
 							<th>Role</th>
+							<th>Logins</th>
+							<th>Last seen</th>
 							<th>Joined</th>
 							<th style={{ textAlign: 'right' }}>Actions</th>
 						</tr>
@@ -311,6 +315,7 @@ export default function UsersAdminPage() {
 								<tr>
 									<td>{u.email}</td>
 									<td>{u.display_name ?? '—'}</td>
+									<td style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{u.company_name ?? '—'}</td>
 									<td>
 										<span className="tag">{u.user_type ?? 'free'}</span>
 										{u.is_trial
@@ -318,6 +323,8 @@ export default function UsersAdminPage() {
 											: u.active_subscription ? <span className="tag pos" style={{ marginLeft: 4 }}>paid</span> : null}
 									</td>
 									<td>{u.user_role === 'admin' ? <span className="tag pos">admin</span> : 'user'}</td>
+									<td className="num">{(u.login_count ?? 0).toLocaleString()}</td>
+									<td className="num">{u.last_seen_at ? fmtDate(u.last_seen_at) : '—'}</td>
 									<td className="num">{new Date(u.created_at).toLocaleDateString()}</td>
 									<td style={{ textAlign: 'right' }}>
 										<div style={{ display: 'inline-flex', gap: 6 }}>
@@ -337,7 +344,7 @@ export default function UsersAdminPage() {
 								</tr>
 								{expandedId === u.id && (
 									<tr>
-										<td colSpan={6} style={{ background: 'var(--bg-2)', padding: 'var(--space-4)' }}>
+										<td colSpan={9} style={{ background: 'var(--bg-2)', padding: 'var(--space-4)' }}>
 											<ManagePanel user={u} />
 										</td>
 									</tr>

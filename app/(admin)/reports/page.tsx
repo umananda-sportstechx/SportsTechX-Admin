@@ -35,6 +35,7 @@ export default function ReportsAdminPage() {
 	const [removePending, setRemovePending] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [search, setSearch] = useState('');
+	const [analyticsOpen, setAnalyticsOpen] = useState(false);
 	const { data, error, isLoading } = useSWR<Response>(['/api/reports'], { dedupingInterval: 30_000 });
 
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/reports');
@@ -146,6 +147,13 @@ export default function ReportsAdminPage() {
 				<button className="btn" style={{ marginTop: 10 }} disabled={!draft.title || createPending} onClick={() => void create()}>Create</button>
 			</div>
 
+			<div className="card" style={{ marginBottom: 'var(--space-4)' }}>
+				<button className="btn ghost" style={{ width: '100%', justifyContent: 'space-between', display: 'flex' }} onClick={() => setAnalyticsOpen((o) => !o)}>
+					<span>Download analytics — per-report stats</span><span>{analyticsOpen ? '▲' : '▼'}</span>
+				</button>
+				{analyticsOpen && <ReportAnalytics />}
+			</div>
+
 			<div className="card">
 				<div style={{ padding: '12px var(--space-4)', borderBottom: '1px solid var(--border)' }}>
 					<input className="search-input" style={{ width: 320, height: 30 }} placeholder="Search reports by title…" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -184,6 +192,35 @@ export default function ReportsAdminPage() {
 				</table>
 				</AsyncState>
 			</div>
+		</div>
+	);
+}
+
+interface ReportStat { id: string; title: string; report_year?: number | null; report_month?: number | null; downloads: number; unique_users: number; last_download: string | null }
+
+function ReportAnalytics() {
+	const { data, isLoading, error, mutate } = useSWR<{ reports: ReportStat[] }>(['/api/admin/reports/analytics'], { dedupingInterval: 60_000 });
+	const rows = (data?.reports ?? []).filter((r) => r.downloads > 0);
+	const totalDl = rows.reduce((s, r) => s + r.downloads, 0);
+	return (
+		<div style={{ padding: 'var(--space-4)', borderTop: '1px solid var(--border)' }}>
+			<AsyncState loading={isLoading} error={error} empty={rows.length === 0} emptyMsg="No downloads recorded yet." onRetry={() => void mutate()}>
+				<div style={{ fontSize: 12, color: 'var(--fg-muted)', marginBottom: 8 }}>{totalDl.toLocaleString()} downloads across {rows.length} reports</div>
+				<table className="data-table">
+					<thead><tr><th>Report</th><th>Period</th><th>Downloads</th><th>Unique users</th><th>Last download</th></tr></thead>
+					<tbody>
+						{rows.map((r) => (
+							<tr key={r.id}>
+								<td>{r.title}</td>
+								<td className="num">{r.report_year ? `${r.report_month ? MONTHS[r.report_month - 1] + ' ' : ''}${r.report_year}` : '—'}</td>
+								<td className="num">{r.downloads.toLocaleString()}</td>
+								<td className="num">{r.unique_users.toLocaleString()}</td>
+								<td className="num">{r.last_download ? new Date(r.last_download).toLocaleDateString() : '—'}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</AsyncState>
 		</div>
 	);
 }

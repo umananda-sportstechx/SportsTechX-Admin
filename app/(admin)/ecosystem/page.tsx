@@ -25,7 +25,7 @@ interface Entity {
 	hq_country?: string | null;
 }
 interface Response { data: Entity[]; total: number; totalPages: number }
-interface EcoStats { total: number; by_type: Bucket[]; by_status: Bucket[] }
+interface EcoStats { total: number; upcoming_events?: number; added_this_month?: number; added_last_month?: number; by_type: Bucket[]; by_status: Bucket[] }
 
 const STATUSES = ['active', 'inactive', 'paused'] as const;
 const ENTITY_TYPES = ['program', 'event', 'organization', 'initiative'] as const;
@@ -72,7 +72,14 @@ export default function EcosystemAdminPage() {
 
 			<StatStrip cols={4}>
 				<StatCard label="Total entities" loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()} />
-				{(stats.data?.by_type ?? []).slice(0, 3).map((b) => (
+				<StatCard
+					label="Added this month"
+					loading={stats.isLoading}
+					value={(stats.data?.added_this_month ?? 0).toLocaleString()}
+					delta={stats.data && (stats.data.added_last_month ?? 0) > 0 ? (((stats.data.added_this_month ?? 0) - (stats.data.added_last_month ?? 0)) / (stats.data.added_last_month ?? 1)) * 100 : null}
+				/>
+				<StatCard label="Upcoming events" loading={stats.isLoading} value={(stats.data?.upcoming_events ?? 0).toLocaleString()} />
+				{(stats.data?.by_type ?? []).slice(0, 1).map((b) => (
 					<StatCard key={b.label} label={b.label} loading={stats.isLoading} value={b.value.toLocaleString()} />
 				))}
 			</StatStrip>

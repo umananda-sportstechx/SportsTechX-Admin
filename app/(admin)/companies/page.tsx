@@ -404,6 +404,28 @@ function CompanyForm({ id, initial, onClose, onSaved }: { id: string | null; ini
 	const [pending, setPending] = useState(false);
 
 	const set = <K extends keyof CompanyForm>(k: K, v: CompanyForm[K]) => setForm((f) => ({ ...f, [k]: v }));
+	const [enriching, setEnriching] = useState(false);
+	// Pull name/description/location from Attio by the entered website domain;
+	// fills only empty fields so it never clobbers admin edits.
+	const enrich = async () => {
+		if (!form.website.trim()) { toast.error('Enter a website first.'); return; }
+		setEnriching(true);
+		try {
+			const r = await api<{ found: boolean; data: { name: string | null; description: string | null; website: string | null; city: string | null; country: string | null; logo_url: string | null; founded_year: number | null } | null }>(
+				'GET', `/api/admin/integrations/attio/company?domain=${encodeURIComponent(form.website.trim())}`);
+			if (!r.found || !r.data) { toast.error('No Attio match for this domain.'); return; }
+			const d = r.data;
+			setForm((f) => ({
+				...f,
+				name: f.name.trim() || d.name || f.name,
+				description: f.description.trim() || d.description || f.description,
+				custom_logo_url: f.custom_logo_url.trim() || d.logo_url || f.custom_logo_url,
+				founded_year: f.founded_year || (d.founded_year ? String(d.founded_year) : f.founded_year),
+				hq: { ...f.hq, city: f.hq.city.trim() || d.city || f.hq.city, country: f.hq.country.trim() || d.country || f.hq.country },
+			}));
+			toast.success('Filled empty fields from Attio');
+		} catch (e) { toast.error((e as Error).message); } finally { setEnriching(false); }
+	};
 
 	const submit = async () => {
 		setPending(true);
@@ -481,7 +503,12 @@ function CompanyForm({ id, initial, onClose, onSaved }: { id: string | null; ini
 							key: 'profile', label: 'Profile', node: (
 								<>
 									<Field label="Name"><input className="search-input" value={form.name} onChange={(e) => set('name', e.target.value)} /></Field>
-									<Field label="Website (required, must be unique)"><input className="search-input" type="url" value={form.website} onChange={(e) => set('website', e.target.value)} placeholder="https://" /></Field>
+									<Field label="Website (required, must be unique)">
+										<div style={{ display: 'flex', gap: 6 }}>
+											<input className="search-input" type="url" value={form.website} onChange={(e) => set('website', e.target.value)} placeholder="https://" style={{ flex: 1 }} />
+											<button type="button" className="btn ghost" disabled={enriching || !form.website.trim()} onClick={() => void enrich()} title="Fill empty fields from Attio">{enriching ? 'Enriching…' : 'Enrich'}</button>
+										</div>
+									</Field>
 									<Field label={isEdit ? 'Slug' : 'Slug (optional — auto from name)'}><input className="search-input" style={{ fontFamily: 'var(--font-mono)' }} value={form.slug} onChange={(e) => set('slug', e.target.value)} disabled={isEdit} /></Field>
 									<Field label="Description"><textarea className="search-input" style={{ minHeight: 80, resize: 'vertical' }} value={form.description} onChange={(e) => set('description', e.target.value)} /></Field>
 									<Field label="Logo"><ImageInput value={form.custom_logo_url} onChange={(u) => set('custom_logo_url', u)} pathPrefix="companies/logos" /></Field>

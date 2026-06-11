@@ -65,6 +65,7 @@ export default function UsersAdminPage() {
 	const [to, setTo] = useState('');
 	const [freqBucket, setFreqBucket] = useState<'never' | 'once' | '2-5' | '6+' | null>(null);
 	const [reportUsersOpen, setReportUsersOpen] = useState(false);
+	const [planDetail, setPlanDetail] = useState<string | null>(null);
 
 	const { data, error, isLoading } = useSWR<UsersResponse>(
 		['/api/admin/users', { q: search || undefined, role: role || undefined, tier: tier || undefined, page, limit: 30 }],
@@ -279,6 +280,8 @@ export default function UsersAdminPage() {
 				</Section>
 			</div>
 
+			<SubscriptionMix onPlan={setPlanDetail} />
+
 			<FilterBar>
 				<input
 					className="search-input"
@@ -368,6 +371,7 @@ export default function UsersAdminPage() {
 
 			{freqBucket && <LoginUsersModal bucket={freqBucket} onClose={() => setFreqBucket(null)} />}
 			{reportUsersOpen && <ReportUsersModal onClose={() => setReportUsersOpen(false)} />}
+			{planDetail && <PlanUsersModal detail={planDetail} onClose={() => setPlanDetail(null)} />}
 		</div>
 	);
 }
@@ -393,6 +397,68 @@ function LoginUsersModal({ bucket, onClose }: { bucket: string; onClose: () => v
 					<tbody>
 						{users.map((u) => (
 							<tr key={u.id}><td>{u.email ?? '—'}</td><td>{u.display_name ?? '—'}</td><td className="num">{u.login_count}</td><td className="num">{u.last_seen_at ? new Date(u.last_seen_at).toLocaleDateString() : '—'}</td></tr>
+						))}
+					</tbody>
+				</table>
+			</AsyncState>
+		</Modal>
+	);
+}
+
+// ─── Subscription mix matrix + monthly churn ─────────────────────────────────
+interface SubsData { matrix: Array<{ detail: string; count: number }>; monthly_churn: Array<{ label: string; value: number }> }
+const prettyDetail = (d: string) => d.replace(/_/g, ' ').replace('trial', '(trial)');
+function SubscriptionMix({ onPlan }: { onPlan: (detail: string) => void }) {
+	const { data, isLoading, error, mutate } = useSWR<SubsData>(['/api/admin/users/analytics/subscriptions'], { dedupingInterval: 60_000 });
+	const matrix = data?.matrix ?? [];
+	const churnChart = (data?.monthly_churn ?? []).map((m) => ({ label: m.label.slice(2), amt: m.value, deals: m.value }));
+	return (
+		<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+			<Section title="Subscription mix" meta="by plan · click to drill in">
+				<AsyncState loading={isLoading} error={error} empty={matrix.length === 0} emptyMsg="No paid/trial plans yet." onRetry={() => void mutate()}>
+					<table className="data-table">
+						<thead><tr><th>Plan</th><th>Users</th><th /></tr></thead>
+						<tbody>
+							{matrix.map((m) => (
+								<tr key={m.detail} style={{ cursor: 'pointer' }} onClick={() => onPlan(m.detail)}>
+									<td>{prettyDetail(m.detail)}{m.detail.includes('trial') && <span className="tag warn" style={{ marginLeft: 6 }}>trial</span>}</td>
+									<td className="num">{m.count.toLocaleString()}</td>
+									<td style={{ textAlign: 'right', color: 'var(--fg-muted)' }}>view →</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</AsyncState>
+			</Section>
+			<Section title="Monthly churn" meta="subscriptions ended, last 12 mo">
+				<AsyncState loading={isLoading} error={error} empty={churnChart.length === 0} emptyMsg="No churn recorded." onRetry={() => void mutate()}>
+					<ComboBarLine data={churnChart} height={200} valueFormatter={(v) => String(Math.round(v))} barLabel="Churned" lineLabel="churned" />
+				</AsyncState>
+			</Section>
+		</div>
+	);
+}
+
+interface PlanUser { id: string; email: string | null; display_name: string | null; company_name: string | null; login_count: number; last_seen_at: string | null }
+function PlanUsersModal({ detail, onClose }: { detail: string; onClose: () => void }) {
+	const [q, setQ] = useState('');
+	const { data, isLoading } = useSWR<{ users: PlanUser[] }>(['/api/admin/users/analytics/plan-users', { detail, q: q || undefined }], { dedupingInterval: 10_000 });
+	const users = data?.users ?? [];
+	const exportCsv = () => {
+		const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+		const csv = ['email,name,company,logins,last_seen', ...users.map((u) => [u.email, u.display_name, u.company_name, u.login_count, u.last_seen_at].map(esc).join(','))].join('\n');
+		const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+		const a = document.createElement('a'); a.href = url; a.download = `plan-${detail}.csv`; a.click(); URL.revokeObjectURL(url);
+	};
+	return (
+		<Modal title={`Users · ${prettyDetail(detail)}`} onClose={onClose} width={640} footer={<><button className="btn ghost" onClick={onClose}>Close</button><button className="btn" disabled={!users.length} onClick={exportCsv}>Export CSV</button></>}>
+			<input className="search-input" style={{ marginBottom: 10 }} placeholder="Search email or name…" value={q} onChange={(e) => setQ(e.target.value)} />
+			<AsyncState loading={isLoading} empty={users.length === 0} emptyMsg="No users on this plan.">
+				<table className="data-table">
+					<thead><tr><th>Email</th><th>Name</th><th>Company</th><th>Logins</th><th>Last seen</th></tr></thead>
+					<tbody>
+						{users.map((u) => (
+							<tr key={u.id}><td>{u.email ?? '—'}</td><td>{u.display_name ?? '—'}</td><td>{u.company_name ?? '—'}</td><td className="num">{u.login_count}</td><td className="num">{u.last_seen_at ? new Date(u.last_seen_at).toLocaleDateString() : '—'}</td></tr>
 						))}
 					</tbody>
 				</table>

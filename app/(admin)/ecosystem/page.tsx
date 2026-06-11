@@ -12,6 +12,7 @@ import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 import { CsvImportButton } from '@/components/csv-import';
 import { YearSelect } from '@/components/year-select';
 import { ImageInput } from '@/components/image-input';
+import { useConfirm } from '@/components/confirm';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import { SportsPicker, LocationFields, SocialLinks, CompanySelectOne, EMPTY_SOCIAL, EMPTY_LOCATION, type SocialValue, type LocationValue } from '@/components/entity-pickers';
 
@@ -33,6 +34,7 @@ const EVENT_MODES = ['in_person', 'virtual', 'hybrid'] as const;
 
 export default function EcosystemAdminPage() {
 	const { mutate } = useSWRConfig();
+	const ask = useConfirm();
 	const [type, setType] = useState<'program' | 'event'>('program');
 	const [search, setSearch] = useState('');
 	const [status, setStatus] = useState('');
@@ -52,7 +54,7 @@ export default function EcosystemAdminPage() {
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/ecosystem-entities');
 
 	const remove = async (id: string, name: string) => {
-		if (!confirm(`Delete ${name}?`)) return;
+		if (!(await ask(`Delete ${name}?`))) return;
 		setRemovePending(true);
 		try {
 			await api('DELETE', `/api/admin/ecosystem-entities/${id}`);
@@ -435,6 +437,7 @@ interface EcoHit { id: string; name: string; entity_type: string }
 /** Relationship-linking + cohort-participant management for an existing entity. */
 function LinksCohortPanel({ entityId }: { entityId: string }) {
 	const { mutate } = useSWRConfig();
+	const ask = useConfirm();
 	const rels = useSWR<RelRow[]>([`/api/admin/ecosystem-entities/${entityId}/relationships`], { dedupingInterval: 10_000 });
 	const parts = useSWR<PartRow[]>([`/api/admin/ecosystem-entities/${entityId}/participants`], { dedupingInterval: 10_000 });
 	const refreshRels = () => mutate([`/api/admin/ecosystem-entities/${entityId}/relationships`]);
@@ -471,7 +474,7 @@ function LinksCohortPanel({ entityId }: { entityId: string }) {
 	};
 	const delPart = async (ppId: string) => { try { await api('DELETE', `/api/admin/ecosystem-entities/${entityId}/participants/${ppId}`); void refreshParts(); } catch (e) { toast.error((e as Error).message); } };
 	const delCohort = async (year: number) => {
-		if (!confirm(`Delete all participants in the ${year} cohort?`)) return;
+		if (!(await ask(`Delete all participants in the ${year} cohort?`))) return;
 		try { await api('DELETE', `/api/admin/ecosystem-entities/${entityId}/cohorts/${year}`); toast.success(`${year} cohort cleared`); void refreshParts(); }
 		catch (e) { toast.error((e as Error).message); }
 	};

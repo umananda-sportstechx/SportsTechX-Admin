@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Trash2, Check, SkipForward, Rocket, Undo2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, StatCard, AsyncState, Tag, Chip, Section } from '@/components/atoms';
 import { Funnel } from '@/components/charts';
@@ -34,6 +35,7 @@ const STATUSES = ['pending', 'completed', 'skipped'] as const;
 
 export default function InvestorReviewPage() {
 	const { mutate } = useSWRConfig();
+	const ask = useConfirm();
 	const [status, setStatus] = useState<string>('pending');
 	const [assigned, setAssigned] = useState<string>('');
 	const [search, setSearch] = useState('');
@@ -83,7 +85,7 @@ export default function InvestorReviewPage() {
 	);
 	const bulkComplete = () => act(() => api('PATCH', '/api/admin/investor-review/bulk-status', { ids: [...selected], status: 'completed' }), 'Marked completed');
 	const bulkSkip = () => act(() => api('PATCH', '/api/admin/investor-review/bulk-status', { ids: [...selected], status: 'skipped' }), 'Marked skipped');
-	const bulkDelete = () => { if (confirm(`Delete ${selected.size} candidate(s)? This cannot be undone.`)) void act(() => api('DELETE', '/api/admin/investor-review/bulk', { ids: [...selected] }), 'Deleted'); };
+	const bulkDelete = async () => { if (await ask(`Delete ${selected.size} candidate(s)? This cannot be undone.`)) void act(() => api('DELETE', '/api/admin/investor-review/bulk', { ids: [...selected] }), 'Deleted'); };
 	const selectAllMatching = async () => {
 		const p = new URLSearchParams();
 		if (status) p.set('status', status);
@@ -94,7 +96,7 @@ export default function InvestorReviewPage() {
 		try { const r = await api<{ ids: string[] }>('GET', `/api/admin/investor-review/ids?${p.toString()}`); setSelected(new Set(r.ids)); }
 		catch (e) { toast.error((e as Error).message); }
 	};
-	const remove = (id: string) => { if (confirm('Delete this candidate?')) void act(() => api('DELETE', `/api/admin/investor-review/${id}`), 'Deleted'); };
+	const remove = (id: string) => { void (async () => { if (await ask('Delete this candidate?')) void act(() => api('DELETE', `/api/admin/investor-review/${id}`), 'Deleted'); })(); };
 	const unskip = (id: string) => act(() => api('PATCH', `/api/admin/investor-review/${id}`, { status: 'pending', skip_reason: '' }), 'Moved back to pending');
 
 	return (

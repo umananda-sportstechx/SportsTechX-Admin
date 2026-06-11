@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Trash2, Save, Link2, X, Search } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Tag, Loading } from '@/components/atoms';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
@@ -48,6 +49,7 @@ async function searchEntity(type: EntityType, q: string): Promise<Array<{ key: s
 
 export default function FeaturedListsPage() {
 	const { mutate } = useSWRConfig();
+	const ask = useConfirm();
 	const [creating, setCreating] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -55,7 +57,7 @@ export default function FeaturedListsPage() {
 	const refresh = () => mutate((key) => Array.isArray(key) && typeof key[0] === 'string' && key[0].startsWith('/api/admin/featured-lists'));
 
 	const remove = async (id: string, name: string) => {
-		if (!confirm(`Delete "${name}"?`)) return;
+		if (!(await ask(`Delete "${name}"?`))) return;
 		try { await api('DELETE', `/api/admin/featured-lists/${id}`); toast.success('Deleted'); refresh(); }
 		catch (e) { toast.error((e as Error).message); }
 	};

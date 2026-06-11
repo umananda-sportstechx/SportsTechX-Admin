@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Save } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState } from '@/components/atoms';
 
@@ -37,13 +38,14 @@ interface PlansResponse { data: Plan[] }
 
 export default function PlansEditorialPage() {
 	const { mutate } = useSWRConfig();
+	const ask = useConfirm();
 	const { data, error, isLoading } = useSWR<PlansResponse>(['/api/admin/subscription-plans']);
 	const [editing, setEditing] = useState<Plan | null>(null);
 	const [creating, setCreating] = useState(false);
 
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/admin/subscription-plans');
 	const archive = async (p: Plan) => {
-		if (!confirm(`Archive "${p.name}"? It stays for existing subscribers but can't be newly subscribed to (Stripe price + product archived).`)) return;
+		if (!(await ask(`Archive "${p.name}"? It stays for existing subscribers but can't be newly subscribed to (Stripe price + product archived).`))) return;
 		try { await api('DELETE', `/api/admin/subscription-plans/${p.id}`); toast.success('Plan archived'); void refresh(); }
 		catch (e) { toast.error((e as Error).message); }
 	};

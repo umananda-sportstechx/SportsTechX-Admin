@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, Section, Pager } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
@@ -42,6 +43,7 @@ const BUSINESS_MODELS = ['b2b', 'b2c', 'b2b2c', 'd2c', 'b2g', 'other'] as const;
 
 export default function CompaniesAdminPage() {
 	const { mutate } = useSWRConfig();
+	const ask = useConfirm();
 	const [search, setSearch] = useState('');
 	const [status, setStatus] = useState('');
 	const [sector, setSector] = useState('');
@@ -66,7 +68,7 @@ export default function CompaniesAdminPage() {
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/companies');
 
 	const remove = async (id: string, name: string) => {
-		if (!confirm(`Delete ${name}?`)) return;
+		if (!(await ask(`Delete ${name}?`))) return;
 		setRemovePending(true);
 		try {
 			await api('DELETE', `/api/admin/companies/${id}`);
@@ -238,6 +240,7 @@ export function CompanyModal({ id, onClose, onSaved, seed }: { id: string | null
 // ── Funding tab: a company's deals, managed inline via the shared DealModal ──
 function CompanyFundingTab({ companyId }: { companyId: string }) {
 	const { mutate } = useSWRConfig();
+	const ask = useConfirm();
 	const { data, isLoading, error } = useSWR<{ data: Array<{ id: string; round_type_name?: string | null; announced_year?: number | null; amount_usd?: string | null; status?: string | null }> }>(
 		['/api/deals', { company_id: companyId, limit: 100, sort: '-announced_date' }], { dedupingInterval: 15_000 },
 	);
@@ -245,7 +248,7 @@ function CompanyFundingTab({ companyId }: { companyId: string }) {
 	const refresh = () => mutate((k) => Array.isArray(k) && k[0] === '/api/deals');
 	const rows = data?.data ?? [];
 	const remove = async (dealId: string) => {
-		if (!confirm('Delete this funding round?')) return;
+		if (!(await ask('Delete this funding round?'))) return;
 		try { await api('DELETE', `/api/admin/deals/${dealId}`); toast.success('Deleted'); refresh(); }
 		catch (e) { toast.error((e as Error).message); }
 	};
@@ -282,6 +285,7 @@ function CompanyFundingTab({ companyId }: { companyId: string }) {
 // ── M&A tab: acquisitions where this company is acquiree or acquirer ──
 function CompanyMaTab({ companyId }: { companyId: string }) {
 	const { mutate } = useSWRConfig();
+	const ask = useConfirm();
 	type Row = { id: string; acquiree_name?: string | null; acquirer_name?: string | null; acquiree_company_id?: string | null; acquisition_year?: number | null; acquisition_type?: string | null };
 	const asTarget = useSWR<{ data: Row[] }>(['/api/acquisitions', { acquiree_company_id: companyId, limit: 50 }], { dedupingInterval: 15_000 });
 	const asBuyer = useSWR<{ data: Row[] }>(['/api/acquisitions', { acquirer_company_id: companyId, limit: 50 }], { dedupingInterval: 15_000 });
@@ -290,7 +294,7 @@ function CompanyMaTab({ companyId }: { companyId: string }) {
 	const seen = new Set<string>();
 	const rows = [...(asTarget.data?.data ?? []), ...(asBuyer.data?.data ?? [])].filter((r) => (seen.has(r.id) ? false : seen.add(r.id)));
 	const remove = async (acqId: string) => {
-		if (!confirm('Delete this acquisition?')) return;
+		if (!(await ask('Delete this acquisition?'))) return;
 		try { await api('DELETE', `/api/admin/acquisitions/${acqId}`); toast.success('Deleted'); refresh(); }
 		catch (e) { toast.error((e as Error).message); }
 	};

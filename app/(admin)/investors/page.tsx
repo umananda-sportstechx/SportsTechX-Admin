@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, Section, Pager } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
@@ -38,6 +39,7 @@ const STATUSES = ['active', 'inactive', 'paused'] as const;
 
 export default function InvestorsAdminPage() {
 	const { mutate } = useSWRConfig();
+	const ask = useConfirm();
 	const [search, setSearch] = useState('');
 	const [category, setCategory] = useState('');
 	const [status, setStatus] = useState('');
@@ -60,7 +62,7 @@ export default function InvestorsAdminPage() {
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/investors');
 
 	const remove = async (id: string) => {
-		if (!confirm('Delete this investor? This cannot be undone.')) return;
+		if (!(await ask('Delete this investor? This cannot be undone.'))) return;
 		try {
 			await api('DELETE', `/api/admin/investors/${id}`);
 			toast.success('Deleted');

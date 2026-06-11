@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Check, X, Trash2, Upload, Rocket } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, StatCard, Section, Tag } from '@/components/atoms';
 import { Funnel } from '@/components/charts';
@@ -41,6 +42,7 @@ const fmtTime = (s: number) => { const h = Math.floor(s / 3600), m = Math.floor(
 
 export default function StartupsPipelinePage() {
 	const { mutate } = useSWRConfig();
+	const ask = useConfirm();
 	const [status, setStatus] = useState<Status | ''>('new');
 	const [assigned, setAssigned] = useState('');
 	const [search, setSearch] = useState('');
@@ -76,7 +78,7 @@ export default function StartupsPipelinePage() {
 		catch (e) { toast.error((e as Error).message); }
 	};
 	const update = (id: string, next: Status) => act(() => api('PATCH', `/api/admin/startups-pipeline/${id}`, { status: next }), 'Updated');
-	const remove = (id: string, name: string) => { if (confirm(`Delete ${name} from the pipeline?`)) void act(() => api('DELETE', `/api/admin/startups-pipeline/${id}`), 'Deleted'); };
+	const remove = (id: string, name: string) => { void (async () => { if (await ask(`Delete ${name} from the pipeline?`)) void act(() => api('DELETE', `/api/admin/startups-pipeline/${id}`), 'Deleted'); })(); };
 	const selectAllMatching = async () => {
 		const p = new URLSearchParams();
 		if (status) p.set('status', status);
@@ -94,7 +96,7 @@ export default function StartupsPipelinePage() {
 		roundRobin ? 'Distributed round-robin' : 'Assigned',
 	);
 	const bulkStatus = (s: Status) => act(() => api('PATCH', '/api/admin/startups-pipeline/bulk-status', { ids: [...selected], status: s }), 'Updated');
-	const bulkDelete = () => { if (confirm(`Delete ${selected.size} entr(ies)?`)) void act(() => api('DELETE', '/api/admin/startups-pipeline/bulk', { ids: [...selected] }), 'Deleted'); };
+	const bulkDelete = () => { void (async () => { if (await ask(`Delete ${selected.size} entr(ies)?`)) void act(() => api('DELETE', '/api/admin/startups-pipeline/bulk', { ids: [...selected] }), 'Deleted'); })(); };
 
 	return (
 		<div>

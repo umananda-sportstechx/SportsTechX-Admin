@@ -6,6 +6,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Trash2, FileText, Eye, EyeOff, Pencil } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading } from '@/components/atoms';
 import { YearSelect } from '@/components/year-select';
@@ -31,6 +32,7 @@ const emptyDraft = {
 
 export default function ReportsAdminPage() {
 	const { mutate } = useSWRConfig();
+	const ask = useConfirm();
 	const [draft, setDraft] = useState({ ...emptyDraft });
 	const [createPending, setCreatePending] = useState(false);
 	const [removePending, setRemovePending] = useState(false);
@@ -183,7 +185,7 @@ export default function ReportsAdminPage() {
 									>
 										{r.is_published === false ? <><Eye size={12} /> Publish</> : <><EyeOff size={12} /> Unpublish</>}
 									</button>
-									<button className="btn ghost" disabled={removePending} onClick={() => { if (confirm(`Delete ${r.title}?`)) void remove(r.id); }}>
+									<button className="btn ghost" disabled={removePending} onClick={async () => { if (await ask(`Delete ${r.title}?`)) void remove(r.id); }}>
 										<Trash2 size={12} />
 									</button>
 								</td>

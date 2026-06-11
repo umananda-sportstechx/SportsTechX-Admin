@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Trash2, X, Save, Pencil, ArrowUp, ArrowDown } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState } from '@/components/atoms';
 
@@ -23,6 +24,7 @@ interface ReportsResponse { data: Report[] }
 
 export default function PollsAdminPage() {
 	const { mutate } = useSWRConfig();
+	const ask = useConfirm();
 	const [reportFilter, setReportFilter] = useState<string>('');
 	const [creating, setCreating] = useState(false);
 
@@ -48,7 +50,7 @@ export default function PollsAdminPage() {
 	};
 
 	const removePoll = async (id: string) => {
-		if (!confirm('Delete poll? Votes will be removed too.')) return;
+		if (!(await ask('Delete poll? Votes will be removed too.'))) return;
 		try { await api('DELETE', `/api/admin/polls/${id}`); toast.success('Deleted'); void refresh(); }
 		catch (e) { toast.error((e as Error).message); }
 	};

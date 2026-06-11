@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, Section, Pager } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
@@ -47,6 +48,7 @@ const fmtMoney = (n: number): string => n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` :
 
 export default function DealsAdminPage() {
 	const { mutate } = useSWRConfig();
+	const ask = useConfirm();
 	const [search, setSearch] = useState('');
 	const [status, setStatus] = useState('');
 	const [businessModel, setBusinessModel] = useState('');
@@ -70,7 +72,7 @@ export default function DealsAdminPage() {
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/deals');
 
 	const remove = async (id: string) => {
-		if (!confirm('Delete this deal?')) return;
+		if (!(await ask('Delete this deal?'))) return;
 		try {
 			await api('DELETE', `/api/admin/deals/${id}`);
 			toast.success('Deleted');

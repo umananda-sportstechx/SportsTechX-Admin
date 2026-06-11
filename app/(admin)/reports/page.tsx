@@ -11,6 +11,7 @@ import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading } from '@/components/atoms';
 import { YearSelect } from '@/components/year-select';
 import { ImageInput } from '@/components/image-input';
+import { FileInput } from '@/components/file-input';
 
 interface Report {
 	id: string;
@@ -121,9 +122,10 @@ export default function ReportsAdminPage() {
 						Feature on dashboard
 					</label>
 				</div>
-				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
-					<input className="search-input" placeholder="Drive link" value={draft.drive_link} onChange={(e) => setDraft({ ...draft, drive_link: e.target.value })} />
-					<input className="search-input" placeholder="PDF URL" value={draft.pdf_url} onChange={(e) => setDraft({ ...draft, pdf_url: e.target.value })} />
+				<input className="search-input" placeholder="Drive link" value={draft.drive_link} onChange={(e) => setDraft({ ...draft, drive_link: e.target.value })} style={{ marginTop: 8 }} />
+				<div style={{ marginTop: 8 }}>
+					<div className="co-stat-label" style={{ marginBottom: 4 }}>PDF</div>
+					<FileInput value={draft.pdf_url} onChange={(u) => setDraft({ ...draft, pdf_url: u })} pathPrefix="reports/pdfs" />
 				</div>
 				<textarea
 					className="search-input"
@@ -291,10 +293,8 @@ function EditReportForm({ id, initial, onClose, onSaved }: { id: string; initial
 						<input type="checkbox" checked={f.show_on_dashboard} onChange={(e) => set('show_on_dashboard', e.target.checked)} /> Featured
 					</label>
 				</div>
-				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-					<input className="search-input" placeholder="Drive link" value={f.drive_link} onChange={(e) => set('drive_link', e.target.value)} />
-					<input className="search-input" placeholder="PDF URL" value={f.pdf_url} onChange={(e) => set('pdf_url', e.target.value)} />
-				</div>
+				<input className="search-input" placeholder="Drive link" value={f.drive_link} onChange={(e) => set('drive_link', e.target.value)} />
+				<div><div className="co-stat-label" style={{ marginBottom: 4 }}>PDF</div><FileInput value={f.pdf_url} onChange={(u) => set('pdf_url', u)} pathPrefix="reports/pdfs" /></div>
 				<div><div className="co-stat-label" style={{ marginBottom: 4 }}>Cover image</div><ImageInput value={f.cover_url} onChange={(u) => set('cover_url', u)} pathPrefix="reports/covers" /></div>
 				<textarea className="search-input" placeholder="Description" value={f.description} onChange={(e) => set('description', e.target.value)} style={{ minHeight: 70, resize: 'vertical' }} />
 				<textarea className="search-input" placeholder="Summary points (one per line)" value={f.summary_points} onChange={(e) => set('summary_points', e.target.value)} style={{ minHeight: 60, resize: 'vertical' }} />

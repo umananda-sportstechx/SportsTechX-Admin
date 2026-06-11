@@ -231,10 +231,12 @@ function PromoteModal({ row, onClose, onDone }: { row: Entry; onClose: () => voi
 		try { await api('POST', `/api/admin/startups-pipeline/${row.id}/merge`, { company_id: companyId }); countWorkItem('startups_pipeline'); toast.success('Merged into existing company'); onDone(); }
 		catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
 	};
-	const onCreated = async (createdId?: string) => {
+	const onCreated = (createdId?: string) => {
+		// The company create links + marks the pipeline row in its own transaction
+		// (via promotePipelineId), so there's no separate mark-promoted call here.
 		if (!createdId) { setCreateOpen(false); return; }
-		try { await api('POST', `/api/admin/startups-pipeline/${row.id}/mark-promoted`, { company_id: createdId }); countWorkItem('startups_pipeline'); toast.success('Promoted to companies'); onDone(); }
-		catch (e) { toast.error((e as Error).message); }
+		countWorkItem('startups_pipeline');
+		onDone();
 	};
 
 	if (createOpen) {
@@ -243,8 +245,9 @@ function PromoteModal({ row, onClose, onDone }: { row: Entry; onClose: () => voi
 			<CompanyModal
 				id={null}
 				seed={p ? { name: p.name, website: p.website, description: p.description, hq: { ...EMPTY_LOCATION, country: p.hq_country, city: p.hq_city } } : undefined}
+				promotePipelineId={row.id}
 				onClose={() => setCreateOpen(false)}
-				onSaved={(id) => void onCreated(id)}
+				onSaved={(id) => onCreated(id)}
 			/>
 		);
 	}

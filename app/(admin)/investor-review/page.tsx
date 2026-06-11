@@ -316,10 +316,12 @@ function PromoteModal({ row, onClose, onDone }: { row: QueueRow; onClose: () => 
 		try { await api('POST', `/api/admin/investor-review/${row.id}/merge`, { investor_id: investorId }); countWorkItem('investor_review'); toast.success('Merged into existing investor'); onDone(); }
 		catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
 	};
-	const onCreated = async (createdId?: string) => {
+	const onCreated = (createdId?: string) => {
+		// The investor create links + marks the review row in its own transaction
+		// (via promoteReviewId), so there's no separate mark-promoted call here.
 		if (!createdId) { setCreateOpen(false); return; }
-		try { await api('POST', `/api/admin/investor-review/${row.id}/mark-promoted`, { investor_id: createdId }); countWorkItem('investor_review'); toast.success('Promoted to investors'); onDone(); }
-		catch (e) { toast.error((e as Error).message); }
+		countWorkItem('investor_review');
+		onDone();
 	};
 
 	if (createOpen) {
@@ -329,8 +331,9 @@ function PromoteModal({ row, onClose, onDone }: { row: QueueRow; onClose: () => 
 			<InvestorModal
 				id={null}
 				seed={p ? { name: p.name, website: p.website, category: cat, hq: { country: p.hq_country, city: '', continent: '', region: '', state: '' } } : undefined}
+				promoteReviewId={row.id}
 				onClose={() => setCreateOpen(false)}
-				onSaved={(id) => void onCreated(id)}
+				onSaved={(id) => onCreated(id)}
 			/>
 		);
 	}

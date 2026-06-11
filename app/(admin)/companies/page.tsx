@@ -232,11 +232,11 @@ function toCompanyForm(h: CompanyEdit): CompanyForm {
 // Outer modal fetches the edit payload (when editing) and only mounts the form
 // once data is ready, so the form can seed useState from props directly — no
 // setState-in-effect, no cascading renders.
-export function CompanyModal({ id, onClose, onSaved, seed }: { id: string | null; onClose: () => void; onSaved: (createdId?: string) => void; seed?: Partial<CompanyForm> }) {
+export function CompanyModal({ id, onClose, onSaved, seed, promotePipelineId }: { id: string | null; onClose: () => void; onSaved: (createdId?: string) => void; seed?: Partial<CompanyForm>; promotePipelineId?: string }) {
 	const isEdit = !!id;
 	const { data: hydrated } = useSWR<CompanyEdit>(isEdit ? [`/api/admin/companies/${id}/edit`] : null, { revalidateOnFocus: false });
 	if (isEdit && !hydrated) return <Modal title="Edit company" onClose={onClose}><Loading msg="Loading company…" /></Modal>;
-	return <CompanyForm id={id} initial={hydrated ? toCompanyForm(hydrated) : { ...EMPTY_COMPANY, ...seed }} onClose={onClose} onSaved={onSaved} />;
+	return <CompanyForm id={id} initial={hydrated ? toCompanyForm(hydrated) : { ...EMPTY_COMPANY, ...seed }} onClose={onClose} onSaved={onSaved} promotePipelineId={promotePipelineId} />;
 }
 
 // ── Funding tab: a company's deals, managed inline via the shared DealModal ──
@@ -395,7 +395,7 @@ function StagedMaTab({ drafts, onChange }: { drafts: StagedAcq[]; onChange: (a: 
 	);
 }
 
-function CompanyForm({ id, initial, onClose, onSaved }: { id: string | null; initial: CompanyForm; onClose: () => void; onSaved: (createdId?: string) => void }) {
+function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id: string | null; initial: CompanyForm; onClose: () => void; onSaved: (createdId?: string) => void; promotePipelineId?: string }) {
 	const isEdit = !!id;
 	const [tab, setTab] = useTabs('profile');
 	const [form, setForm] = useState<CompanyForm>(initial);
@@ -468,6 +468,8 @@ function CompanyForm({ id, initial, onClose, onSaved }: { id: string | null; ini
 				// so they're created in the same atomic request.
 				if (stagedDeals.length) body.deals = stagedDeals.map((d) => d.body);
 				if (stagedAcqs.length) body.acquisitions = stagedAcqs.map((a) => a.body);
+				// Promote-from-queue: link the pipeline row in the same create tx.
+				if (promotePipelineId) body.pipeline_id = promotePipelineId;
 				const created = await api<{ id: string }>('POST', '/api/admin/companies', body);
 				createdId = created?.id;
 			}

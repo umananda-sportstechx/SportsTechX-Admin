@@ -205,14 +205,14 @@ function toInvestorForm(h: InvestorEdit): InvestorForm {
 	};
 }
 
-export function InvestorModal({ id, onClose, onSaved, seed }: { id: string | null; onClose: () => void; onSaved: (createdId?: string) => void; seed?: Partial<InvestorForm> }) {
+export function InvestorModal({ id, onClose, onSaved, seed, promoteReviewId }: { id: string | null; onClose: () => void; onSaved: (createdId?: string) => void; seed?: Partial<InvestorForm>; promoteReviewId?: string }) {
 	const isEdit = !!id;
 	const { data: hydrated } = useSWR<InvestorEdit>(isEdit ? [`/api/admin/investors/${id}/edit`] : null, { revalidateOnFocus: false });
 	if (isEdit && !hydrated) return <Modal title="Edit investor" onClose={onClose}><Loading msg="Loading investor…" /></Modal>;
-	return <InvestorForm id={id} initial={hydrated ? toInvestorForm(hydrated) : { ...EMPTY_INVESTOR, ...seed }} onClose={onClose} onSaved={onSaved} />;
+	return <InvestorForm id={id} initial={hydrated ? toInvestorForm(hydrated) : { ...EMPTY_INVESTOR, ...seed }} onClose={onClose} onSaved={onSaved} promoteReviewId={promoteReviewId} />;
 }
 
-function InvestorForm({ id, initial, onClose, onSaved }: { id: string | null; initial: InvestorForm; onClose: () => void; onSaved: (createdId?: string) => void }) {
+function InvestorForm({ id, initial, onClose, onSaved, promoteReviewId }: { id: string | null; initial: InvestorForm; onClose: () => void; onSaved: (createdId?: string) => void; promoteReviewId?: string }) {
 	const isEdit = !!id;
 	const [tab, setTab] = useTabs('profile');
 	const [form, setForm] = useState<InvestorForm>(initial);
@@ -255,7 +255,11 @@ function InvestorForm({ id, initial, onClose, onSaved }: { id: string | null; in
 			};
 			let createdId: string | undefined;
 			if (isEdit) await api('PATCH', `/api/admin/investors/${id}`, body);
-			else { const created = await api<{ id: string }>('POST', '/api/admin/investors', body); createdId = created?.id; }
+			else {
+				// Promote-from-queue: link the review row in the same create tx.
+				if (promoteReviewId) body.review_id = promoteReviewId;
+				const created = await api<{ id: string }>('POST', '/api/admin/investors', body); createdId = created?.id;
+			}
 			toast.success(isEdit ? 'Saved' : 'Created');
 			onSaved(createdId);
 		} catch (e) {

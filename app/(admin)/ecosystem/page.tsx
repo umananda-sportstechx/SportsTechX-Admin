@@ -12,7 +12,7 @@ import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 import { CsvImportButton } from '@/components/csv-import';
 import { YearSelect } from '@/components/year-select';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
-import { SportsPicker, LocationFields, SocialLinks, EMPTY_SOCIAL, EMPTY_LOCATION, type SocialValue, type LocationValue } from '@/components/entity-pickers';
+import { SportsPicker, LocationFields, SocialLinks, CompanySelectOne, EMPTY_SOCIAL, EMPTY_LOCATION, type SocialValue, type LocationValue } from '@/components/entity-pickers';
 
 interface Entity {
 	id: string;
@@ -143,7 +143,7 @@ export default function EcosystemAdminPage() {
 interface ProgramDetails {
 	duration_label: string; interval_label: string; investment_label: string; equity_label: string;
 	stage_label: string; cohort_size: string; latest_cohort_year: string; cohort_history_label: string;
-	details: string; entries_open: boolean; is_virtual: boolean; has_office_space: boolean; is_profitable: boolean;
+	details: string; entries_open: boolean; entries_end_date: string; is_virtual: boolean; has_office_space: boolean; is_profitable: boolean;
 }
 interface EventDetails {
 	mode: string; start_date: string; end_date: string; is_featured: boolean;
@@ -151,25 +151,28 @@ interface EventDetails {
 }
 interface EntityForm {
 	name: string; slug: string; entity_type: string; description: string; website: string;
-	category: string; founded_year: string; status: string; hq: LocationValue;
+	category: string; founded_year: string; latest_activity_year: string; status: string; hq: LocationValue;
+	poc_name: string; poc_position: string; poc_email: string; poc_linkedin: string;
 	social: SocialValue; sport_ids: string[]; program: ProgramDetails; event: EventDetails;
 }
 
 const EMPTY_PROGRAM: ProgramDetails = {
 	duration_label: '', interval_label: '', investment_label: '', equity_label: '', stage_label: '',
 	cohort_size: '', latest_cohort_year: '', cohort_history_label: '', details: '',
-	entries_open: false, is_virtual: false, has_office_space: false, is_profitable: false,
+	entries_open: false, entries_end_date: '', is_virtual: false, has_office_space: false, is_profitable: false,
 };
 const EMPTY_EVENT: EventDetails = {
 	mode: '', start_date: '', end_date: '', is_featured: false, cover_url: '', discount_code: '', discount_description: '',
 };
 const emptyEntity = (type: string): EntityForm => ({
-	name: '', slug: '', entity_type: type, description: '', website: '', category: '', founded_year: '', status: 'active',
+	name: '', slug: '', entity_type: type, description: '', website: '', category: '', founded_year: '', latest_activity_year: '', status: 'active',
+	poc_name: '', poc_position: '', poc_email: '', poc_linkedin: '',
 	hq: { ...EMPTY_LOCATION }, social: { ...EMPTY_SOCIAL }, sport_ids: [], program: { ...EMPTY_PROGRAM }, event: { ...EMPTY_EVENT },
 });
 
 interface EntityEdit extends Entity {
-	description?: string | null; website?: string | null; founded_year?: number | null;
+	description?: string | null; website?: string | null; founded_year?: number | null; latest_activity_year?: number | null;
+	poc_name?: string | null; poc_position?: string | null; poc_email?: string | null; poc_linkedin?: string | null;
 	hq_city?: string | null; hq_continent?: string | null; hq_region?: string | null; hq_state?: string | null;
 	twitter_url?: string | null; instagram_url?: string | null; facebook_url?: string | null;
 	linkedin_url?: string | null; youtube_url?: string | null; email?: string | null;
@@ -186,7 +189,8 @@ function toEntityForm(h: EntityEdit, defaultType: string): EntityForm {
 	return {
 		name: h.name ?? '', slug: h.slug ?? '', entity_type: h.entity_type ?? defaultType,
 		description: h.description ?? '', website: h.website ?? '', category: h.category ?? '',
-		founded_year: h.founded_year ? String(h.founded_year) : '', status: h.status ?? 'active',
+		founded_year: h.founded_year ? String(h.founded_year) : '', latest_activity_year: h.latest_activity_year ? String(h.latest_activity_year) : '', status: h.status ?? 'active',
+		poc_name: h.poc_name ?? '', poc_position: h.poc_position ?? '', poc_email: h.poc_email ?? '', poc_linkedin: h.poc_linkedin ?? '',
 		hq: { country: h.hq_country ?? '', city: h.hq_city ?? '', continent: h.hq_continent ?? '', region: h.hq_region ?? '', state: h.hq_state ?? '' },
 		social: {
 			twitter_url: h.twitter_url ?? '', instagram_url: h.instagram_url ?? '', facebook_url: h.facebook_url ?? '',
@@ -197,7 +201,7 @@ function toEntityForm(h: EntityEdit, defaultType: string): EntityForm {
 			duration_label: str(p.duration_label), interval_label: str(p.interval_label), investment_label: str(p.investment_label),
 			equity_label: str(p.equity_label), stage_label: str(p.stage_label), cohort_size: str(p.cohort_size),
 			latest_cohort_year: str(p.latest_cohort_year), cohort_history_label: str(p.cohort_history_label), details: str(p.details),
-			entries_open: !!p.entries_open, is_virtual: !!p.is_virtual, has_office_space: !!p.has_office_space, is_profitable: !!p.is_profitable,
+			entries_open: !!p.entries_open, entries_end_date: date(p.entries_end_date), is_virtual: !!p.is_virtual, has_office_space: !!p.has_office_space, is_profitable: !!p.is_profitable,
 		},
 		event: {
 			mode: str(ev.mode), start_date: date(ev.start_date), end_date: date(ev.end_date),
@@ -233,6 +237,11 @@ function EntityForm({ id, initial, onClose, onSaved }: { id: string | null; init
 				website: form.website.trim() || undefined,
 				category: form.category.trim() || undefined,
 				founded_year: form.founded_year ? Number(form.founded_year) : undefined,
+				latest_activity_year: form.latest_activity_year ? Number(form.latest_activity_year) : undefined,
+				poc_name: form.poc_name.trim() || undefined,
+				poc_position: form.poc_position.trim() || undefined,
+				poc_email: form.poc_email.trim() || undefined,
+				poc_linkedin: form.poc_linkedin.trim() || undefined,
 				status: form.status,
 				hq_country: form.hq.country.trim() || undefined,
 				hq_city: form.hq.city.trim() || undefined,
@@ -254,6 +263,7 @@ function EntityForm({ id, initial, onClose, onSaved }: { id: string | null; init
 					cohort_history_label: form.program.cohort_history_label.trim() || null,
 					details: form.program.details.trim() || null,
 					entries_open: form.program.entries_open,
+					entries_end_date: form.program.entries_end_date || null,
 					is_virtual: form.program.is_virtual,
 					has_office_space: form.program.has_office_space,
 					is_profitable: form.program.is_profitable,
@@ -328,6 +338,19 @@ function EntityForm({ id, initial, onClose, onSaved }: { id: string | null; init
 								</Field>
 							</>
 						) },
+						{ key: 'contact', label: 'Contact', node: (
+							<>
+								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+									<Field label="POC name"><input className="search-input" value={form.poc_name} onChange={(e) => set('poc_name', e.target.value)} /></Field>
+									<Field label="POC position"><input className="search-input" value={form.poc_position} onChange={(e) => set('poc_position', e.target.value)} /></Field>
+								</div>
+								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+									<Field label="POC email"><input className="search-input" value={form.poc_email} onChange={(e) => set('poc_email', e.target.value)} placeholder="name@org.com" /></Field>
+									<Field label="POC LinkedIn"><input className="search-input" value={form.poc_linkedin} onChange={(e) => set('poc_linkedin', e.target.value)} placeholder="https://linkedin.com/in/…" /></Field>
+								</div>
+								<Field label="Latest activity year" hint="most recent year this entity was active"><YearSelect value={form.latest_activity_year} onChange={(v) => set('latest_activity_year', v)} /></Field>
+							</>
+						) },
 						{ key: 'location', label: 'Location', node: <Field label="Headquarters"><LocationFields value={form.hq} onChange={(v) => set('hq', v)} /></Field> },
 						{
 							key: 'details', label: isEvent ? 'Event details' : 'Program details', node: isEvent ? (
@@ -368,7 +391,10 @@ function EntityForm({ id, initial, onClose, onSaved }: { id: string | null; init
 										<Field label="Cohort size"><input className="search-input" type="number" value={form.program.cohort_size} onChange={(e) => setProgram('cohort_size', e.target.value)} /></Field>
 										<Field label="Latest cohort"><YearSelect value={form.program.latest_cohort_year} onChange={(v) => setProgram('latest_cohort_year', v)} /></Field>
 									</div>
-									<Field label="Cohort history"><input className="search-input" value={form.program.cohort_history_label} onChange={(e) => setProgram('cohort_history_label', e.target.value)} /></Field>
+									<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+										<Field label="Cohort history"><input className="search-input" value={form.program.cohort_history_label} onChange={(e) => setProgram('cohort_history_label', e.target.value)} /></Field>
+										<Field label="Applications close"><input className="search-input" type="date" value={form.program.entries_end_date} onChange={(e) => setProgram('entries_end_date', e.target.value)} /></Field>
+									</div>
 									<Field label="Details"><textarea className="search-input" style={{ minHeight: 60, resize: 'vertical' }} value={form.program.details} onChange={(e) => setProgram('details', e.target.value)} /></Field>
 									<div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
 										<label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}><input type="checkbox" checked={form.program.entries_open} onChange={(e) => setProgram('entries_open', e.target.checked)} /> Entries open</label>
@@ -418,19 +444,35 @@ function LinksCohortPanel({ entityId }: { entityId: string }) {
 	};
 	const delRel = async (relId: string) => { try { await api('DELETE', `/api/admin/ecosystem-entities/${entityId}/relationships/${relId}`); void refreshRels(); } catch (e) { toast.error((e as Error).message); } };
 
-	// participant add state
+	// participant add state — prefer linking a real company; fall back to a free-text name.
+	const [pCompanyId, setPCompanyId] = useState('');
 	const [pName, setPName] = useState('');
 	const [pCohort, setPCohort] = useState('');
 	const [pYear, setPYear] = useState('');
 	const [pStatus, setPStatus] = useState<string>('accepted');
 	const addPart = async () => {
-		if (!pName.trim()) { toast.error('Enter a company / startup name.'); return; }
+		if (!pCompanyId && !pName.trim()) { toast.error('Pick a company or enter a startup name.'); return; }
 		try {
-			await api('POST', `/api/admin/ecosystem-entities/${entityId}/participants`, { startup_name: pName.trim(), cohort_name: pCohort.trim() || undefined, cohort_year: pYear ? Number(pYear) : undefined, status: pStatus });
-			toast.success('Participant added'); setPName(''); setPCohort(''); setPYear(''); void refreshParts();
+			await api('POST', `/api/admin/ecosystem-entities/${entityId}/participants`, {
+				company_id: pCompanyId || undefined,
+				startup_name: !pCompanyId && pName.trim() ? pName.trim() : undefined,
+				cohort_name: pCohort.trim() || undefined, cohort_year: pYear ? Number(pYear) : undefined, status: pStatus,
+			});
+			toast.success('Participant added'); setPCompanyId(''); setPName(''); setPCohort(''); setPYear(''); void refreshParts();
 		} catch (e) { toast.error((e as Error).message); }
 	};
 	const delPart = async (ppId: string) => { try { await api('DELETE', `/api/admin/ecosystem-entities/${entityId}/participants/${ppId}`); void refreshParts(); } catch (e) { toast.error((e as Error).message); } };
+	const delCohort = async (year: number) => {
+		if (!confirm(`Delete all participants in the ${year} cohort?`)) return;
+		try { await api('DELETE', `/api/admin/ecosystem-entities/${entityId}/cohorts/${year}`); toast.success(`${year} cohort cleared`); void refreshParts(); }
+		catch (e) { toast.error((e as Error).message); }
+	};
+	// Group participants by cohort year (newest first; null years last).
+	const grouped = (() => {
+		const m = new Map<number | null, PartRow[]>();
+		for (const p of parts.data ?? []) { const y = p.cohort_year ?? null; if (!m.has(y)) m.set(y, []); m.get(y)!.push(p); }
+		return [...m.entries()].sort((a, b) => (b[0] ?? -1) - (a[0] ?? -1));
+	})();
 
 	return (
 		<div style={{ display: 'grid', gap: 18 }}>
@@ -464,19 +506,32 @@ function LinksCohortPanel({ entityId }: { entityId: string }) {
 
 			<div>
 				<div className="co-stat-label" style={{ marginBottom: 8 }}>Cohort participants</div>
-				<div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-					<input className="search-input" style={{ height: 32, flex: '1 1 160px' }} placeholder="Company / startup name" value={pName} onChange={(e) => setPName(e.target.value)} />
-					<input className="search-input" style={{ height: 32, flex: '0 0 120px' }} placeholder="Cohort" value={pCohort} onChange={(e) => setPCohort(e.target.value)} />
-					<div style={{ flex: '0 0 110px' }}><YearSelect value={pYear} onChange={setPYear} placeholder="Year" /></div>
+				<div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'flex-start', marginBottom: 4 }}>
+					<div style={{ flex: '1 1 200px' }}><CompanySelectOne value={pCompanyId} onChange={setPCompanyId} /></div>
+					<input className="search-input" style={{ height: 32, flex: '0 0 110px' }} placeholder="Cohort" value={pCohort} onChange={(e) => setPCohort(e.target.value)} />
+					<div style={{ flex: '0 0 100px' }}><YearSelect value={pYear} onChange={setPYear} placeholder="Year" /></div>
 					<select className="search-input" style={{ height: 32, flex: '0 0 auto' }} value={pStatus} onChange={(e) => setPStatus(e.target.value)}>{PART_STATUS.map((s) => <option key={s} value={s}>{s}</option>)}</select>
 					<button className="btn" style={{ height: 32 }} onClick={() => void addPart()}>Add</button>
 				</div>
+				{!pCompanyId && (
+					<input className="search-input" style={{ height: 30, marginBottom: 10, width: '100%' }} placeholder="…or a startup name not yet in the database" value={pName} onChange={(e) => setPName(e.target.value)} />
+				)}
 				<AsyncState loading={parts.isLoading} error={parts.error} empty={(parts.data?.length ?? 0) === 0} emptyMsg="No participants." onRetry={() => void refreshParts()}>
-					<table className="data-table"><thead><tr><th>Name</th><th>Cohort</th><th>Year</th><th>Status</th><th /></tr></thead><tbody>
-						{(parts.data ?? []).map((pp) => (
-							<tr key={pp.id}><td>{pp.name ?? '—'}</td><td>{pp.cohort_name ?? '—'}</td><td className="num">{pp.cohort_year ?? '—'}</td><td>{pp.participation_status}</td><td style={{ textAlign: 'right' }}><button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => void delPart(pp.id)}><Trash2 size={12} /></button></td></tr>
+					<div style={{ display: 'grid', gap: 12 }}>
+						{grouped.map(([year, rows]) => (
+							<div key={year ?? 'none'}>
+								<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+									<div style={{ fontSize: 12, fontWeight: 600 }}>{year ?? 'No year'} <span style={{ color: 'var(--fg-muted)', fontWeight: 400 }}>· {rows.length}</span></div>
+									{year != null && <button className="btn ghost" style={{ color: 'var(--accent)', fontSize: 11, padding: '2px 8px' }} onClick={() => void delCohort(year)}>Delete cohort</button>}
+								</div>
+								<table className="data-table"><tbody>
+									{rows.map((pp) => (
+										<tr key={pp.id}><td>{pp.name ?? '—'}{pp.company_id && <span className="tag pos" style={{ marginLeft: 6 }}>linked</span>}</td><td>{pp.cohort_name ?? '—'}</td><td>{pp.participation_status}</td><td style={{ textAlign: 'right' }}><button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => void delPart(pp.id)}><Trash2 size={12} /></button></td></tr>
+									))}
+								</tbody></table>
+							</div>
 						))}
-					</tbody></table>
+					</div>
 				</AsyncState>
 			</div>
 		</div>

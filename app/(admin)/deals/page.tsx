@@ -7,7 +7,7 @@ import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading, StatCard, Section, Pager } from '@/components/atoms';
+import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 import { CsvImportButton } from '@/components/csv-import';
@@ -55,13 +55,15 @@ export default function DealsAdminPage() {
 	const [sizeBucket, setSizeBucket] = useState('');
 	const [year, setYear] = useState('');
 	const [page, setPage] = useState(1);
+	const [sort, setSort] = useState('-announced_date');
+	const onSort = (s: string) => { setSort(s); setPage(1); };
 	const [creating, setCreating] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 
 	const { data, error, isLoading } = useSWR<DealsResponse>(
 		['/api/deals', {
 			q: search || undefined, status: status || undefined, business_model: businessModel || undefined,
-			deal_size_bucket: sizeBucket || undefined, year: year || undefined, page, limit: 30, sort: '-announced_date',
+			deal_size_bucket: sizeBucket || undefined, year: year || undefined, page, limit: 30, sort,
 		}],
 		{ dedupingInterval: 30_000 },
 	);
@@ -125,7 +127,7 @@ export default function DealsAdminPage() {
 			<div className="card">
 				<AsyncState loading={isLoading} error={error} empty={deals.length === 0} emptyMsg={search ? 'No deals match.' : 'No deals yet.'} onRetry={() => void refresh()}>
 					<table className="data-table">
-						<thead><tr><th>Company</th><th>Round</th><th>Year</th><th>Amount</th><th>Status</th><th style={{ textAlign: 'right' }} /></tr></thead>
+						<thead><tr><th>Company</th><th>Round</th><SortableTh label="Year" field="announced_date" sort={sort} onSort={onSort} /><SortableTh label="Amount" field="amount_usd" sort={sort} onSort={onSort} /><th>Status</th><th style={{ textAlign: 'right' }} /></tr></thead>
 						<tbody>
 							{deals.map((d) => (
 								<tr key={d.id}>

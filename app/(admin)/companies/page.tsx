@@ -7,7 +7,7 @@ import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading, StatCard, Section, Pager } from '@/components/atoms';
+import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 import { CsvImportButton } from '@/components/csv-import';
@@ -49,6 +49,8 @@ export default function CompaniesAdminPage() {
 	const [sector, setSector] = useState('');
 	const [verified, setVerified] = useState('');
 	const [page, setPage] = useState(1);
+	const [sort, setSort] = useState('-created_at');
+	const onSort = (s: string) => { setSort(s); setPage(1); };
 	const [creating, setCreating] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [removePending, setRemovePending] = useState(false);
@@ -56,7 +58,7 @@ export default function CompaniesAdminPage() {
 	const { data, error, isLoading } = useSWR<CompaniesResponse>(
 		['/api/companies', {
 			search: search || undefined, status: status || undefined, sector: sector || undefined,
-			is_verified: verified || undefined, page, limit: 30,
+			is_verified: verified || undefined, page, limit: 30, sort,
 		}],
 		{ dedupingInterval: 30_000 },
 	);
@@ -137,7 +139,7 @@ export default function CompaniesAdminPage() {
 			<div className="card">
 				<AsyncState loading={isLoading} error={error} empty={companies.length === 0} emptyMsg={search ? 'No companies match.' : 'No companies yet.'} onRetry={() => void refresh()}>
 					<table className="data-table">
-						<thead><tr><th>Name</th><th>Slug</th><th>Sector</th><th>HQ</th><th>Status</th><th style={{ textAlign: 'right' }} /></tr></thead>
+						<thead><tr><SortableTh label="Name" field="name" sort={sort} onSort={onSort} /><th>Slug</th><th>Sector</th><th>HQ</th><th>Status</th><th style={{ textAlign: 'right' }} /></tr></thead>
 						<tbody>
 							{companies.map((c) => (
 								<tr key={c.id}>

@@ -218,6 +218,22 @@ export function Chip({ active, count, onClick, children }: ChipProps) {
 	);
 }
 
+/**
+ * Clickable sortable table header. `field` is the backend sort key; the active
+ * sort toggles `field` ⇄ `-field` (descending first). Pass the page's current
+ * `sort` + setter; the parent should reset to page 1 on change.
+ */
+export function SortableTh({ label, field, sort, onSort, align }: { label: string; field: string; sort: string; onSort: (s: string) => void; align?: 'left' | 'right' }) {
+	const desc = sort === `-${field}`;
+	const asc = sort === field;
+	const next = desc ? field : `-${field}`;
+	return (
+		<th style={{ cursor: 'pointer', userSelect: 'none', textAlign: align }} onClick={() => onSort(next)}>
+			{label} <span style={{ fontSize: 10, color: asc || desc ? 'var(--fg)' : 'var(--fg-muted)' }}>{asc ? '▲' : desc ? '▼' : '↕'}</span>
+		</th>
+	);
+}
+
 /** Prev/Next pager for paginated catalog tables. Renders nothing for a single page. */
 export function Pager({ page, totalPages, onPage }: { page: number; totalPages?: number; onPage: (p: number) => void }) {
 	if (!totalPages || totalPages <= 1) return null;

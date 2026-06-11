@@ -7,7 +7,7 @@ import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading, StatCard, Section, Pager } from '@/components/atoms';
+import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 import { CsvImportButton } from '@/components/csv-import';
@@ -46,13 +46,15 @@ export default function AcquisitionsAdminPage() {
 	const [type, setType] = useState('');
 	const [year, setYear] = useState('');
 	const [page, setPage] = useState(1);
+	const [sort, setSort] = useState('-acquisition_date');
+	const onSort = (s: string) => { setSort(s); setPage(1); };
 	const [creating, setCreating] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 
 	const { data, error, isLoading } = useSWR<AcqResponse>(
 		['/api/acquisitions', {
 			q: search || undefined, acquisition_type: type || undefined, year: year || undefined,
-			page, limit: 30, sort: '-acquisition_date',
+			page, limit: 30, sort,
 		}],
 		{ dedupingInterval: 30_000 },
 	);
@@ -114,7 +116,7 @@ export default function AcquisitionsAdminPage() {
 			<div className="card">
 				<AsyncState loading={isLoading} error={error} empty={rows.length === 0} emptyMsg={search ? 'No acquisitions match.' : 'No acquisitions yet.'} onRetry={() => void refresh()}>
 					<table className="data-table">
-						<thead><tr><th>Acquiree</th><th>Acquirer</th><th>Year</th><th>Amount</th><th>Type</th><th style={{ textAlign: 'right' }} /></tr></thead>
+						<thead><tr><th>Acquiree</th><th>Acquirer</th><SortableTh label="Year" field="acquisition_date" sort={sort} onSort={onSort} /><SortableTh label="Amount" field="amount_usd" sort={sort} onSort={onSort} /><th>Type</th><th style={{ textAlign: 'right' }} /></tr></thead>
 						<tbody>
 							{rows.map((a) => (
 								<tr key={a.id}>

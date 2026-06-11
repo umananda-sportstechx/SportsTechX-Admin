@@ -7,7 +7,7 @@ import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading, StatCard, Section, Pager } from '@/components/atoms';
+import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
@@ -45,13 +45,15 @@ export default function InvestorsAdminPage() {
 	const [status, setStatus] = useState('');
 	const [verified, setVerified] = useState('');
 	const [page, setPage] = useState(1);
+	const [sort, setSort] = useState('-created_at');
+	const onSort = (s: string) => { setSort(s); setPage(1); };
 	const [creating, setCreating] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 
 	const { data, error, isLoading } = useSWR<InvestorsResponse>(
 		['/api/investors', {
 			search: search || undefined, category: category || undefined, status: status || undefined,
-			is_verified: verified || undefined, page, limit: 30,
+			is_verified: verified || undefined, page, limit: 30, sort,
 		}],
 		{ dedupingInterval: 30_000 },
 	);
@@ -127,7 +129,7 @@ export default function InvestorsAdminPage() {
 				<AsyncState loading={isLoading} error={error} empty={rows.length === 0} emptyMsg={search ? 'No investors match.' : 'No investors yet.'} onRetry={() => void refresh()}>
 					<table className="data-table" style={{ width: '100%' }}>
 						<thead>
-							<tr><th>Name</th><th>Category</th><th>Launched</th><th>Status</th><th>Verified</th><th /></tr>
+							<tr><SortableTh label="Name" field="name" sort={sort} onSort={onSort} /><SortableTh label="Category" field="category" sort={sort} onSort={onSort} /><SortableTh label="Launched" field="year_launched" sort={sort} onSort={onSort} /><th>Status</th><th>Verified</th><th /></tr>
 						</thead>
 						<tbody>
 							{rows.map((r) => (

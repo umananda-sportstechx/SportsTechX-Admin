@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { Trash2, FileText, Eye, EyeOff } from 'lucide-react';
+import { Trash2, FileText, Eye, EyeOff, Pencil } from 'lucide-react';
 import { api } from '@/lib/api';
-import { PageHeader, AsyncState } from '@/components/atoms';
+import { Modal } from '@/components/modal';
+import { PageHeader, AsyncState, Loading } from '@/components/atoms';
 import { YearSelect } from '@/components/year-select';
 
 interface Report {
@@ -32,6 +33,8 @@ export default function ReportsAdminPage() {
 	const [draft, setDraft] = useState({ ...emptyDraft });
 	const [createPending, setCreatePending] = useState(false);
 	const [removePending, setRemovePending] = useState(false);
+	const [editingId, setEditingId] = useState<string | null>(null);
+	const [search, setSearch] = useState('');
 	const { data, error, isLoading } = useSWR<Response>(['/api/reports'], { dedupingInterval: 30_000 });
 
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/reports');
@@ -87,10 +90,15 @@ export default function ReportsAdminPage() {
 		}
 	};
 
-	const reports = data?.data ?? [];
+	const allReports = data?.data ?? [];
+	const reports = search.trim()
+		? allReports.filter((r) => r.title.toLowerCase().includes(search.trim().toLowerCase()))
+		: allReports;
 	return (
 		<div>
 			<PageHeader kicker={`Library · ${(data?.total ?? 0).toLocaleString()} reports`} title="Reports" />
+
+			{editingId && <EditReportModal id={editingId} onClose={() => setEditingId(null)} onSaved={() => { setEditingId(null); void refresh(); }} />}
 
 			<div className="card" style={{ padding: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
 				<div style={{ fontWeight: 700, marginBottom: 12 }}>Publish a new report</div>
@@ -139,7 +147,10 @@ export default function ReportsAdminPage() {
 			</div>
 
 			<div className="card">
-				<AsyncState loading={isLoading} error={error} empty={reports.length === 0} emptyMsg="No reports yet." onRetry={() => void refresh()}>
+				<div style={{ padding: '12px var(--space-4)', borderBottom: '1px solid var(--border)' }}>
+					<input className="search-input" style={{ width: 320, height: 30 }} placeholder="Search reports by title…" value={search} onChange={(e) => setSearch(e.target.value)} />
+				</div>
+				<AsyncState loading={isLoading} error={error} empty={reports.length === 0} emptyMsg={search ? 'No reports match.' : 'No reports yet.'} onRetry={() => void refresh()}>
 				<table className="data-table">
 					<thead><tr><th>Title</th><th>Model</th><th>Period</th><th>Status</th><th style={{ textAlign: 'right' }}></th></tr></thead>
 					<tbody>
@@ -155,6 +166,7 @@ export default function ReportsAdminPage() {
 											<FileText size={12} /> Sections
 										</Link>
 									)}
+									<button className="btn ghost" onClick={() => setEditingId(r.id)} title="Edit metadata"><Pencil size={12} /> Edit</button>
 									<button
 										className="btn ghost"
 										onClick={() => void togglePublished(r.id, r.is_published === false)}
@@ -173,5 +185,78 @@ export default function ReportsAdminPage() {
 				</AsyncState>
 			</div>
 		</div>
+	);
+}
+
+interface ReportEdit {
+	id: string; title: string; short_title?: string | null; report_month?: number | null; report_year?: number | null;
+	show_on_dashboard?: boolean; description?: string | null; summary_points?: string | null; drive_link?: string | null; pdf_url?: string | null;
+}
+
+function EditReportModal({ id, onClose, onSaved }: { id: string; onClose: () => void; onSaved: () => void }) {
+	const { data } = useSWR<ReportEdit>([`/api/admin/reports/${id}/edit`], { revalidateOnFocus: false });
+	if (!data) return <Modal title="Edit report" onClose={onClose}><Loading msg="Loading report…" /></Modal>;
+	return <EditReportForm initial={data} id={id} onClose={onClose} onSaved={onSaved} />;
+}
+
+function EditReportForm({ id, initial, onClose, onSaved }: { id: string; initial: ReportEdit; onClose: () => void; onSaved: () => void }) {
+	const [f, setF] = useState({
+		title: initial.title ?? '', short_title: initial.short_title ?? '',
+		report_month: initial.report_month ? String(initial.report_month) : '',
+		report_year: initial.report_year ? String(initial.report_year) : '',
+		show_on_dashboard: !!initial.show_on_dashboard,
+		drive_link: initial.drive_link ?? '', pdf_url: initial.pdf_url ?? '',
+		description: initial.description ?? '', summary_points: initial.summary_points ?? '',
+	});
+	const [pending, setPending] = useState(false);
+	const set = (k: keyof typeof f, v: string | boolean) => setF((p) => ({ ...p, [k]: v }));
+	const submit = async () => {
+		setPending(true);
+		try {
+			await api('PATCH', `/api/admin/reports/${id}`, {
+				title: f.title.trim(),
+				short_title: f.short_title.trim() || undefined,
+				report_month: f.report_month ? Number(f.report_month) : null,
+				report_year: f.report_year ? Number(f.report_year) : null,
+				show_on_dashboard: f.show_on_dashboard,
+				drive_link: f.drive_link.trim() || undefined,
+				pdf_url: f.pdf_url.trim() || undefined,
+				description: f.description.trim() || undefined,
+				summary_points: f.summary_points.trim() || undefined,
+			});
+			toast.success('Report updated');
+			onSaved();
+		} catch (e) { toast.error((e as Error).message); } finally { setPending(false); }
+	};
+	return (
+		<Modal title="Edit report" onClose={onClose} width={620} footer={
+			<>
+				<button className="btn ghost" onClick={onClose}>Cancel</button>
+				<button className="btn" disabled={!f.title.trim() || pending} onClick={() => void submit()}>{pending ? 'Saving…' : 'Save'}</button>
+			</>
+		}>
+			<div style={{ display: 'grid', gap: 8 }}>
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+					<input className="search-input" placeholder="Title" value={f.title} onChange={(e) => set('title', e.target.value)} />
+					<input className="search-input" placeholder="Short title" value={f.short_title} onChange={(e) => set('short_title', e.target.value)} />
+				</div>
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+					<select className="search-input" value={f.report_month} onChange={(e) => set('report_month', e.target.value)}>
+						<option value="">Month —</option>
+						{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+					</select>
+					<YearSelect value={f.report_year} onChange={(v) => set('report_year', v)} placeholder="Year —" />
+					<label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+						<input type="checkbox" checked={f.show_on_dashboard} onChange={(e) => set('show_on_dashboard', e.target.checked)} /> Featured
+					</label>
+				</div>
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+					<input className="search-input" placeholder="Drive link" value={f.drive_link} onChange={(e) => set('drive_link', e.target.value)} />
+					<input className="search-input" placeholder="PDF URL" value={f.pdf_url} onChange={(e) => set('pdf_url', e.target.value)} />
+				</div>
+				<textarea className="search-input" placeholder="Description" value={f.description} onChange={(e) => set('description', e.target.value)} style={{ minHeight: 70, resize: 'vertical' }} />
+				<textarea className="search-input" placeholder="Summary points (one per line)" value={f.summary_points} onChange={(e) => set('summary_points', e.target.value)} style={{ minHeight: 60, resize: 'vertical' }} />
+			</div>
+		</Modal>
 	);
 }

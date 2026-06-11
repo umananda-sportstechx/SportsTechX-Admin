@@ -10,7 +10,7 @@ import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, StatCard, Section, Tag } from '@/components/atoms';
 import { Funnel } from '@/components/charts';
 import { StatStrip } from '@/components/filters';
-import { WorkSessionTimer } from '@/components/work-session-timer';
+import { WorkSessionTimer, countWorkItem } from '@/components/work-session-timer';
 import { EMPTY_LOCATION } from '@/components/entity-pickers';
 import { CompanyModal } from '../companies/page';
 
@@ -228,12 +228,12 @@ function PromoteModal({ row, onClose, onDone }: { row: Entry; onClose: () => voi
 
 	const merge = async (companyId: string) => {
 		setBusy(true);
-		try { await api('POST', `/api/admin/startups-pipeline/${row.id}/merge`, { company_id: companyId }); toast.success('Merged into existing company'); onDone(); }
+		try { await api('POST', `/api/admin/startups-pipeline/${row.id}/merge`, { company_id: companyId }); countWorkItem('startups_pipeline'); toast.success('Merged into existing company'); onDone(); }
 		catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
 	};
 	const onCreated = async (createdId?: string) => {
 		if (!createdId) { setCreateOpen(false); return; }
-		try { await api('POST', `/api/admin/startups-pipeline/${row.id}/mark-promoted`, { company_id: createdId }); toast.success('Promoted to companies'); onDone(); }
+		try { await api('POST', `/api/admin/startups-pipeline/${row.id}/mark-promoted`, { company_id: createdId }); countWorkItem('startups_pipeline'); toast.success('Promoted to companies'); onDone(); }
 		catch (e) { toast.error((e as Error).message); }
 	};
 

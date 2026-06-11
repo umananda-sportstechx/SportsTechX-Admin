@@ -9,7 +9,7 @@ import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, StatCard, AsyncState, Tag, Chip, Section } from '@/components/atoms';
 import { Funnel } from '@/components/charts';
-import { WorkSessionTimer } from '@/components/work-session-timer';
+import { WorkSessionTimer, countWorkItem } from '@/components/work-session-timer';
 import { InvestorModal } from '../investors/page';
 
 interface QueueRow {
@@ -313,12 +313,12 @@ function PromoteModal({ row, onClose, onDone }: { row: QueueRow; onClose: () => 
 
 	const merge = async (investorId: string) => {
 		setBusy(true);
-		try { await api('POST', `/api/admin/investor-review/${row.id}/merge`, { investor_id: investorId }); toast.success('Merged into existing investor'); onDone(); }
+		try { await api('POST', `/api/admin/investor-review/${row.id}/merge`, { investor_id: investorId }); countWorkItem('investor_review'); toast.success('Merged into existing investor'); onDone(); }
 		catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
 	};
 	const onCreated = async (createdId?: string) => {
 		if (!createdId) { setCreateOpen(false); return; }
-		try { await api('POST', `/api/admin/investor-review/${row.id}/mark-promoted`, { investor_id: createdId }); toast.success('Promoted to investors'); onDone(); }
+		try { await api('POST', `/api/admin/investor-review/${row.id}/mark-promoted`, { investor_id: createdId }); countWorkItem('investor_review'); toast.success('Promoted to investors'); onDone(); }
 		catch (e) { toast.error((e as Error).message); }
 	};
 

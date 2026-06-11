@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading, StatCard, Section } from '@/components/atoms';
+import { PageHeader, AsyncState, Loading, StatCard, Section, Pager } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 import { CsvImportButton } from '@/components/csv-import';
@@ -135,6 +135,7 @@ export default function EcosystemAdminPage() {
 					</table>
 				</AsyncState>
 			</div>
+			<Pager page={page} totalPages={data?.totalPages} onPage={setPage} />
 		</div>
 	);
 }

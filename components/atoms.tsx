@@ -148,12 +148,15 @@ export function StatCard({
 	href,
 	loading,
 	urgent,
+	delta,
 }: {
 	label: string;
 	value: React.ReactNode;
 	href?: string;
 	loading?: boolean;
 	urgent?: boolean;
+	/** Optional period-over-period change (%). Renders a colored ▲/▼ sub-line. */
+	delta?: number | null;
 }) {
 	const inner = (
 		<>
@@ -172,6 +175,11 @@ export function StatCard({
 					}}
 				>
 					{value}
+				</div>
+			)}
+			{!loading && delta != null && Number.isFinite(delta) && (
+				<div style={{ fontSize: 11, marginTop: 4, color: delta >= 0 ? 'var(--pos)' : 'var(--neg)' }}>
+					{delta >= 0 ? '▲' : '▼'} {Math.abs(delta).toFixed(1)}% vs prev
 				</div>
 			)}
 		</>
@@ -207,6 +215,18 @@ export function Chip({ active, count, onClick, children }: ChipProps) {
 			{children}
 			{count != null && <span className="ct">{count}</span>}
 		</button>
+	);
+}
+
+/** Prev/Next pager for paginated catalog tables. Renders nothing for a single page. */
+export function Pager({ page, totalPages, onPage }: { page: number; totalPages?: number; onPage: (p: number) => void }) {
+	if (!totalPages || totalPages <= 1) return null;
+	return (
+		<div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16, alignItems: 'center' }}>
+			<span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)', marginRight: 8 }}>Page {page} of {totalPages}</span>
+			<button className="btn ghost" disabled={page <= 1} onClick={() => onPage(page - 1)}>Prev</button>
+			<button className="btn ghost" disabled={page >= totalPages} onClick={() => onPage(page + 1)}>Next</button>
+		</div>
 	);
 }
 

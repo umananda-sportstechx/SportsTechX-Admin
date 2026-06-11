@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Check, X, Trash2, Upload, Rocket } from 'lucide-react';
@@ -108,7 +108,7 @@ export default function StartupsPipelinePage() {
 				<StatCard label="New" value={(c?.new ?? 0).toLocaleString()} urgent={(c?.new ?? 0) > 0} />
 				<StatCard label="Reviewing" value={(c?.reviewing ?? 0).toLocaleString()} />
 				<StatCard label="Added" value={(c?.added ?? 0).toLocaleString()} />
-				<StatCard label="Added this week" value={(stats?.weekly.added_this_week ?? 0).toLocaleString()} />
+				<StatCard label="Added this week" value={(stats?.weekly.added_this_week ?? 0).toLocaleString()} delta={stats?.weekly && stats.weekly.added_last_week > 0 ? ((stats.weekly.added_this_week - stats.weekly.added_last_week) / stats.weekly.added_last_week) * 100 : null} />
 			</StatStrip>
 
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
@@ -187,7 +187,7 @@ export default function StartupsPipelinePage() {
 						<thead>
 							<tr>
 								<th style={{ width: 28 }}><input type="checkbox" checked={allSelected} onChange={toggleAll} /></th>
-								<th>Date</th><th>Name</th><th>HQ</th><th>Assigned</th><th>Status</th><th style={{ textAlign: 'right' }}>Actions</th>
+								<th>Date</th><th>Name</th><th>HQ</th><th>Source</th><th>Notes</th><th>Assigned</th><th>Status</th><th style={{ textAlign: 'right' }}>Actions</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -196,7 +196,9 @@ export default function StartupsPipelinePage() {
 									<td><input type="checkbox" checked={selected.has(e.id)} onChange={() => toggle(e.id)} /></td>
 									<td className="num">{new Date(e.created_at).toLocaleDateString()}</td>
 									<td><div style={{ fontWeight: 600 }}>{e.name}</div>{e.website && <a href={e.website} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: 'var(--accent)' }}>{e.website}</a>}</td>
-									<td>{e.hq_country ?? '—'}</td>
+									<td>{[e.hq_city, e.hq_country].filter(Boolean).join(', ') || '—'}</td>
+									<td style={{ fontSize: 12 }}>{e.source ?? '—'}</td>
+									<td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--fg-muted)' }} title={e.notes ?? ''}>{e.notes ?? '—'}</td>
 									<td>{adminName(e.assigned_to)}</td>
 									<td><Tag variant={e.status === 'added' ? 'pos' : e.status === 'rejected' ? 'warn' : ''}>{e.status}</Tag></td>
 									<td style={{ textAlign: 'right' }}>
@@ -278,37 +280,95 @@ function PromoteModal({ row, onClose, onDone }: { row: Entry; onClose: () => voi
 	);
 }
 
+interface CandRow { name: string; website: string | null; in_database: Array<{ name: string; website: string | null }>; in_queue: Array<{ name: string; website: string | null }>; approved: boolean }
+
+/**
+ * Bulk import with a dedupe-review step: paste or upload candidates, preview
+ * each against the companies catalog + existing queue, then approve/skip per
+ * row before importing. Rows with an existing match are unchecked by default.
+ */
 function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
 	const [text, setText] = useState('');
-	const [pending, setPending] = useState(false);
-	// Each line: "Name, https://site" or just a URL/name. Comma splits name/website.
+	const [rows, setRows] = useState<CandRow[] | null>(null);
+	const [busy, setBusy] = useState(false);
+	const fileRef = useRef<HTMLInputElement>(null);
+
+	// Each line: "Name, https://site" or a bare URL/name. Comma/tab splits name/website.
 	const parse = () => text.split('\n').map((l) => l.trim()).filter(Boolean).map((line) => {
 		const [a, b] = line.split(/[,\t]/).map((s) => s.trim());
 		if (b) return { name: a, website: b };
 		if (/^https?:\/\//i.test(a)) return { name: a.replace(/^https?:\/\//, '').replace(/\/.*$/, ''), website: a };
 		return { name: a };
 	});
-	const submit = async () => {
-		const rows = parse();
-		if (!rows.length) { toast.error('Paste at least one line'); return; }
-		setPending(true);
-		try {
-			const r = await api<{ inserted: number; skipped: number }>('POST', '/api/admin/startups-pipeline/import', { rows });
-			toast.success(`Imported ${r.inserted}${r.skipped ? `, skipped ${r.skipped} dup(s)` : ''}`);
-			onSaved();
-		} catch (e) { toast.error((e as Error).message); } finally { setPending(false); }
+
+	const onFile = (file: File) => {
+		const reader = new FileReader();
+		reader.onload = () => setText(String(reader.result ?? ''));
+		reader.readAsText(file);
 	};
+
+	const review = async () => {
+		const parsed = parse();
+		if (!parsed.length) { toast.error('Paste or upload at least one candidate'); return; }
+		setBusy(true);
+		try {
+			const r = await api<{ rows: Array<Omit<CandRow, 'approved'>> }>('POST', '/api/admin/startups-pipeline/import-preview', { rows: parsed });
+			setRows(r.rows.map((x) => ({ ...x, approved: x.in_database.length === 0 && x.in_queue.length === 0 })));
+		} catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
+	};
+
+	const importApproved = async () => {
+		const approved = (rows ?? []).filter((r) => r.approved).map((r) => ({ name: r.name, website: r.website ?? undefined }));
+		if (!approved.length) { toast.error('No candidates approved'); return; }
+		setBusy(true);
+		try {
+			const r = await api<{ inserted: number; skipped: number }>('POST', '/api/admin/startups-pipeline/import', { rows: approved });
+			toast.success(`Imported ${r.inserted}${r.skipped ? `, ${r.skipped} dup skipped` : ''}`);
+			onSaved();
+		} catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
+	};
+
+	const toggle = (i: number) => setRows((prev) => prev!.map((r, j) => (j === i ? { ...r, approved: !r.approved } : r)));
+	const approvedCount = (rows ?? []).filter((r) => r.approved).length;
+
 	return (
-		<Modal title="Bulk import candidates" onClose={onClose} width={520} footer={
-			<>
-				<button className="btn ghost" onClick={onClose}>Cancel</button>
-				<button className="btn" disabled={!text.trim() || pending} onClick={() => void submit()}>{pending ? 'Importing…' : 'Import'}</button>
-			</>
+		<Modal title="Bulk import candidates" onClose={onClose} width={640} footer={
+			rows
+				? <><button className="btn ghost" onClick={() => setRows(null)}>← Back</button><button className="btn" disabled={busy || approvedCount === 0} onClick={() => void importApproved()}>{busy ? 'Importing…' : `Import ${approvedCount} approved`}</button></>
+				: <><button className="btn ghost" onClick={onClose}>Cancel</button><button className="btn" disabled={busy || !text.trim()} onClick={() => void review()}>{busy ? 'Checking…' : 'Review duplicates →'}</button></>
 		}>
-			<div style={{ display: 'grid', gap: 8 }}>
-				<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>One per line. Use <code>Name, https://website</code> or paste plain URLs. Duplicates (by website) are skipped.</div>
-				<textarea className="search-input" style={{ minHeight: 180, resize: 'vertical', fontFamily: 'var(--font-mono)', fontSize: 12 }} value={text} onChange={(e) => setText(e.target.value)} placeholder={'Acme Sports, https://acme.com\nhttps://example.io'} />
-			</div>
+			{!rows ? (
+				<div style={{ display: 'grid', gap: 8 }}>
+					<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>One per line: <code>Name, https://website</code> or plain URLs. Upload a CSV/TXT or paste below — you&apos;ll review duplicates before importing.</div>
+					<input ref={fileRef} type="file" accept=".csv,.txt" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }} />
+					<button className="btn ghost" style={{ justifySelf: 'start' }} onClick={() => fileRef.current?.click()}><Upload size={12} /> Upload CSV / TXT</button>
+					<textarea className="search-input" style={{ minHeight: 180, resize: 'vertical', fontFamily: 'var(--font-mono)', fontSize: 12 }} value={text} onChange={(e) => setText(e.target.value)} placeholder={'Acme Sports, https://acme.com\nhttps://example.io'} />
+				</div>
+			) : (
+				<div style={{ display: 'grid', gap: 8 }}>
+					<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{approvedCount}/{rows.length} approved · rows with an existing match are unchecked — tick to import anyway.</div>
+					<div style={{ maxHeight: 360, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 6 }}>
+						<table className="data-table">
+							<thead><tr><th style={{ width: 28 }} /><th>Candidate</th><th>Existing matches</th></tr></thead>
+							<tbody>
+								{rows.map((r, i) => {
+									const matches = [...r.in_database.map((m) => ({ ...m, where: 'db' as const })), ...r.in_queue.map((m) => ({ ...m, where: 'queue' as const }))];
+									return (
+										<tr key={i} style={matches.length ? { background: 'var(--bg-2)' } : undefined}>
+											<td><input type="checkbox" checked={r.approved} onChange={() => toggle(i)} /></td>
+											<td><div style={{ fontWeight: 600 }}>{r.name}</div>{r.website && <div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{r.website}</div>}</td>
+											<td style={{ fontSize: 12 }}>
+												{matches.length === 0 ? <span style={{ color: 'var(--pos)' }}>none — new</span>
+													: matches.map((m, k) => <div key={k}><Tag variant={m.where === 'db' ? 'warn' : ''}>{m.where === 'db' ? 'in DB' : 'in queue'}</Tag> {m.name}</div>)}
+											</td>
+										</tr>
+									);
+								})}
+							</tbody>
+						</table>
+					</div>
+				</div>
+			)}
 		</Modal>
 	);
 }

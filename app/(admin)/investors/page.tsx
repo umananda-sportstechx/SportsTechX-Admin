@@ -85,6 +85,7 @@ export default function InvestorsAdminPage() {
 			const r = await api<InvestorsResponse>('GET', `/api/investors?${new URLSearchParams(params)}`);
 			const out = (r?.data ?? []).map((i) => [i.name ?? '', i.website ?? '', i.category ?? '', i.year_launched ? String(i.year_launched) : '', i.status ?? '']);
 			if (out.length === 0) { toast.error('No investors to export'); return; }
+			if (out.length >= 5000) toast.warning('Export capped at 5000 rows — narrow the filters for a complete export.');
 			downloadCsv('investors.csv', ['name', 'website', 'category', 'year_launched', 'status'], out);
 		} catch (e) { toast.error((e as Error).message); }
 	};

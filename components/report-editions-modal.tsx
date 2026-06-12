@@ -84,8 +84,10 @@ export function ReportEditionsModal({ id, onClose }: { id: string; onClose: () =
 				<div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12, display: 'grid', gap: 10, background: 'var(--bg-2)' }}>
 					<div style={{ fontWeight: 600, fontSize: 13 }}>{editing ? 'Edit edition' : 'Add edition'}</div>
 					<div style={{ display: 'grid', gridTemplateColumns: '120px 140px 1fr', gap: 8 }}>
-						<input className="search-input" placeholder="Lang (en, fr…)" value={draft.language_code} onChange={(e) => set('language_code', e.target.value)} />
-						<select className="search-input" value={draft.access_tier} onChange={(e) => set('access_tier', e.target.value)}>
+						{/* Lang + tier are the edition's identity (the upsert key); lock them when
+						    editing so a change can't silently fork a new edition. */}
+						<input className="search-input" placeholder="Lang (en, fr…)" value={draft.language_code} disabled={!!editing} title={editing ? 'Delete and re-add to change the language' : undefined} onChange={(e) => set('language_code', e.target.value)} />
+						<select className="search-input" value={draft.access_tier} disabled={!!editing} onChange={(e) => set('access_tier', e.target.value)}>
 							{['free', 'growth', 'pro'].map((t) => <option key={t} value={t}>{t}</option>)}
 						</select>
 						<input className="search-input" placeholder="Title (in this language)" value={draft.title} onChange={(e) => set('title', e.target.value)} />

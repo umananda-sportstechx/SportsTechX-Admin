@@ -19,7 +19,7 @@ interface ImportResult { created: number; failed: number; errors: Array<{ index:
 
 // Canonical columns per entity + the help text shown to the admin.
 const COLUMNS: Record<Entity, { keys: string[]; help: string }> = {
-	companies: { keys: ['name', 'website', 'description', 'sector', 'business_model', 'founded_year', 'country', 'city', 'region', 'continent', 'status'], help: 'name (required), website, description, sector, business_model, founded_year, country, city, region, continent, status' },
+	companies: { keys: ['name', 'website', 'description', 'sector', 'business_model', 'founded_year', 'country', 'city', 'region', 'continent', 'status'], help: 'name (required), website (required, unique), description, sector, business_model, founded_year, country, city, region, continent, status' },
 	deals: { keys: ['company', 'round_type', 'announced_date', 'amount_usd', 'currency_code', 'status'], help: 'company (required — name or website), round_type, announced_date, amount_usd, currency_code, status' },
 	acquisitions: { keys: ['acquiree', 'acquirer', 'acquisition_date', 'amount_usd', 'acquisition_type'], help: 'acquiree (required), acquirer, acquisition_date, amount_usd, acquisition_type' },
 	ecosystem: { keys: ['name', 'entity_type', 'description', 'website', 'category', 'founded_year', 'country', 'city', 'region', 'continent', 'status'], help: 'name (required), entity_type, description, website, category, founded_year, country, city, region, continent, status' },

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Save, Trash2 } from 'lucide-react';
@@ -16,7 +16,8 @@ import { ImageInput } from '@/components/image-input';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import {
 	SectorCascade, SportsPicker, TechTagsPicker, LocationFields, SocialLinks,
-	EMPTY_SOCIAL, EMPTY_LOCATION, type SocialValue, type LocationValue,
+	RoundTypeSelect, CurrencySelect, InvestorPicker, CompanySelectOne,
+	EMPTY_SOCIAL, EMPTY_LOCATION, type SocialValue, type LocationValue, type DealInvestor,
 } from '@/components/entity-pickers';
 import { DealModal, type StagedDeal } from '../deals/page';
 import { AcquisitionModal, type StagedAcq } from '../acquisitions/page';
@@ -329,24 +330,47 @@ function CompanyMaTab({ companyId }: { companyId: string }) {
 	);
 }
 
-// ── Staged Funding tab (NEW company): drafts held in parent form state, created
-//    atomically alongside the company on save. No company_id exists yet. ──
+// ── Staged Funding / M&A tabs (NEW company) ──────────────────────────────────
+// Drafts are held in parent form state and created atomically alongside the
+// company on save (no company_id exists yet). The "Add" action expands an
+// inline editor in place — no child modal — matching the legacy admin's flow.
+
+const DEAL_STATUSES = ['active', 'inactive', 'not_sportstech', 'website_error'] as const;
+const SIZE_BUCKETS = ['under_1m', 'from_1m_to_10m', 'from_10m_to_100m', 'over_100m'] as const;
+const ACQ_TYPES = ['acquisition', 'merger', 'asset_purchase'] as const;
+const PARTY_MODELS = ['b2b', 'b2c', 'b2b2c', 'd2c', 'b2g', 'other'] as const;
+
+function fmtStagedAmount(v: string): string {
+	const n = Number(v);
+	if (!Number.isFinite(n) || n <= 0) return '—';
+	if (n >= 1e9) return `$${(n / 1e9).toFixed(1)}B`;
+	if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
+	if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}K`;
+	return `$${n}`;
+}
+
+const editorBox: CSSProperties = { border: '1px solid var(--border)', borderRadius: 8, padding: 12, display: 'grid', gap: 12, background: 'var(--bg-2)' };
+
+interface PartyForm { is_sportstech: boolean; sector_id: string; business_model: string; hq: LocationValue; sport_ids: string[] }
+const emptyParty = (): PartyForm => ({ is_sportstech: false, sector_id: '', business_model: '', hq: { ...EMPTY_LOCATION }, sport_ids: [] });
+
 function StagedFundingTab({ drafts, onChange }: { drafts: StagedDeal[]; onChange: (d: StagedDeal[]) => void }) {
 	const [open, setOpen] = useState(false);
 	return (
 		<div style={{ display: 'grid', gap: 10 }}>
 			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
 				<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{drafts.length} round{drafts.length === 1 ? '' : 's'} staged · saved with the company</div>
-				<button className="btn" onClick={() => setOpen(true)}><Plus size={12} /> Add funding round</button>
+				{!open && <button className="btn" onClick={() => setOpen(true)}><Plus size={12} /> Add funding round</button>}
 			</div>
 			{drafts.length === 0 ? (
 				<div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>No funding rounds yet. Add rounds here — they’ll be created when you save the company.</div>
 			) : (
 				<table className="data-table">
-					<thead><tr><th>Year</th><th>Amount</th><th /></tr></thead>
+					<thead><tr><th>Round</th><th>Year</th><th>Amount</th><th /></tr></thead>
 					<tbody>
 						{drafts.map((d, i) => (
 							<tr key={i}>
+								<td>{d.label.round ?? '—'}</td>
 								<td className="num">{d.label.year ?? '—'}</td>
 								<td className="num">{d.label.amount ?? '—'}</td>
 								<td style={{ textAlign: 'right' }}>
@@ -357,29 +381,112 @@ function StagedFundingTab({ drafts, onChange }: { drafts: StagedDeal[]; onChange
 					</tbody>
 				</table>
 			)}
-			{open && <DealModal id={null} onStage={(d) => onChange([...drafts, d])} onClose={() => setOpen(false)} onSaved={() => setOpen(false)} />}
+			{open && <InlineFundingEditor onStage={(d) => { onChange([...drafts, d]); setOpen(false); }} onCancel={() => setOpen(false)} />}
 		</div>
 	);
 }
 
-// ── Staged M&A tab (NEW company): acquisitions with the new company as acquiree. ──
+function InlineFundingEditor({ onStage, onCancel }: { onStage: (d: StagedDeal) => void; onCancel: () => void }) {
+	const [roundTypeId, setRoundTypeId] = useState('');
+	const [date, setDate] = useState('');
+	const [amount, setAmount] = useState('');
+	const [currency, setCurrency] = useState('');
+	const [bucket, setBucket] = useState('');
+	const [status, setStatus] = useState('active');
+	const [sectorId, setSectorId] = useState('');
+	const [model, setModel] = useState('');
+	const [sourceUrl, setSourceUrl] = useState('');
+	const [txnUrl, setTxnUrl] = useState('');
+	const [hq, setHq] = useState<LocationValue>({ ...EMPTY_LOCATION });
+	const [sportIds, setSportIds] = useState<string[]>([]);
+	const [investors, setInvestors] = useState<DealInvestor[]>([]);
+
+	const add = () => {
+		const body: Record<string, unknown> = {
+			round_type_id: roundTypeId || undefined,
+			announced_date: date || undefined,
+			amount: amount.trim() ? Number(amount) : undefined,
+			currency_code: currency || undefined,
+			deal_size_bucket: bucket || undefined,
+			status,
+			sector_id: sectorId || undefined,
+			business_model: model || undefined,
+			source_url: sourceUrl.trim() || undefined,
+			transaction_url: txnUrl.trim() || undefined,
+			hq_country: hq.country.trim() || undefined,
+			hq_city: hq.city.trim() || undefined,
+			hq_continent: hq.continent.trim() || undefined,
+			hq_region: hq.region.trim() || undefined,
+			hq_state: hq.state.trim() || undefined,
+			sport_ids: sportIds,
+			investors,
+		};
+		onStage({ body, label: { amount: amount.trim() ? fmtStagedAmount(amount) : undefined, year: date ? date.slice(0, 4) : undefined } });
+	};
+
+	return (
+		<div style={editorBox}>
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+				<Field label="Round type"><RoundTypeSelect value={roundTypeId} onChange={setRoundTypeId} /></Field>
+				<Field label="Announced date"><input className="search-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+			</div>
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 1fr', gap: 12 }}>
+				<Field label="Amount"><input className="search-input" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="in currency" /></Field>
+				<Field label="Currency"><CurrencySelect value={currency} onChange={setCurrency} /></Field>
+				<Field label="Size bucket">
+					<select className="search-input" value={bucket} onChange={(e) => setBucket(e.target.value)}>
+						<option value="">—</option>
+						{SIZE_BUCKETS.map((b) => <option key={b} value={b}>{b.replace(/_/g, ' ')}</option>)}
+					</select>
+				</Field>
+			</div>
+			<Field label="Investors" hint="star marks the lead"><InvestorPicker value={investors} onChange={setInvestors} /></Field>
+			<Field label="Sector"><SectorCascade value={sectorId} onChange={setSectorId} /></Field>
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+				<Field label="Business model">
+					<select className="search-input" value={model} onChange={(e) => setModel(e.target.value)}>
+						<option value="">—</option>
+						{PARTY_MODELS.map((b) => <option key={b} value={b}>{b.toUpperCase()}</option>)}
+					</select>
+				</Field>
+				<Field label="Status">
+					<select className="search-input" value={status} onChange={(e) => setStatus(e.target.value)}>
+						{DEAL_STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
+					</select>
+				</Field>
+			</div>
+			<Field label="Location"><LocationFields value={hq} onChange={setHq} /></Field>
+			<Field label="Sports"><SportsPicker value={sportIds} onChange={setSportIds} /></Field>
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+				<Field label="Source URL"><input className="search-input" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://" /></Field>
+				<Field label="Transaction URL"><input className="search-input" value={txnUrl} onChange={(e) => setTxnUrl(e.target.value)} placeholder="https://" /></Field>
+			</div>
+			<div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+				<button className="btn ghost" onClick={onCancel}>Cancel</button>
+				<button className="btn" onClick={add}><Plus size={12} /> Add round</button>
+			</div>
+		</div>
+	);
+}
+
 function StagedMaTab({ drafts, onChange }: { drafts: StagedAcq[]; onChange: (a: StagedAcq[]) => void }) {
 	const [open, setOpen] = useState(false);
 	return (
 		<div style={{ display: 'grid', gap: 10 }}>
 			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
 				<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{drafts.length} acquisition{drafts.length === 1 ? '' : 's'} staged · saved with the company</div>
-				<button className="btn" onClick={() => setOpen(true)}><Plus size={12} /> Add acquisition</button>
+				{!open && <button className="btn" onClick={() => setOpen(true)}><Plus size={12} /> Add acquisition</button>}
 			</div>
 			{drafts.length === 0 ? (
-				<div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>No acquisitions yet. Add them here — they’ll be created when you save the company.</div>
+				<div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>No acquisitions yet. Choose whether this company was the acquirer or the acquiree, then add the other party.</div>
 			) : (
 				<table className="data-table">
-					<thead><tr><th>Acquirer</th><th>Year</th><th>Amount</th><th /></tr></thead>
+					<thead><tr><th>This company</th><th>Counterparty</th><th>Year</th><th>Amount</th><th /></tr></thead>
 					<tbody>
 						{drafts.map((a, i) => (
 							<tr key={i}>
-								<td>{a.label.acquirer ?? '—'}</td>
+								<td>{a.label.role === 'acquirer' ? 'Acquirer' : 'Acquiree'}</td>
+								<td>{a.label.counterparty ?? a.label.acquirer ?? '—'}</td>
 								<td className="num">{a.label.year ?? '—'}</td>
 								<td className="num">{a.label.amount ?? '—'}</td>
 								<td style={{ textAlign: 'right' }}>
@@ -390,7 +497,129 @@ function StagedMaTab({ drafts, onChange }: { drafts: StagedAcq[]; onChange: (a: 
 					</tbody>
 				</table>
 			)}
-			{open && <AcquisitionModal id={null} onStage={(a) => onChange([...drafts, a])} onClose={() => setOpen(false)} onSaved={() => setOpen(false)} />}
+			{open && <InlineMaEditor onStage={(a) => { onChange([...drafts, a]); setOpen(false); }} onCancel={() => setOpen(false)} />}
+		</div>
+	);
+}
+
+function InlineMaEditor({ onStage, onCancel }: { onStage: (a: StagedAcq) => void; onCancel: () => void }) {
+	const [role, setRole] = useState<'acquiree' | 'acquirer'>('acquiree');
+	const [cpId, setCpId] = useState('');        // counterparty company (the other side)
+	const [cpName, setCpName] = useState('');    // counterparty free-text name / display
+	const [party, setParty] = useState<PartyForm>(emptyParty());
+	const [date, setDate] = useState('');
+	const [amount, setAmount] = useState('');
+	const [currency, setCurrency] = useState('');
+	const [type, setType] = useState('acquisition');
+	const [sourceUrl, setSourceUrl] = useState('');
+
+	// The new company's role; the counterparty fills the *opposite* side's columns.
+	const opposite = role === 'acquiree' ? 'acquirer' : 'acquiree';
+	const cpLabel = role === 'acquiree' ? 'Acquiring company (acquirer)' : 'Acquired company (acquiree)';
+
+	const pickCounterparty = (id: string) => {
+		setCpId(id);
+		if (!id) return;
+		// Auto-fill the counterparty's classification/location from its catalog record.
+		void (async () => {
+			try {
+				const c = await api<{ name?: string; sector_id?: string | null; business_model?: string | null; hq_country?: string | null; hq_city?: string | null; hq_continent?: string | null; hq_region?: string | null; hq_state?: string | null; sport_ids?: string[] }>('GET', `/api/admin/companies/${id}/edit`);
+				setCpName(c.name ?? '');
+				setParty((p) => ({
+					...p,
+					sector_id: c.sector_id ?? '',
+					business_model: c.business_model ?? '',
+					hq: { country: c.hq_country ?? '', city: c.hq_city ?? '', continent: c.hq_continent ?? '', region: c.hq_region ?? '', state: c.hq_state ?? '' },
+					sport_ids: c.sport_ids ?? [],
+				}));
+			} catch { /* leave fields for manual entry */ }
+		})();
+	};
+
+	const canAdd = !!cpId || !!cpName.trim();
+	const add = () => {
+		const body: Record<string, unknown> = {
+			_role: role,
+			acquisition_date: date || undefined,
+			amount: amount.trim() ? Number(amount) : undefined,
+			currency_code: currency || undefined,
+			acquisition_type: type,
+			source_url: sourceUrl.trim() || undefined,
+			[`${opposite}_company_id`]: cpId || undefined,
+			[`${opposite}_name`]: !cpId && cpName.trim() ? cpName.trim() : undefined,
+			[`${opposite}_is_sportstech`]: party.is_sportstech,
+			[`${opposite}_sector_id`]: party.sector_id || undefined,
+			[`${opposite}_business_model`]: party.business_model || undefined,
+			[`${opposite}_hq_country`]: party.hq.country.trim() || undefined,
+			[`${opposite}_hq_city`]: party.hq.city.trim() || undefined,
+			[`${opposite}_hq_continent`]: party.hq.continent.trim() || undefined,
+			[`${opposite}_hq_region`]: party.hq.region.trim() || undefined,
+			[`${opposite}_hq_state`]: party.hq.state.trim() || undefined,
+			[`${opposite}_sport_ids`]: party.sport_ids,
+		};
+		onStage({ body, label: { counterparty: cpName.trim() || undefined, role, amount: amount.trim() ? fmtStagedAmount(amount) : undefined, year: date ? date.slice(0, 4) : undefined } });
+	};
+
+	const roleBtn = (r: 'acquiree' | 'acquirer', title: string, sub: string) => (
+		<button type="button" onClick={() => setRole(r)}
+			style={{
+				flex: 1, padding: '10px 12px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+				border: `1px solid ${role === r ? 'var(--accent)' : 'var(--border)'}`,
+				background: role === r ? 'var(--bg-3)' : 'transparent',
+			}}>
+			<div style={{ fontWeight: 600, fontSize: 13 }}>{title}</div>
+			<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{sub}</div>
+		</button>
+	);
+
+	return (
+		<div style={editorBox}>
+			<div>
+				<div className="co-stat-label" style={{ marginBottom: 6 }}>Is this company the acquirer or the acquiree?</div>
+				<div style={{ display: 'flex', gap: 8 }}>
+					{roleBtn('acquirer', 'Acquirer', 'This company acquired another')}
+					{roleBtn('acquiree', 'Acquiree', 'This company was acquired')}
+				</div>
+			</div>
+			<Field label={cpLabel} hint="search the catalog to auto-fill, or type a name">
+				<CompanySelectOne value={cpId} onChange={pickCounterparty} placeholder={`Search the ${opposite}…`} />
+			</Field>
+			{!cpId && (
+				<Field label="…or counterparty name (free text)"><input className="search-input" value={cpName} onChange={(e) => setCpName(e.target.value)} placeholder="Name of the other company" /></Field>
+			)}
+			<Field label="Counterparty sector"><SectorCascade value={party.sector_id} onChange={(v) => setParty((p) => ({ ...p, sector_id: v }))} /></Field>
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+				<Field label="Counterparty business model">
+					<select className="search-input" value={party.business_model} onChange={(e) => setParty((p) => ({ ...p, business_model: e.target.value }))}>
+						<option value="">—</option>
+						{PARTY_MODELS.map((b) => <option key={b} value={b}>{b.toUpperCase()}</option>)}
+					</select>
+				</Field>
+				<label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, alignSelf: 'end', paddingBottom: 8 }}>
+					<input type="checkbox" checked={party.is_sportstech} onChange={(e) => setParty((p) => ({ ...p, is_sportstech: e.target.checked }))} /> Counterparty is SportsTech
+				</label>
+			</div>
+			<Field label="Counterparty location"><LocationFields value={party.hq} onChange={(v) => setParty((p) => ({ ...p, hq: v }))} /></Field>
+			<Field label="Counterparty sports"><SportsPicker value={party.sport_ids} onChange={(v) => setParty((p) => ({ ...p, sport_ids: v }))} /></Field>
+			<div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, display: 'grid', gap: 12 }}>
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+					<Field label="Acquisition date"><input className="search-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+					<Field label="Type">
+						<select className="search-input" value={type} onChange={(e) => setType(e.target.value)}>
+							{ACQ_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
+						</select>
+					</Field>
+				</div>
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>
+					<Field label="Amount"><input className="search-input" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="in currency" /></Field>
+					<Field label="Currency"><CurrencySelect value={currency} onChange={setCurrency} /></Field>
+				</div>
+				<Field label="Source URL"><input className="search-input" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://" /></Field>
+			</div>
+			<div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+				<button className="btn ghost" onClick={onCancel}>Cancel</button>
+				<button className="btn" disabled={!canAdd} onClick={add}><Plus size={12} /> Add acquisition</button>
+			</div>
 		</div>
 	);
 }

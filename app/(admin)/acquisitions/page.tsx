@@ -188,7 +188,7 @@ function toAcqForm(h: AcqEdit): AcqForm {
 
 // A staged M&A draft = the POST body minus acquiree_company_id (the new company),
 // plus a small label snapshot for rendering the row before the company exists.
-export interface StagedAcq { body: Record<string, unknown>; label: { acquirer?: string; amount?: string; year?: string } }
+export interface StagedAcq { body: Record<string, unknown>; label: { acquirer?: string; counterparty?: string; role?: 'acquiree' | 'acquirer'; amount?: string; year?: string } }
 
 export function AcquisitionModal({ id, onClose, onSaved, onStage }: { id: string | null; onClose: () => void; onSaved: () => void; onStage?: (a: StagedAcq) => void }) {
 	const isEdit = !!id;

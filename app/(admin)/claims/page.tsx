@@ -94,6 +94,7 @@ export default function ClaimsAdminPage() {
 	};
 	const reopen = (id: string) => act(id, () => api('POST', `/api/admin/claims/${id}/reopen`), 'Claim re-opened');
 	const unverify = (id: string) => act(id, () => api('POST', `/api/admin/claims/${id}/unverify`), 'Verification removed');
+	const regenerate = (id: string) => act(id, () => api('POST', `/api/admin/claims/${id}/regenerate-report`), 'Report regeneration queued');
 	const toggleActive = (id: string, active: boolean) => act(id, () => api('POST', `/api/admin/claims/${id}/toggle-active`, { active }), active ? 'Marked active' : 'Marked inactive');
 	const copyShare = (token: string) => { void navigator.clipboard.writeText(`${window.location.origin}/verified/${token}`); toast.success('Share link copied'); };
 
@@ -190,6 +191,7 @@ export default function ClaimsAdminPage() {
 											{c.status === 'verified' && (
 												<>
 													{c.shareable_token && <button className="btn ghost" disabled={pendingId === c.id} onClick={() => copyShare(c.shareable_token!)} title="Copy verified share link">Copy link</button>}
+													<button className="btn ghost" disabled={pendingId === c.id} onClick={() => void regenerate(c.id)} title="Re-run the verified-company report">Regenerate report</button>
 													<button className="btn ghost" disabled={pendingId === c.id} onClick={() => void unverify(c.id)}>Un-verify</button>
 												</>
 											)}

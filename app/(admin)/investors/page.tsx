@@ -13,7 +13,7 @@ import { FilterBar, FilterSelect, StatStrip, BoolFilter, FilterRange, RefSlugFil
 import { downloadCsv } from '@/components/csv-import';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import {
-	SectorCascade, SportsPicker, TechTagsPicker, RoundTypesPicker, LocationFields, SocialLinks,
+	SectorCascade, SportsPicker, TechTagsPicker, RoundTypesPicker, LocationFields, SocialLinks, CurrencySelect,
 	EMPTY_SOCIAL, EMPTY_LOCATION, type SocialValue, type LocationValue,
 } from '@/components/entity-pickers';
 import { YearSelect } from '@/components/year-select';
@@ -186,6 +186,9 @@ export default function InvestorsAdminPage() {
 	);
 }
 
+interface FundDraft { fund_name: string; announced_date: string; fund_value: string; currency_code: string; source_url: string }
+const emptyFund = (): FundDraft => ({ fund_name: '', announced_date: '', fund_value: '', currency_code: '', source_url: '' });
+
 interface InvestorForm {
 	name: string; slug: string; website: string; description: string;
 	category: string; year_launched: string; status: string;
@@ -198,6 +201,7 @@ interface InvestorForm {
 	poc_name: string; poc_position: string; poc_email: string; poc_linkedin: string;
 	thesis_sector_ids: string[]; thesis_sport_ids: string[];
 	thesis_tech_tag_ids: string[]; thesis_round_type_ids: string[];
+	funds: FundDraft[];
 }
 
 const EMPTY_INVESTOR: InvestorForm = {
@@ -208,6 +212,7 @@ const EMPTY_INVESTOR: InvestorForm = {
 	latest_funding: '', latest_funding_amount: '', last_raised_at: '',
 	poc_name: '', poc_position: '', poc_email: '', poc_linkedin: '',
 	thesis_sector_ids: [], thesis_sport_ids: [], thesis_tech_tag_ids: [], thesis_round_type_ids: [],
+	funds: [],
 };
 
 interface InvestorEdit extends Investor {
@@ -218,6 +223,7 @@ interface InvestorEdit extends Investor {
 	total_funding?: string | null; annual_revenue?: string | null; actively_investing?: boolean | null;
 	latest_funding?: string | null; latest_funding_amount?: string | null; last_raised_at?: string | null;
 	poc_name?: string | null; poc_position?: string | null; poc_email?: string | null; poc_linkedin?: string | null;
+	funds?: Array<{ fund_name?: string | null; announced_date?: string | null; fund_value?: string | null; currency_code?: string | null; source_url?: string | null }>;
 	twitter_url?: string | null; instagram_url?: string | null; facebook_url?: string | null;
 	linkedin_url?: string | null; youtube_url?: string | null; email?: string | null;
 	thesis_sector_ids?: string[]; thesis_sport_ids?: string[]; thesis_tech_tag_ids?: string[]; thesis_round_type_ids?: string[];
@@ -243,6 +249,10 @@ function toInvestorForm(h: InvestorEdit): InvestorForm {
 		poc_name: h.poc_name ?? '', poc_position: h.poc_position ?? '', poc_email: h.poc_email ?? '', poc_linkedin: h.poc_linkedin ?? '',
 		thesis_sector_ids: h.thesis_sector_ids ?? [], thesis_sport_ids: h.thesis_sport_ids ?? [],
 		thesis_tech_tag_ids: h.thesis_tech_tag_ids ?? [], thesis_round_type_ids: h.thesis_round_type_ids ?? [],
+		funds: (h.funds ?? []).map((f) => ({
+			fund_name: f.fund_name ?? '', announced_date: f.announced_date ? String(f.announced_date).slice(0, 10) : '',
+			fund_value: f.fund_value != null ? String(f.fund_value) : '', currency_code: f.currency_code ?? '', source_url: f.source_url ?? '',
+		})),
 	};
 }
 
@@ -300,6 +310,11 @@ function InvestorForm({ id, initial, onClose, onSaved, promoteReviewId }: { id: 
 				thesis_sport_ids: form.thesis_sport_ids,
 				thesis_tech_tag_ids: form.thesis_tech_tag_ids,
 				thesis_round_type_ids: form.thesis_round_type_ids,
+				funds: form.funds.filter((f) => f.fund_name.trim()).map((f) => ({
+					fund_name: f.fund_name.trim(), announced_date: f.announced_date || undefined,
+					fund_value: f.fund_value.trim() ? Number(f.fund_value) : undefined,
+					currency_code: f.currency_code || undefined, source_url: f.source_url.trim() || undefined,
+				})),
 			};
 			let createdId: string | undefined;
 			if (isEdit) await api('PATCH', `/api/admin/investors/${id}`, body);
@@ -418,6 +433,29 @@ function InvestorForm({ id, initial, onClose, onSaved, promoteReviewId }: { id: 
 									<Field label="POC LinkedIn"><input className="search-input" value={form.poc_linkedin} onChange={(e) => set('poc_linkedin', e.target.value)} placeholder="https://linkedin.com/in/…" /></Field>
 								</div>
 							</>
+						) },
+						{ key: 'funds', label: 'Funds', hint: form.funds.length || undefined, node: (
+							<div style={{ display: 'grid', gap: 10 }}>
+								{form.funds.length === 0 && <div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>No funds yet. Add the fund vehicles this investor has raised.</div>}
+								{form.funds.map((f, i) => {
+									const upd = (patch: Partial<FundDraft>) => set('funds', form.funds.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+									return (
+										<div key={i} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, display: 'grid', gap: 8 }}>
+											<div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8 }}>
+												<input className="search-input" placeholder="Fund name" value={f.fund_name} onChange={(e) => upd({ fund_name: e.target.value })} />
+												<input className="search-input" type="date" value={f.announced_date} onChange={(e) => upd({ announced_date: e.target.value })} />
+											</div>
+											<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 2fr auto', gap: 8, alignItems: 'center' }}>
+												<input className="search-input" type="number" placeholder="Value" value={f.fund_value} onChange={(e) => upd({ fund_value: e.target.value })} />
+												<CurrencySelect value={f.currency_code} onChange={(v) => upd({ currency_code: v })} />
+												<input className="search-input" placeholder="Source URL" value={f.source_url} onChange={(e) => upd({ source_url: e.target.value })} />
+												<button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => set('funds', form.funds.filter((_, j) => j !== i))}><Trash2 size={12} /></button>
+											</div>
+										</div>
+									);
+								})}
+								<button className="btn ghost" style={{ justifySelf: 'start' }} onClick={() => set('funds', [...form.funds, emptyFund()])}><Plus size={12} /> Add fund</button>
+							</div>
 						) },
 					]}
 				/>

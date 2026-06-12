@@ -200,6 +200,7 @@ interface CompanyForm {
 	is_verified: boolean;
 	is_unicorn: boolean;
 	is_actively_raising: boolean;
+	raising_amount: string; raising_round: string; raising_valuation: string; raising_pitch_deck_url: string;
 	social: SocialValue;
 	sport_ids: string[];
 	tech_tag_ids: string[];
@@ -212,6 +213,7 @@ const EMPTY_COMPANY: CompanyForm = {
 	sector_id: '', business_model: '', hq: { ...EMPTY_LOCATION },
 	founded_year: '', ipo_date: '', status: 'active',
 	is_verified: false, is_unicorn: false, is_actively_raising: false,
+	raising_amount: '', raising_round: '', raising_valuation: '', raising_pitch_deck_url: '',
 	social: { ...EMPTY_SOCIAL }, sport_ids: [], tech_tag_ids: [],
 	poc_first_name: '', poc_last_name: '', poc_job_position: '', poc_email: '', poc_linkedin: '', accelerator: '', cohort: '',
 };
@@ -223,6 +225,8 @@ interface CompanyEdit extends Company {
 	is_verified?: boolean;
 	is_unicorn?: boolean;
 	is_actively_raising?: boolean;
+	actively_raising_amount?: string | number | null; actively_raising_round?: string | null;
+	actively_raising_valuation?: string | number | null; actively_raising_pitch_deck_url?: string | null;
 	twitter_url?: string | null; instagram_url?: string | null; facebook_url?: string | null;
 	linkedin_url?: string | null; youtube_url?: string | null; email?: string | null;
 	hq_continent?: string | null; hq_region?: string | null; hq_state?: string | null; hq_report_region?: string | null;
@@ -239,6 +243,10 @@ function toCompanyForm(h: CompanyEdit): CompanyForm {
 		founded_year: h.founded_year ? String(h.founded_year) : '',
 		ipo_date: h.ipo_date ? String(h.ipo_date).slice(0, 10) : '',
 		status: h.status ?? 'active', is_verified: !!h.is_verified, is_unicorn: !!h.is_unicorn, is_actively_raising: !!h.is_actively_raising,
+		raising_amount: h.actively_raising_amount != null ? String(h.actively_raising_amount) : '',
+		raising_round: h.actively_raising_round ?? '',
+		raising_valuation: h.actively_raising_valuation != null ? String(h.actively_raising_valuation) : '',
+		raising_pitch_deck_url: h.actively_raising_pitch_deck_url ?? '',
 		social: {
 			twitter_url: h.twitter_url ?? '', instagram_url: h.instagram_url ?? '', facebook_url: h.facebook_url ?? '',
 			linkedin_url: h.linkedin_url ?? '', youtube_url: h.youtube_url ?? '', email: h.email ?? '',
@@ -698,6 +706,10 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 				is_verified: form.is_verified,
 				is_unicorn: form.is_unicorn,
 				is_actively_raising: form.is_actively_raising,
+				actively_raising_amount: form.raising_amount.trim() ? Number(form.raising_amount) : undefined,
+				actively_raising_round: form.raising_round.trim() || undefined,
+				actively_raising_valuation: form.raising_valuation.trim() ? Number(form.raising_valuation) : undefined,
+				actively_raising_pitch_deck_url: form.raising_pitch_deck_url.trim() || undefined,
 				social: form.social,
 				sport_ids: form.sport_ids,
 				tech_tag_ids: form.tech_tag_ids,
@@ -831,6 +843,18 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 									<label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
 										<input type="checkbox" checked={form.is_actively_raising} onChange={(e) => set('is_actively_raising', e.target.checked)} /> Actively raising
 									</label>
+									{form.is_actively_raising && (
+										<div style={{ display: 'grid', gap: 12, padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)' }}>
+											<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+												<Field label="Raising amount ($)"><input className="search-input" type="number" value={form.raising_amount} onChange={(e) => set('raising_amount', e.target.value)} placeholder="target raise" /></Field>
+												<Field label="Round"><input className="search-input" value={form.raising_round} onChange={(e) => set('raising_round', e.target.value)} placeholder="e.g. Series A" /></Field>
+											</div>
+											<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+												<Field label="Valuation ($)"><input className="search-input" type="number" value={form.raising_valuation} onChange={(e) => set('raising_valuation', e.target.value)} placeholder="pre/post" /></Field>
+												<Field label="Pitch deck URL"><input className="search-input" value={form.raising_pitch_deck_url} onChange={(e) => set('raising_pitch_deck_url', e.target.value)} placeholder="https://" /></Field>
+											</div>
+										</div>
+									)}
 								</>
 							),
 						},

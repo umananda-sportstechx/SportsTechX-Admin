@@ -194,6 +194,8 @@ interface InvestorForm {
 	keywords: string; logo_url: string;
 	num_employees: string; num_investments: string; num_exits: string;
 	total_funding: string; annual_revenue: string; analyst_notes: string;
+	latest_funding: string; latest_funding_amount: string; last_raised_at: string;
+	poc_name: string; poc_position: string; poc_email: string; poc_linkedin: string;
 	thesis_sector_ids: string[]; thesis_sport_ids: string[];
 	thesis_tech_tag_ids: string[]; thesis_round_type_ids: string[];
 }
@@ -203,6 +205,8 @@ const EMPTY_INVESTOR: InvestorForm = {
 	is_verified: false, actively_investing: false, hq: { ...EMPTY_LOCATION }, social: { ...EMPTY_SOCIAL },
 	keywords: '', logo_url: '', num_employees: '', num_investments: '', num_exits: '',
 	total_funding: '', annual_revenue: '', analyst_notes: '',
+	latest_funding: '', latest_funding_amount: '', last_raised_at: '',
+	poc_name: '', poc_position: '', poc_email: '', poc_linkedin: '',
 	thesis_sector_ids: [], thesis_sport_ids: [], thesis_tech_tag_ids: [], thesis_round_type_ids: [],
 };
 
@@ -212,6 +216,8 @@ interface InvestorEdit extends Investor {
 	keywords?: string | null; logo_url?: string | null; analyst_notes?: string | null;
 	num_employees?: number | null; num_investments?: number | null; num_exits?: number | null;
 	total_funding?: string | null; annual_revenue?: string | null; actively_investing?: boolean | null;
+	latest_funding?: string | null; latest_funding_amount?: string | null; last_raised_at?: string | null;
+	poc_name?: string | null; poc_position?: string | null; poc_email?: string | null; poc_linkedin?: string | null;
 	twitter_url?: string | null; instagram_url?: string | null; facebook_url?: string | null;
 	linkedin_url?: string | null; youtube_url?: string | null; email?: string | null;
 	thesis_sector_ids?: string[]; thesis_sport_ids?: string[]; thesis_tech_tag_ids?: string[]; thesis_round_type_ids?: string[];
@@ -232,6 +238,9 @@ function toInvestorForm(h: InvestorEdit): InvestorForm {
 		num_investments: h.num_investments != null ? String(h.num_investments) : '',
 		num_exits: h.num_exits != null ? String(h.num_exits) : '',
 		total_funding: h.total_funding ?? '', annual_revenue: h.annual_revenue ?? '', analyst_notes: h.analyst_notes ?? '',
+		latest_funding: h.latest_funding ?? '', latest_funding_amount: h.latest_funding_amount ?? '',
+		last_raised_at: h.last_raised_at ? String(h.last_raised_at).slice(0, 10) : '',
+		poc_name: h.poc_name ?? '', poc_position: h.poc_position ?? '', poc_email: h.poc_email ?? '', poc_linkedin: h.poc_linkedin ?? '',
 		thesis_sector_ids: h.thesis_sector_ids ?? [], thesis_sport_ids: h.thesis_sport_ids ?? [],
 		thesis_tech_tag_ids: h.thesis_tech_tag_ids ?? [], thesis_round_type_ids: h.thesis_round_type_ids ?? [],
 	};
@@ -279,6 +288,13 @@ function InvestorForm({ id, initial, onClose, onSaved, promoteReviewId }: { id: 
 				total_funding: form.total_funding.trim() || null,
 				annual_revenue: form.annual_revenue.trim() || null,
 				analyst_notes: form.analyst_notes.trim() || null,
+				latest_funding: form.latest_funding.trim() || null,
+				latest_funding_amount: form.latest_funding_amount.trim() || null,
+				last_raised_at: form.last_raised_at.trim() || null,
+				poc_name: form.poc_name.trim() || null,
+				poc_position: form.poc_position.trim() || null,
+				poc_email: form.poc_email.trim() || null,
+				poc_linkedin: form.poc_linkedin.trim() || null,
 				social: form.social,
 				thesis_sector_ids: form.thesis_sector_ids,
 				thesis_sport_ids: form.thesis_sport_ids,
@@ -383,7 +399,24 @@ function InvestorForm({ id, initial, onClose, onSaved, promoteReviewId }: { id: 
 									<Field label="Total funding (USD)"><input className="search-input" value={form.total_funding} onChange={(e) => set('total_funding', e.target.value)} /></Field>
 									<Field label="Annual revenue (USD)"><input className="search-input" value={form.annual_revenue} onChange={(e) => set('annual_revenue', e.target.value)} /></Field>
 								</div>
+								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+									<Field label="Latest fund / round"><input className="search-input" value={form.latest_funding} onChange={(e) => set('latest_funding', e.target.value)} placeholder="e.g. Fund III" /></Field>
+									<Field label="Latest amount (USD)"><input className="search-input" value={form.latest_funding_amount} onChange={(e) => set('latest_funding_amount', e.target.value)} /></Field>
+									<Field label="Last raised"><input className="search-input" type="date" value={form.last_raised_at} onChange={(e) => set('last_raised_at', e.target.value)} /></Field>
+								</div>
 								<Field label="Analyst notes"><textarea className="search-input" style={{ minHeight: 70, resize: 'vertical' }} value={form.analyst_notes} onChange={(e) => set('analyst_notes', e.target.value)} /></Field>
+							</>
+						) },
+						{ key: 'contact', label: 'Contact', node: (
+							<>
+								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+									<Field label="POC name"><input className="search-input" value={form.poc_name} onChange={(e) => set('poc_name', e.target.value)} /></Field>
+									<Field label="POC position"><input className="search-input" value={form.poc_position} onChange={(e) => set('poc_position', e.target.value)} /></Field>
+								</div>
+								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+									<Field label="POC email"><input className="search-input" value={form.poc_email} onChange={(e) => set('poc_email', e.target.value)} placeholder="name@fund.com" /></Field>
+									<Field label="POC LinkedIn"><input className="search-input" value={form.poc_linkedin} onChange={(e) => set('poc_linkedin', e.target.value)} placeholder="https://linkedin.com/in/…" /></Field>
+								</div>
 							</>
 						) },
 					]}

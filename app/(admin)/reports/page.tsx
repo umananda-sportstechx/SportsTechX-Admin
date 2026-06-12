@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { Trash2, FileText, Eye, EyeOff, Pencil } from 'lucide-react';
+import { Trash2, FileText, Eye, EyeOff, Pencil, Languages } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
@@ -12,6 +12,7 @@ import { PageHeader, AsyncState, Loading } from '@/components/atoms';
 import { YearSelect } from '@/components/year-select';
 import { ImageInput } from '@/components/image-input';
 import { FileInput } from '@/components/file-input';
+import { ReportEditionsModal } from '@/components/report-editions-modal';
 
 interface Report {
 	id: string;
@@ -38,6 +39,7 @@ export default function ReportsAdminPage() {
 	const [createPending, setCreatePending] = useState(false);
 	const [removePending, setRemovePending] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
+	const [editionsId, setEditionsId] = useState<string | null>(null);
 	const [search, setSearch] = useState('');
 	const [analyticsOpen, setAnalyticsOpen] = useState(false);
 	const { data, error, isLoading } = useSWR<Response>(['/api/reports'], { dedupingInterval: 30_000 });
@@ -104,6 +106,7 @@ export default function ReportsAdminPage() {
 			<PageHeader kicker={`Library · ${(data?.total ?? 0).toLocaleString()} reports`} title="Reports" />
 
 			{editingId && <EditReportModal id={editingId} onClose={() => setEditingId(null)} onSaved={() => { setEditingId(null); void refresh(); }} />}
+			{editionsId && <ReportEditionsModal id={editionsId} onClose={() => setEditionsId(null)} />}
 
 			<div className="card" style={{ padding: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
 				<div style={{ fontWeight: 700, marginBottom: 12 }}>Publish a new report</div>
@@ -180,6 +183,7 @@ export default function ReportsAdminPage() {
 										</Link>
 									)}
 									<button className="btn ghost" onClick={() => setEditingId(r.id)} title="Edit metadata"><Pencil size={12} /> Edit</button>
+										<button className="btn ghost" onClick={() => setEditionsId(r.id)} title="Language editions"><Languages size={12} /> Editions</button>
 									<button
 										className="btn ghost"
 										onClick={() => void togglePublished(r.id, r.is_published === false)}

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Upload, AlertTriangle } from 'lucide-react';
+import { Upload, AlertTriangle, FileDown } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Modal } from '@/components/modal';
 
@@ -61,6 +61,35 @@ function parseCsv(text: string): Record<string, string>[] {
 	return rows.slice(1)
 		.filter((r) => r.some((v) => v.trim() !== ''))
 		.map((r) => Object.fromEntries(headers.map((h, idx) => [h, (r[idx] ?? '').trim()])));
+}
+
+// ── Downloadable templates (header + a couple of sample rows) ────────────────
+const SAMPLES: Record<Entity, string[][]> = {
+	companies: [
+		['Pitchside Analytics', 'https://pitchside.io', 'Real-time match analytics for football clubs', 'Performance Analytics', 'b2b', '2017', 'United Kingdom', 'London', 'Europe', 'Europe', 'active'],
+		['StrideWear', 'https://stridewear.com', 'Smart running apparel with embedded sensors', 'Wearables', 'd2c', '2019', 'United States', 'Portland', 'North America', 'Americas', 'active'],
+	],
+	deals: [
+		['https://pitchside.io', 'Series A', '2023-03-14', '8000000', 'USD', 'active'],
+		['https://courtvision.ai', 'Seed', '2022-11-02', '2500000', 'USD', 'active'],
+	],
+	acquisitions: [
+		['StrideWear', 'Nike', '2023-07-01', '120000000', 'acquisition'],
+		['TurfIQ', 'John Deere', '2022-04-15', '45000000', 'acquisition'],
+	],
+	ecosystem: [
+		['SportsTech Hub Berlin', 'organization', 'Accelerator and coworking for sportstech startups', 'https://sportstechhub.berlin', 'Accelerator', '2017', 'Germany', 'Berlin', 'Europe', 'Europe', 'active'],
+		['Global SportsTech Summit', 'event', 'Annual conference for sportstech founders and investors', 'https://gstsummit.com', 'Conference', '2015', 'United States', 'New York', 'North America', 'Americas', 'active'],
+	],
+};
+
+function csvCell(v: string): string { return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }
+export function downloadCsv(filename: string, header: string[], rows: string[][]): void {
+	const body = [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
+	const url = URL.createObjectURL(new Blob([body], { type: 'text/csv;charset=utf-8' }));
+	const a = document.createElement('a');
+	a.href = url; a.download = filename; a.click();
+	URL.revokeObjectURL(url);
 }
 
 // ── Duplicate detection (client-side in-file key + server-side DB check) ──────
@@ -157,7 +186,10 @@ export function CsvImportButton({ entity, onDone }: { entity: Entity; onDone: ()
 							Columns (case-insensitive, common aliases accepted):<br />
 							<span style={{ fontFamily: 'var(--font-mono)' }}>{COLUMNS[entity].help}</span>
 						</div>
-						<input type="file" accept=".csv,text/csv" className="search-input" onChange={(e) => { const f = e.target.files?.[0]; if (f) void onFile(f); }} />
+						<div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+							<input type="file" accept=".csv,text/csv" className="search-input" style={{ flex: 1 }} onChange={(e) => { const f = e.target.files?.[0]; if (f) void onFile(f); }} />
+							<button className="btn ghost" onClick={() => downloadCsv(`${entity}_template.csv`, cols, SAMPLES[entity])} title="Download a CSV template with sample rows"><FileDown size={12} /> Template</button>
+						</div>
 
 						{rows.length > 0 && (
 							<>

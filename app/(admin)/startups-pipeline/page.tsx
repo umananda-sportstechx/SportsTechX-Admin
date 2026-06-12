@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Check, X, Trash2, Upload, Rocket } from 'lucide-react';
@@ -11,6 +11,7 @@ import { PageHeader, AsyncState, StatCard, Section, Tag } from '@/components/ato
 import { Funnel } from '@/components/charts';
 import { StatStrip } from '@/components/filters';
 import { WorkSessionTimer, countWorkItem } from '@/components/work-session-timer';
+import { CandidateInput, parseCandidates } from '@/components/candidate-import';
 import { EMPTY_LOCATION } from '@/components/entity-pickers';
 import { CompanyModal } from '../companies/page';
 
@@ -296,24 +297,9 @@ function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 	const [text, setText] = useState('');
 	const [rows, setRows] = useState<CandRow[] | null>(null);
 	const [busy, setBusy] = useState(false);
-	const fileRef = useRef<HTMLInputElement>(null);
-
-	// Each line: "Name, https://site" or a bare URL/name. Comma/tab splits name/website.
-	const parse = () => text.split('\n').map((l) => l.trim()).filter(Boolean).map((line) => {
-		const [a, b] = line.split(/[,\t]/).map((s) => s.trim());
-		if (b) return { name: a, website: b };
-		if (/^https?:\/\//i.test(a)) return { name: a.replace(/^https?:\/\//, '').replace(/\/.*$/, ''), website: a };
-		return { name: a };
-	});
-
-	const onFile = (file: File) => {
-		const reader = new FileReader();
-		reader.onload = () => setText(String(reader.result ?? ''));
-		reader.readAsText(file);
-	};
 
 	const review = async () => {
-		const parsed = parse();
+		const parsed = parseCandidates(text);
 		if (!parsed.length) { toast.error('Paste or upload at least one candidate'); return; }
 		setBusy(true);
 		try {
@@ -344,10 +330,7 @@ function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 		}>
 			{!rows ? (
 				<div style={{ display: 'grid', gap: 8 }}>
-					<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>One per line: <code>Name, https://website</code> or plain URLs. Upload a CSV/TXT or paste below — you&apos;ll review duplicates before importing.</div>
-					<input ref={fileRef} type="file" accept=".csv,.txt" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }} />
-					<button className="btn ghost" style={{ justifySelf: 'start' }} onClick={() => fileRef.current?.click()}><Upload size={12} /> Upload CSV / TXT</button>
-					<textarea className="search-input" style={{ minHeight: 180, resize: 'vertical', fontFamily: 'var(--font-mono)', fontSize: 12 }} value={text} onChange={(e) => setText(e.target.value)} placeholder={'Acme Sports, https://acme.com\nhttps://example.io'} />
+					<CandidateInput text={text} onText={setText} sampleName="Acme Sports" placeholder={'Acme Sports, https://acme.com\nhttps://example.io'} />
 				</div>
 			) : (
 				<div style={{ display: 'grid', gap: 8 }}>

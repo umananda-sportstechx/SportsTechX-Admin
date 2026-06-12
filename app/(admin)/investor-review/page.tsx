@@ -10,6 +10,7 @@ import { Modal } from '@/components/modal';
 import { PageHeader, StatCard, AsyncState, Tag, Chip, Section } from '@/components/atoms';
 import { Funnel } from '@/components/charts';
 import { WorkSessionTimer, countWorkItem } from '@/components/work-session-timer';
+import { CandidateInput, parseCandidates } from '@/components/candidate-import';
 import { InvestorModal } from '../investors/page';
 
 interface QueueRow {
@@ -369,14 +370,8 @@ function PromoteModal({ row, onClose, onDone }: { row: QueueRow; onClose: () => 
 function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
 	const [text, setText] = useState('');
 	const [pending, setPending] = useState(false);
-	const parse = () => text.split('\n').map((l) => l.trim()).filter(Boolean).map((line) => {
-		const [a, b] = line.split(/[,\t]/).map((s) => s.trim());
-		if (b) return { name: a, website: b };
-		if (/^https?:\/\//i.test(a)) return { name: a.replace(/^https?:\/\//, '').replace(/\/.*$/, ''), website: a };
-		return { name: a };
-	});
 	const submit = async () => {
-		const rows = parse();
+		const rows = parseCandidates(text);
 		if (!rows.length) { toast.error('Paste at least one line'); return; }
 		setPending(true);
 		try {
@@ -391,10 +386,7 @@ function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 				<button className="btn" disabled={!text.trim() || pending} onClick={() => void submit()}>{pending ? 'Importing…' : 'Import'}</button>
 			</>
 		}>
-			<div style={{ display: 'grid', gap: 8 }}>
-				<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>One per line. Use <code>Name, https://website</code> or paste plain URLs. Duplicates (by website) are skipped.</div>
-				<textarea className="search-input" style={{ minHeight: 180, resize: 'vertical', fontFamily: 'var(--font-mono)', fontSize: 12 }} value={text} onChange={(e) => setText(e.target.value)} placeholder={'Sequoia Capital, https://sequoiacap.com\nhttps://a16z.com'} />
-			</div>
+			<CandidateInput text={text} onText={setText} sampleName="Sequoia Capital" placeholder={'Sequoia Capital, https://sequoiacap.com\nhttps://a16z.com'} />
 		</Modal>
 	);
 }

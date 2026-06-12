@@ -188,6 +188,9 @@ export default function InvestorsAdminPage() {
 
 interface FundDraft { fund_name: string; announced_date: string; fund_value: string; currency_code: string; source_url: string }
 const emptyFund = (): FundDraft => ({ fund_name: '', announced_date: '', fund_value: '', currency_code: '', source_url: '' });
+interface GeoScope { scope_type: 'country' | 'region' | 'continent'; scope_value: string }
+const GEO_SCOPES = ['country', 'region', 'continent'] as const;
+const REVENUE_STAGES = ['pre_revenue', 'early_revenue', 'growth', 'profitable', 'other'] as const;
 
 interface InvestorForm {
 	name: string; slug: string; website: string; description: string;
@@ -201,6 +204,8 @@ interface InvestorForm {
 	poc_name: string; poc_position: string; poc_email: string; poc_linkedin: string;
 	thesis_sector_ids: string[]; thesis_sport_ids: string[];
 	thesis_tech_tag_ids: string[]; thesis_round_type_ids: string[];
+	thesis_amount_min: string; thesis_amount_max: string;
+	thesis_revenue_stages: string[]; thesis_geo: GeoScope[];
 	funds: FundDraft[];
 }
 
@@ -212,6 +217,7 @@ const EMPTY_INVESTOR: InvestorForm = {
 	latest_funding: '', latest_funding_amount: '', last_raised_at: '',
 	poc_name: '', poc_position: '', poc_email: '', poc_linkedin: '',
 	thesis_sector_ids: [], thesis_sport_ids: [], thesis_tech_tag_ids: [], thesis_round_type_ids: [],
+	thesis_amount_min: '', thesis_amount_max: '', thesis_revenue_stages: [], thesis_geo: [],
 	funds: [],
 };
 
@@ -227,6 +233,8 @@ interface InvestorEdit extends Investor {
 	twitter_url?: string | null; instagram_url?: string | null; facebook_url?: string | null;
 	linkedin_url?: string | null; youtube_url?: string | null; email?: string | null;
 	thesis_sector_ids?: string[]; thesis_sport_ids?: string[]; thesis_tech_tag_ids?: string[]; thesis_round_type_ids?: string[];
+	thesis_amount_min?: string | null; thesis_amount_max?: string | null;
+	thesis_revenue_stages?: string[]; thesis_geo?: Array<{ scope_type: string; scope_value: string }>;
 }
 
 function toInvestorForm(h: InvestorEdit): InvestorForm {
@@ -249,6 +257,10 @@ function toInvestorForm(h: InvestorEdit): InvestorForm {
 		poc_name: h.poc_name ?? '', poc_position: h.poc_position ?? '', poc_email: h.poc_email ?? '', poc_linkedin: h.poc_linkedin ?? '',
 		thesis_sector_ids: h.thesis_sector_ids ?? [], thesis_sport_ids: h.thesis_sport_ids ?? [],
 		thesis_tech_tag_ids: h.thesis_tech_tag_ids ?? [], thesis_round_type_ids: h.thesis_round_type_ids ?? [],
+		thesis_amount_min: h.thesis_amount_min != null ? String(h.thesis_amount_min) : '',
+		thesis_amount_max: h.thesis_amount_max != null ? String(h.thesis_amount_max) : '',
+		thesis_revenue_stages: h.thesis_revenue_stages ?? [],
+		thesis_geo: (h.thesis_geo ?? []).map((g) => ({ scope_type: g.scope_type as GeoScope['scope_type'], scope_value: g.scope_value })),
 		funds: (h.funds ?? []).map((f) => ({
 			fund_name: f.fund_name ?? '', announced_date: f.announced_date ? String(f.announced_date).slice(0, 10) : '',
 			fund_value: f.fund_value != null ? String(f.fund_value) : '', currency_code: f.currency_code ?? '', source_url: f.source_url ?? '',
@@ -310,6 +322,10 @@ function InvestorForm({ id, initial, onClose, onSaved, promoteReviewId }: { id: 
 				thesis_sport_ids: form.thesis_sport_ids,
 				thesis_tech_tag_ids: form.thesis_tech_tag_ids,
 				thesis_round_type_ids: form.thesis_round_type_ids,
+				thesis_amount_min: form.thesis_amount_min.trim() ? Number(form.thesis_amount_min) : null,
+				thesis_amount_max: form.thesis_amount_max.trim() ? Number(form.thesis_amount_max) : null,
+				thesis_revenue_stages: form.thesis_revenue_stages,
+				thesis_geo: form.thesis_geo.filter((g) => g.scope_value.trim()).map((g) => ({ scope_type: g.scope_type, scope_value: g.scope_value.trim() })),
 				funds: form.funds.filter((f) => f.fund_name.trim()).map((f) => ({
 					fund_name: f.fund_name.trim(), announced_date: f.announced_date || undefined,
 					fund_value: f.fund_value.trim() ? Number(f.fund_value) : undefined,
@@ -399,6 +415,37 @@ function InvestorForm({ id, initial, onClose, onSaved, promoteReviewId }: { id: 
 								<Field label="Sports"><SportsPicker value={form.thesis_sport_ids} onChange={(v) => set('thesis_sport_ids', v)} /></Field>
 								<Field label="Tech tags"><TechTagsPicker value={form.thesis_tech_tag_ids} onChange={(v) => set('thesis_tech_tag_ids', v)} /></Field>
 								<Field label="Preferred rounds"><RoundTypesPicker value={form.thesis_round_type_ids} onChange={(v) => set('thesis_round_type_ids', v)} /></Field>
+								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+									<Field label="Cheque min (USD)"><input className="search-input" type="number" value={form.thesis_amount_min} onChange={(e) => set('thesis_amount_min', e.target.value)} /></Field>
+									<Field label="Cheque max (USD)"><input className="search-input" type="number" value={form.thesis_amount_max} onChange={(e) => set('thesis_amount_max', e.target.value)} /></Field>
+								</div>
+								<Field label="Revenue stages">
+									<div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+										{REVENUE_STAGES.map((s) => (
+											<label key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+												<input type="checkbox" checked={form.thesis_revenue_stages.includes(s)} onChange={(e) => set('thesis_revenue_stages', e.target.checked ? [...form.thesis_revenue_stages, s] : form.thesis_revenue_stages.filter((x) => x !== s))} />
+												{s.replace(/_/g, ' ')}
+											</label>
+										))}
+									</div>
+								</Field>
+								<Field label="Geography focus" hint="countries / regions / continents the investor targets">
+									<div style={{ display: 'grid', gap: 8 }}>
+										{form.thesis_geo.map((g, i) => {
+											const upd = (patch: Partial<GeoScope>) => set('thesis_geo', form.thesis_geo.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+											return (
+												<div key={i} style={{ display: 'grid', gridTemplateColumns: '130px 1fr auto', gap: 8, alignItems: 'center' }}>
+													<select className="search-input" value={g.scope_type} onChange={(e) => upd({ scope_type: e.target.value as GeoScope['scope_type'] })}>
+														{GEO_SCOPES.map((t) => <option key={t} value={t}>{t}</option>)}
+													</select>
+													<input className="search-input" placeholder="e.g. United States / Europe" value={g.scope_value} onChange={(e) => upd({ scope_value: e.target.value })} />
+													<button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => set('thesis_geo', form.thesis_geo.filter((_, j) => j !== i))}><Trash2 size={12} /></button>
+												</div>
+											);
+										})}
+										<button className="btn ghost" style={{ justifySelf: 'start' }} onClick={() => set('thesis_geo', [...form.thesis_geo, { scope_type: 'country', scope_value: '' }])}><Plus size={12} /> Add geography</button>
+									</div>
+								</Field>
 							</>
 						) },
 						{ key: 'stats', label: 'Stats & Notes', node: (

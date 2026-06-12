@@ -9,7 +9,7 @@ import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
-import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
+import { FilterBar, FilterSelect, StatStrip, FilterRange, RefSlugFilter } from '@/components/filters';
 import { CsvImportButton } from '@/components/csv-import';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import {
@@ -54,16 +54,26 @@ export default function DealsAdminPage() {
 	const [businessModel, setBusinessModel] = useState('');
 	const [sizeBucket, setSizeBucket] = useState('');
 	const [year, setYear] = useState('');
+	const [sector, setSector] = useState('');
+	const [sport, setSport] = useState('');
+	const [roundType, setRoundType] = useState('');
+	const [amountMin, setAmountMin] = useState('');
+	const [amountMax, setAmountMax] = useState('');
+	const [disclosed, setDisclosed] = useState('');
 	const [page, setPage] = useState(1);
 	const [sort, setSort] = useState('-announced_date');
 	const onSort = (s: string) => { setSort(s); setPage(1); };
+	const reset1 = () => setPage(1);
 	const [creating, setCreating] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 
 	const { data, error, isLoading } = useSWR<DealsResponse>(
 		['/api/deals', {
 			q: search || undefined, status: status || undefined, business_model: businessModel || undefined,
-			deal_size_bucket: sizeBucket || undefined, year: year || undefined, page, limit: 30, sort,
+			deal_size_bucket: sizeBucket || undefined, year: year || undefined,
+			sector_slug: sector || undefined, sport_slug: sport || undefined, round_type_slug: roundType || undefined,
+			amount_usd_min: amountMin || undefined, amount_usd_max: amountMax || undefined, disclosed_only: disclosed || undefined,
+			page, limit: 30, sort,
 		}],
 		{ dedupingInterval: 30_000 },
 	);
@@ -114,7 +124,12 @@ export default function DealsAdminPage() {
 				<FilterSelect ariaLabel="Status" value={status} onChange={(v) => { setStatus(v); setPage(1); }} options={[...STATUSES]} allLabel="All statuses" />
 				<FilterSelect ariaLabel="Business model" value={businessModel} onChange={(v) => { setBusinessModel(v); setPage(1); }} options={[...BUSINESS_MODELS]} allLabel="All models" />
 				<FilterSelect ariaLabel="Deal size" value={sizeBucket} onChange={(v) => { setSizeBucket(v); setPage(1); }} options={SIZE_BUCKETS.map((s) => ({ value: s, label: s.replace(/_/g, ' ').replace('from ', '').replace('to', '–') }))} allLabel="Any size" />
-				<FilterSelect ariaLabel="Year" value={year} onChange={(v) => { setYear(v); setPage(1); }} options={yearOpts} allLabel="All years" />
+				<FilterSelect ariaLabel="Year" value={year} onChange={(v) => { setYear(v); reset1(); }} options={yearOpts} allLabel="All years" />
+				<RefSlugFilter kind="sectors" ariaLabel="Sector" value={sector} onChange={(v) => { setSector(v); reset1(); }} allLabel="All sectors" />
+				<RefSlugFilter kind="sports" ariaLabel="Sport" value={sport} onChange={(v) => { setSport(v); reset1(); }} allLabel="All sports" />
+				<RefSlugFilter kind="round-types" ariaLabel="Round" value={roundType} onChange={(v) => { setRoundType(v); reset1(); }} allLabel="All rounds" />
+				<FilterRange label="Amount $" min={amountMin} max={amountMax} onMin={(v) => { setAmountMin(v); reset1(); }} onMax={(v) => { setAmountMax(v); reset1(); }} />
+				<FilterSelect ariaLabel="Disclosed" value={disclosed} onChange={(v) => { setDisclosed(v); reset1(); }} options={[{ value: 'true', label: 'Disclosed only' }]} allLabel="Any amount" />
 				<div style={{ flex: 1 }} />
 				<CsvImportButton entity="deals" onDone={() => void refresh()} />
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add deal</button>

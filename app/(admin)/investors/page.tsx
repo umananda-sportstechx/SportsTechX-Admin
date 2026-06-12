@@ -9,7 +9,8 @@ import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
-import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
+import { FilterBar, FilterSelect, StatStrip, BoolFilter, FilterRange, RefSlugFilter } from '@/components/filters';
+import { downloadCsv } from '@/components/csv-import';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import {
 	SectorCascade, SportsPicker, TechTagsPicker, RoundTypesPicker, LocationFields, SocialLinks,
@@ -44,16 +45,26 @@ export default function InvestorsAdminPage() {
 	const [category, setCategory] = useState('');
 	const [status, setStatus] = useState('');
 	const [verified, setVerified] = useState('');
+	const [sector, setSector] = useState('');
+	const [sport, setSport] = useState('');
+	const [country, setCountry] = useState('');
+	const [investing, setInvesting] = useState('');
+	const [launchedMin, setLaunchedMin] = useState('');
+	const [launchedMax, setLaunchedMax] = useState('');
 	const [page, setPage] = useState(1);
 	const [sort, setSort] = useState('-created_at');
 	const onSort = (s: string) => { setSort(s); setPage(1); };
+	const reset1 = () => setPage(1);
 	const [creating, setCreating] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 
 	const { data, error, isLoading } = useSWR<InvestorsResponse>(
 		['/api/investors', {
 			search: search || undefined, category: category || undefined, status: status || undefined,
-			is_verified: verified || undefined, page, limit: 30, sort,
+			is_verified: verified || undefined, sector_slug: sector || undefined, sport_slug: sport || undefined,
+			country: country.trim() || undefined, actively_investing: investing || undefined,
+			year_launched_min: launchedMin || undefined, year_launched_max: launchedMax || undefined,
+			page, limit: 30, sort,
 		}],
 		{ dedupingInterval: 30_000 },
 	);
@@ -62,6 +73,21 @@ export default function InvestorsAdminPage() {
 	const statusSegments = toSegments(stats.data?.by_status ?? []);
 
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/investors');
+
+	// Export the full filtered result set (not just the current page) to CSV.
+	const exportCsv = async () => {
+		const params: Record<string, string> = { limit: '5000', sort };
+		const add = (k: string, v: string) => { if (v) params[k] = v; };
+		add('search', search); add('category', category); add('status', status); add('is_verified', verified);
+		add('sector_slug', sector); add('sport_slug', sport); add('country', country.trim());
+		add('actively_investing', investing); add('year_launched_min', launchedMin); add('year_launched_max', launchedMax);
+		try {
+			const r = await api<InvestorsResponse>('GET', `/api/investors?${new URLSearchParams(params)}`);
+			const out = (r?.data ?? []).map((i) => [i.name ?? '', i.website ?? '', i.category ?? '', i.year_launched ? String(i.year_launched) : '', i.status ?? '']);
+			if (out.length === 0) { toast.error('No investors to export'); return; }
+			downloadCsv('investors.csv', ['name', 'website', 'category', 'year_launched', 'status'], out);
+		} catch (e) { toast.error((e as Error).message); }
+	};
 
 	const remove = async (id: string) => {
 		if (!(await ask('Delete this investor? This cannot be undone.'))) return;
@@ -110,10 +136,16 @@ export default function InvestorsAdminPage() {
 					value={search}
 					onChange={(e) => { setSearch(e.target.value); setPage(1); }}
 				/>
-				<FilterSelect ariaLabel="Category" value={category} onChange={(v) => { setCategory(v); setPage(1); }} options={[...CATEGORIES]} allLabel="All categories" />
-				<FilterSelect ariaLabel="Status" value={status} onChange={(v) => { setStatus(v); setPage(1); }} options={[...STATUSES]} allLabel="All statuses" />
-				<FilterSelect ariaLabel="Verified" value={verified} onChange={(v) => { setVerified(v); setPage(1); }} options={[{ value: 'true', label: 'Verified' }, { value: 'false', label: 'Unverified' }]} allLabel="Any verification" />
+				<FilterSelect ariaLabel="Category" value={category} onChange={(v) => { setCategory(v); reset1(); }} options={[...CATEGORIES]} allLabel="All categories" />
+				<FilterSelect ariaLabel="Status" value={status} onChange={(v) => { setStatus(v); reset1(); }} options={[...STATUSES]} allLabel="All statuses" />
+				<FilterSelect ariaLabel="Verified" value={verified} onChange={(v) => { setVerified(v); reset1(); }} options={[{ value: 'true', label: 'Verified' }, { value: 'false', label: 'Unverified' }]} allLabel="Any verification" />
+				<RefSlugFilter kind="sectors" ariaLabel="Thesis sector" value={sector} onChange={(v) => { setSector(v); reset1(); }} allLabel="Any sector" />
+				<RefSlugFilter kind="sports" ariaLabel="Thesis sport" value={sport} onChange={(v) => { setSport(v); reset1(); }} allLabel="Any sport" />
+				<input className="search-input" style={{ height: 32, width: 130 }} placeholder="Country" value={country} onChange={(e) => { setCountry(e.target.value); reset1(); }} />
+				<BoolFilter ariaLabel="Actively investing" value={investing} onChange={(v) => { setInvesting(v); reset1(); }} yesLabel="Investing" noLabel="Not investing" allLabel="Any activity" />
+				<FilterRange label="Launched" min={launchedMin} max={launchedMax} onMin={(v) => { setLaunchedMin(v); reset1(); }} onMax={(v) => { setLaunchedMax(v); reset1(); }} width={64} />
 				<div style={{ flex: 1 }} />
+				<button className="btn ghost" onClick={() => void exportCsv()}>Export CSV</button>
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add investor</button>
 			</FilterBar>
 

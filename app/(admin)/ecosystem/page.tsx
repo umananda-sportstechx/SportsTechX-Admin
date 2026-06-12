@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, Section, Pager } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
-import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
+import { FilterBar, FilterSelect, StatStrip, FilterRange, RefSlugFilter } from '@/components/filters';
 import { CsvImportButton } from '@/components/csv-import';
 import { YearSelect } from '@/components/year-select';
 import { ImageInput } from '@/components/image-input';
@@ -38,13 +38,31 @@ export default function EcosystemAdminPage() {
 	const [type, setType] = useState<'program' | 'event'>('program');
 	const [search, setSearch] = useState('');
 	const [status, setStatus] = useState('');
+	const [country, setCountry] = useState('');
+	const [category, setCategory] = useState('');
+	const [sport, setSport] = useState('');
+	const [foundedMin, setFoundedMin] = useState('');
+	const [foundedMax, setFoundedMax] = useState('');
+	const [mode, setMode] = useState('');
+	const [featured, setFeatured] = useState('');
+	const [upcoming, setUpcoming] = useState('');
+	const [entriesOpen, setEntriesOpen] = useState('');
 	const [page, setPage] = useState(1);
+	const reset1 = () => setPage(1);
 	const [creating, setCreating] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [removePending, setRemovePending] = useState(false);
 
 	const { data, error, isLoading } = useSWR<Response>(
-		['/api/ecosystem-entities', { entity_type: type, q: search || undefined, status: status || undefined, page, limit: 30 }],
+		['/api/ecosystem-entities', {
+			entity_type: type, q: search || undefined, status: status || undefined,
+			country: country.trim() || undefined, category: category.trim() || undefined, sport_slug: sport || undefined,
+			founded_year_min: foundedMin || undefined, founded_year_max: foundedMax || undefined,
+			...(type === 'event'
+				? { mode: mode || undefined, is_featured: featured || undefined, upcoming_only: upcoming || undefined }
+				: { entries_open: entriesOpen || undefined }),
+			page, limit: 30,
+		}],
 		{ dedupingInterval: 30_000 },
 	);
 	const stats = useSWR<EcoStats>(['/api/admin/stats/ecosystem'], { dedupingInterval: 60_000 });
@@ -105,8 +123,21 @@ export default function EcosystemAdminPage() {
 			<FilterBar>
 				<button className={`chip ${type === 'program' ? 'on' : ''}`} onClick={() => { setType('program'); setPage(1); }}>Programs</button>
 				<button className={`chip ${type === 'event' ? 'on' : ''}`} onClick={() => { setType('event'); setPage(1); }}>Events</button>
-				<input className="search-input" style={{ flex: '0 0 240px', height: 32 }} placeholder="Search…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
-				<FilterSelect ariaLabel="Status" value={status} onChange={(v) => { setStatus(v); setPage(1); }} options={[...STATUSES]} allLabel="All statuses" />
+				<input className="search-input" style={{ flex: '0 0 220px', height: 32 }} placeholder="Search…" value={search} onChange={(e) => { setSearch(e.target.value); reset1(); }} />
+				<FilterSelect ariaLabel="Status" value={status} onChange={(v) => { setStatus(v); reset1(); }} options={[...STATUSES]} allLabel="All statuses" />
+				<RefSlugFilter kind="sports" ariaLabel="Sport" value={sport} onChange={(v) => { setSport(v); reset1(); }} allLabel="All sports" />
+				<input className="search-input" style={{ height: 32, width: 120 }} placeholder="Category" value={category} onChange={(e) => { setCategory(e.target.value); reset1(); }} />
+				<input className="search-input" style={{ height: 32, width: 120 }} placeholder="Country" value={country} onChange={(e) => { setCountry(e.target.value); reset1(); }} />
+				<FilterRange label="Founded" min={foundedMin} max={foundedMax} onMin={(v) => { setFoundedMin(v); reset1(); }} onMax={(v) => { setFoundedMax(v); reset1(); }} width={64} />
+				{type === 'event' ? (
+					<>
+						<FilterSelect ariaLabel="Mode" value={mode} onChange={(v) => { setMode(v); reset1(); }} options={[...EVENT_MODES]} allLabel="Any mode" />
+						<FilterSelect ariaLabel="Upcoming" value={upcoming} onChange={(v) => { setUpcoming(v); reset1(); }} options={[{ value: 'true', label: 'Upcoming only' }]} allLabel="All dates" />
+						<FilterSelect ariaLabel="Featured" value={featured} onChange={(v) => { setFeatured(v); reset1(); }} options={[{ value: 'true', label: 'Featured only' }]} allLabel="Any" />
+					</>
+				) : (
+					<FilterSelect ariaLabel="Applications" value={entriesOpen} onChange={(v) => { setEntriesOpen(v); reset1(); }} options={[{ value: 'true', label: 'Applications open' }, { value: 'false', label: 'Closed' }]} allLabel="Any application status" />
+				)}
 				<div style={{ flex: 1 }} />
 				<CsvImportButton entity="ecosystem" onDone={() => void refresh()} />
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add {type}</button>

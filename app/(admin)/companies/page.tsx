@@ -9,7 +9,7 @@ import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
-import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
+import { FilterBar, FilterSelect, StatStrip, BoolFilter, FilterRange, RefSlugFilter } from '@/components/filters';
 import { CsvImportButton } from '@/components/csv-import';
 import { YearSelect } from '@/components/year-select';
 import { ImageInput } from '@/components/image-input';
@@ -49,9 +49,18 @@ export default function CompaniesAdminPage() {
 	const [status, setStatus] = useState('');
 	const [sector, setSector] = useState('');
 	const [verified, setVerified] = useState('');
+	const [sport, setSport] = useState('');
+	const [country, setCountry] = useState('');
+	const [raising, setRaising] = useState('');
+	const [unicorn, setUnicorn] = useState('');
+	const [foundedMin, setFoundedMin] = useState('');
+	const [foundedMax, setFoundedMax] = useState('');
+	const [fundingMin, setFundingMin] = useState('');
+	const [fundingMax, setFundingMax] = useState('');
 	const [page, setPage] = useState(1);
 	const [sort, setSort] = useState('-created_at');
 	const onSort = (s: string) => { setSort(s); setPage(1); };
+	const reset1 = () => setPage(1);
 	const [creating, setCreating] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [removePending, setRemovePending] = useState(false);
@@ -59,7 +68,11 @@ export default function CompaniesAdminPage() {
 	const { data, error, isLoading } = useSWR<CompaniesResponse>(
 		['/api/companies', {
 			search: search || undefined, status: status || undefined, sector: sector || undefined,
-			is_verified: verified || undefined, page, limit: 30, sort,
+			is_verified: verified || undefined, sport: sport || undefined, country: country.trim() || undefined,
+			is_actively_raising: raising || undefined, is_unicorn: unicorn || undefined,
+			founded_year_min: foundedMin || undefined, founded_year_max: foundedMax || undefined,
+			min_funding: fundingMin || undefined, max_funding: fundingMax || undefined,
+			page, limit: 30, sort,
 		}],
 		{ dedupingInterval: 30_000 },
 	);
@@ -121,9 +134,15 @@ export default function CompaniesAdminPage() {
 					value={search}
 					onChange={(e) => { setSearch(e.target.value); setPage(1); }}
 				/>
-				<FilterSelect ariaLabel="Status" value={status} onChange={(v) => { setStatus(v); setPage(1); }} options={[...STATUSES]} allLabel="All statuses" />
-				<FilterSelect ariaLabel="Sector" value={sector} onChange={(v) => { setSector(v); setPage(1); }} options={(sectorOpts.data ?? []).map((s) => ({ value: s.slug, label: s.name }))} allLabel="All sectors" />
-				<FilterSelect ariaLabel="Verified" value={verified} onChange={(v) => { setVerified(v); setPage(1); }} options={[{ value: 'true', label: 'Verified' }, { value: 'false', label: 'Unverified' }]} allLabel="Any verification" />
+				<FilterSelect ariaLabel="Status" value={status} onChange={(v) => { setStatus(v); reset1(); }} options={[...STATUSES]} allLabel="All statuses" />
+				<FilterSelect ariaLabel="Sector" value={sector} onChange={(v) => { setSector(v); reset1(); }} options={(sectorOpts.data ?? []).map((s) => ({ value: s.slug, label: s.name }))} allLabel="All sectors" />
+				<RefSlugFilter kind="sports" ariaLabel="Sport" value={sport} onChange={(v) => { setSport(v); reset1(); }} allLabel="All sports" />
+				<FilterSelect ariaLabel="Verified" value={verified} onChange={(v) => { setVerified(v); reset1(); }} options={[{ value: 'true', label: 'Verified' }, { value: 'false', label: 'Unverified' }]} allLabel="Any verification" />
+				<input className="search-input" style={{ height: 32, width: 130 }} placeholder="Country" value={country} onChange={(e) => { setCountry(e.target.value); reset1(); }} />
+				<BoolFilter ariaLabel="Actively raising" value={raising} onChange={(v) => { setRaising(v); reset1(); }} yesLabel="Raising" noLabel="Not raising" allLabel="Any raising" />
+				<BoolFilter ariaLabel="Unicorn" value={unicorn} onChange={(v) => { setUnicorn(v); reset1(); }} yesLabel="Unicorn" noLabel="Non-unicorn" allLabel="Any size" />
+				<FilterRange label="Founded" min={foundedMin} max={foundedMax} onMin={(v) => { setFoundedMin(v); reset1(); }} onMax={(v) => { setFoundedMax(v); reset1(); }} width={64} />
+				<FilterRange label="Funding $" min={fundingMin} max={fundingMax} onMin={(v) => { setFundingMin(v); reset1(); }} onMax={(v) => { setFundingMax(v); reset1(); }} />
 				<div style={{ flex: 1 }} />
 				<CsvImportButton entity="companies" onDone={() => void refresh()} />
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add company</button>

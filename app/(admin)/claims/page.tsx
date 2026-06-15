@@ -67,6 +67,9 @@ export default function ClaimsAdminPage() {
 	);
 	const stats = useSWR<QueueStats>(['/api/admin/stats/queues'], { dedupingInterval: 60_000 });
 	const c = stats.data?.claims;
+	const usersResp = useSWR<{ data: Array<{ id: string; full_name?: string | null; display_name?: string | null; email: string; user_role: string }> }>(
+		['/api/admin/users', { limit: 100 }], { dedupingInterval: 5 * 60_000 });
+	const admins = (usersResp.data?.data ?? []).filter((u) => u.user_role === 'admin');
 
 	const claims = data?.data ?? [];
 
@@ -86,6 +89,7 @@ export default function ClaimsAdminPage() {
 	};
 
 	const pickup = (id: string) => act(id, () => api('POST', `/api/admin/claims/${id}/pickup`, { picked_up: true }), 'Claim picked up');
+	const assign = (id: string, adminId: string) => act(id, () => api('POST', `/api/admin/claims/${id}/pickup`, { picked_up: true, assign_to: adminId }), 'Claim assigned');
 	const verify = (id: string) => act(id, () => api('POST', `/api/admin/claims/${id}/verify`, { send_email: sendEmail }), 'Claim verified');
 	const reject = (id: string) => {
 		const reason = window.prompt('Reason for rejection (optional):') ?? undefined;
@@ -181,6 +185,13 @@ export default function ClaimsAdminPage() {
 										<div style={{ display: 'inline-flex', gap: 6 }}>
 											{c.status === 'pending' && (
 												<button className="btn ghost" disabled={pendingId === c.id} onClick={() => void pickup(c.id)}>Pick up</button>
+											)}
+											{(c.status === 'pending' || c.status === 'picked_up') && admins.length > 0 && (
+												<select className="search-input" style={{ height: 30, maxWidth: 150 }} value="" disabled={pendingId === c.id}
+													onChange={(e) => { if (e.target.value) void assign(c.id, e.target.value); }} aria-label="Assign claim to admin">
+													<option value="">Assign to…</option>
+													{admins.map((a) => <option key={a.id} value={a.id}>{a.full_name || a.display_name || a.email}</option>)}
+												</select>
 											)}
 											{c.status !== 'verified' && c.status !== 'rejected' && (
 												<button className="btn" disabled={pendingId === c.id} onClick={() => void verify(c.id)}>Verify</button>

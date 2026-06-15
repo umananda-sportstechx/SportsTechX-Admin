@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import useSWR from 'swr';
 import { toast } from 'sonner';
-import { CalendarPlus, Coins, KeyRound } from 'lucide-react';
+import { CalendarPlus, Coins, KeyRound, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
 import { UserSelectOne, UserMultiPicker } from '@/components/entity-pickers';
 
@@ -376,6 +377,53 @@ export default function BillingAdminPage() {
 						</div>
 					</div>
 				)}
+			</div>
+
+			<OpsAndFunnel />
+		</div>
+	);
+}
+
+interface Funnel {
+	overall: { total: number; ever_trialed: number; paid: number; free_to_trial_pct: number; trial_to_paid_pct: number };
+	by_plan: Array<{ tier: string | null; trialing: number; paid: number }>;
+}
+
+/** DB-side conversion funnel (per-plan) + ops: manually run the trial-expiry sweep. */
+function OpsAndFunnel() {
+	const { data, mutate } = useSWR<Funnel>(['/api/admin/billing/conversion-funnel'], { dedupingInterval: 60_000 });
+	const [running, setRunning] = useState(false);
+	const runSweep = async () => {
+		setRunning(true);
+		try { await api('POST', '/api/admin/billing/run-trial-expiry'); toast.success('Trial-expiry sweep queued'); }
+		catch (e) { toast.error((e as Error).message); } finally { setRunning(false); }
+	};
+	const o = data?.overall;
+	return (
+		<div style={{ marginTop: 'var(--space-5)', display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)' }}>
+			<div className="card" style={{ padding: 'var(--space-4)' }}>
+				<div style={{ fontWeight: 700, marginBottom: 10 }}>Conversion funnel <span style={{ fontWeight: 400, color: 'var(--fg-muted)', fontSize: 12 }}>· DB-side, per plan</span></div>
+				<div style={{ display: 'flex', gap: 24, marginBottom: 12, flexWrap: 'wrap' }}>
+					<div><div className="co-stat-label">Users</div><div style={{ fontSize: 20, fontWeight: 700 }}>{(o?.total ?? 0).toLocaleString()}</div></div>
+					<div><div className="co-stat-label">Free → trial</div><div style={{ fontSize: 20, fontWeight: 700 }}>{(o?.free_to_trial_pct ?? 0).toFixed(1)}%</div></div>
+					<div><div className="co-stat-label">Trial → paid</div><div style={{ fontSize: 20, fontWeight: 700 }}>{(o?.trial_to_paid_pct ?? 0).toFixed(1)}%</div></div>
+					<div><div className="co-stat-label">Paying</div><div style={{ fontSize: 20, fontWeight: 700 }}>{(o?.paid ?? 0).toLocaleString()}</div></div>
+				</div>
+				<table className="data-table">
+					<thead><tr><th>Plan tier</th><th>Trialing</th><th>Paying</th></tr></thead>
+					<tbody>
+						{(data?.by_plan ?? []).map((r) => (
+							<tr key={r.tier ?? '—'}><td>{r.tier ?? '—'}</td><td className="num">{r.trialing.toLocaleString()}</td><td className="num">{r.paid.toLocaleString()}</td></tr>
+						))}
+						{(data?.by_plan?.length ?? 0) === 0 && <tr><td colSpan={3} style={{ color: 'var(--fg-muted)' }}>No paid/trial users yet.</td></tr>}
+					</tbody>
+				</table>
+			</div>
+			<div className="card" style={{ padding: 'var(--space-4)' }}>
+				<div style={{ fontWeight: 700, marginBottom: 10 }}>Ops</div>
+				<div style={{ fontSize: 12, color: 'var(--fg-muted)', marginBottom: 10 }}>Trials auto-expire hourly. Run the sweep now to immediately downgrade any users whose trial has ended (safety net for missed webhooks).</div>
+				<button className="btn" disabled={running} onClick={() => void runSweep()}><RefreshCw size={12} /> {running ? 'Queuing…' : 'Run trial-expiry sweep'}</button>
+				<button className="btn ghost" style={{ marginTop: 8 }} onClick={() => void mutate()}>Refresh funnel</button>
 			</div>
 		</div>
 	);

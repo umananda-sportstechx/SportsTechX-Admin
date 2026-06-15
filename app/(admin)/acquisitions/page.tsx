@@ -5,10 +5,11 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading, StatCard, Section } from '@/components/atoms';
+import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
-import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
+import { FilterBar, FilterSelect, StatStrip, FilterRange, RefSlugFilter } from '@/components/filters';
 import { CsvImportButton } from '@/components/csv-import';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import { CompanySelectOne, SectorCascade, SportsPicker, CurrencySelect, LocationFields, EMPTY_LOCATION, type LocationValue } from '@/components/entity-pickers';
@@ -40,17 +41,30 @@ const fmtMoney = (n: number): string => n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` :
 
 export default function AcquisitionsAdminPage() {
 	const { mutate } = useSWRConfig();
+	const ask = useConfirm();
 	const [search, setSearch] = useState('');
 	const [type, setType] = useState('');
 	const [year, setYear] = useState('');
+	const [sector, setSector] = useState('');
+	const [sport, setSport] = useState('');
+	const [country, setCountry] = useState('');
+	const [stech, setStech] = useState('');
+	const [amountMin, setAmountMin] = useState('');
+	const [amountMax, setAmountMax] = useState('');
 	const [page, setPage] = useState(1);
+	const [sort, setSort] = useState('-acquisition_date');
+	const onSort = (s: string) => { setSort(s); setPage(1); };
+	const reset1 = () => setPage(1);
 	const [creating, setCreating] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 
 	const { data, error, isLoading } = useSWR<AcqResponse>(
 		['/api/acquisitions', {
 			q: search || undefined, acquisition_type: type || undefined, year: year || undefined,
-			page, limit: 30, sort: '-acquisition_date',
+			sector_slug: sector || undefined, sport_slug: sport || undefined, country: country.trim() || undefined,
+			acquiree_is_sportstech: stech || undefined,
+			amount_usd_min: amountMin || undefined, amount_usd_max: amountMax || undefined,
+			page, limit: 30, sort,
 		}],
 		{ dedupingInterval: 30_000 },
 	);
@@ -61,7 +75,7 @@ export default function AcquisitionsAdminPage() {
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/acquisitions');
 
 	const remove = async (id: string) => {
-		if (!confirm('Delete this acquisition?')) return;
+		if (!(await ask('Delete this acquisition?'))) return;
 		try {
 			await api('DELETE', `/api/admin/acquisitions/${id}`);
 			toast.success('Deleted');
@@ -98,8 +112,13 @@ export default function AcquisitionsAdminPage() {
 
 			<FilterBar>
 				<input className="search-input" style={{ flex: '0 0 280px', height: 32 }} placeholder="Search acquiree / acquirer…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
-				<FilterSelect ariaLabel="Type" value={type} onChange={(v) => { setType(v); setPage(1); }} options={[...TYPES]} allLabel="All types" />
-				<FilterSelect ariaLabel="Year" value={year} onChange={(v) => { setYear(v); setPage(1); }} options={yearOpts} allLabel="All years" />
+				<FilterSelect ariaLabel="Type" value={type} onChange={(v) => { setType(v); reset1(); }} options={[...TYPES]} allLabel="All types" />
+				<FilterSelect ariaLabel="Year" value={year} onChange={(v) => { setYear(v); reset1(); }} options={yearOpts} allLabel="All years" />
+				<RefSlugFilter kind="sectors" ariaLabel="Sector (either side)" value={sector} onChange={(v) => { setSector(v); reset1(); }} allLabel="Any sector" />
+				<RefSlugFilter kind="sports" ariaLabel="Sport (either side)" value={sport} onChange={(v) => { setSport(v); reset1(); }} allLabel="Any sport" />
+				<input className="search-input" style={{ height: 32, width: 130 }} placeholder="Country" value={country} onChange={(e) => { setCountry(e.target.value); reset1(); }} />
+				<FilterSelect ariaLabel="SportsTech acquiree" value={stech} onChange={(v) => { setStech(v); reset1(); }} options={[{ value: 'true', label: 'SportsTech acquiree' }]} allLabel="Any acquiree" />
+				<FilterRange label="Value $" min={amountMin} max={amountMax} onMin={(v) => { setAmountMin(v); reset1(); }} onMax={(v) => { setAmountMax(v); reset1(); }} />
 				<div style={{ flex: 1 }} />
 				<CsvImportButton entity="acquisitions" onDone={() => void refresh()} />
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add acquisition</button>
@@ -112,7 +131,7 @@ export default function AcquisitionsAdminPage() {
 			<div className="card">
 				<AsyncState loading={isLoading} error={error} empty={rows.length === 0} emptyMsg={search ? 'No acquisitions match.' : 'No acquisitions yet.'} onRetry={() => void refresh()}>
 					<table className="data-table">
-						<thead><tr><th>Acquiree</th><th>Acquirer</th><th>Year</th><th>Amount</th><th>Type</th><th style={{ textAlign: 'right' }} /></tr></thead>
+						<thead><tr><th>Acquiree</th><th>Acquirer</th><SortableTh label="Year" field="acquisition_date" sort={sort} onSort={onSort} /><SortableTh label="Amount" field="amount_usd" sort={sort} onSort={onSort} /><th>Type</th><th style={{ textAlign: 'right' }} /></tr></thead>
 						<tbody>
 							{rows.map((a) => (
 								<tr key={a.id}>
@@ -131,6 +150,7 @@ export default function AcquisitionsAdminPage() {
 					</table>
 				</AsyncState>
 			</div>
+			<Pager page={page} totalPages={data?.totalPages} onPage={setPage} />
 		</div>
 	);
 }
@@ -183,7 +203,7 @@ function toAcqForm(h: AcqEdit): AcqForm {
 
 // A staged M&A draft = the POST body minus acquiree_company_id (the new company),
 // plus a small label snapshot for rendering the row before the company exists.
-export interface StagedAcq { body: Record<string, unknown>; label: { acquirer?: string; amount?: string; year?: string } }
+export interface StagedAcq { body: Record<string, unknown>; label: { acquirer?: string; counterparty?: string; role?: 'acquiree' | 'acquirer'; amount?: string; year?: string } }
 
 export function AcquisitionModal({ id, onClose, onSaved, onStage }: { id: string | null; onClose: () => void; onSaved: () => void; onStage?: (a: StagedAcq) => void }) {
 	const isEdit = !!id;

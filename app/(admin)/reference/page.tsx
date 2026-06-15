@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Plus, Trash2, Save } from 'lucide-react';
 import { Modal } from '@/components/modal';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm';
 
 type Kind = 'sectors' | 'sports' | 'tech-tags' | 'round-types';
 
@@ -29,6 +30,7 @@ interface RefResponse { data: RefRow[] }
 
 export default function ReferenceAdminPage() {
 	const { mutate } = useSWRConfig();
+	const ask = useConfirm();
 	const [kind, setKind] = useState<Kind>('sectors');
 	const [editing, setEditing] = useState<RefRow | null>(null);
 	const [creating, setCreating] = useState(false);
@@ -38,7 +40,7 @@ export default function ReferenceAdminPage() {
 	const refresh = () => mutate((key) => Array.isArray(key) && typeof key[0] === 'string' && (key[0] as string).startsWith(`/api/admin/reference/${kind}`));
 
 	const remove = async (id: string) => {
-		if (!confirm('Delete this entry? Anything referencing it may break.')) return;
+		if (!(await ask('Delete this entry? Anything referencing it may break.'))) return;
 		try {
 			await api('DELETE', `/api/admin/reference/${kind}/${id}`);
 			toast.success('Deleted');
@@ -78,7 +80,7 @@ export default function ReferenceAdminPage() {
 				<RefModal
 					kind={kind}
 					initial={editing}
-					parents={rows.filter((r) => !r.parent_id)}
+					parents={rows.filter((r) => r.id !== editing?.id)}
 					onClose={() => { setCreating(false); setEditing(null); }}
 					onSaved={() => { setCreating(false); setEditing(null); void refresh(); }}
 				/>

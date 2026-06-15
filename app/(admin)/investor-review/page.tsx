@@ -3,12 +3,14 @@
 import { useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { Plus, Trash2, Check, SkipForward, Rocket } from 'lucide-react';
+import { Plus, Trash2, Check, SkipForward, Rocket, Undo2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, StatCard, AsyncState, Tag, Chip, Section } from '@/components/atoms';
 import { Funnel } from '@/components/charts';
-import { WorkSessionTimer } from '@/components/work-session-timer';
+import { WorkSessionTimer, countWorkItem } from '@/components/work-session-timer';
+import { CandidateInput, parseCandidates } from '@/components/candidate-import';
 import { InvestorModal } from '../investors/page';
 
 interface QueueRow {
@@ -34,6 +36,7 @@ const STATUSES = ['pending', 'completed', 'skipped'] as const;
 
 export default function InvestorReviewPage() {
 	const { mutate } = useSWRConfig();
+	const ask = useConfirm();
 	const [status, setStatus] = useState<string>('pending');
 	const [assigned, setAssigned] = useState<string>('');
 	const [search, setSearch] = useState('');
@@ -83,7 +86,7 @@ export default function InvestorReviewPage() {
 	);
 	const bulkComplete = () => act(() => api('PATCH', '/api/admin/investor-review/bulk-status', { ids: [...selected], status: 'completed' }), 'Marked completed');
 	const bulkSkip = () => act(() => api('PATCH', '/api/admin/investor-review/bulk-status', { ids: [...selected], status: 'skipped' }), 'Marked skipped');
-	const bulkDelete = () => { if (confirm(`Delete ${selected.size} candidate(s)? This cannot be undone.`)) void act(() => api('DELETE', '/api/admin/investor-review/bulk', { ids: [...selected] }), 'Deleted'); };
+	const bulkDelete = async () => { if (await ask(`Delete ${selected.size} candidate(s)? This cannot be undone.`)) void act(() => api('DELETE', '/api/admin/investor-review/bulk', { ids: [...selected] }), 'Deleted'); };
 	const selectAllMatching = async () => {
 		const p = new URLSearchParams();
 		if (status) p.set('status', status);
@@ -94,7 +97,8 @@ export default function InvestorReviewPage() {
 		try { const r = await api<{ ids: string[] }>('GET', `/api/admin/investor-review/ids?${p.toString()}`); setSelected(new Set(r.ids)); }
 		catch (e) { toast.error((e as Error).message); }
 	};
-	const remove = (id: string) => { if (confirm('Delete this candidate?')) void act(() => api('DELETE', `/api/admin/investor-review/${id}`), 'Deleted'); };
+	const remove = (id: string) => { void (async () => { if (await ask('Delete this candidate?')) void act(() => api('DELETE', `/api/admin/investor-review/${id}`), 'Deleted'); })(); };
+	const unskip = (id: string) => act(() => api('PATCH', `/api/admin/investor-review/${id}`, { status: 'pending', skip_reason: '' }), 'Moved back to pending');
 
 	return (
 		<div>
@@ -106,7 +110,7 @@ export default function InvestorReviewPage() {
 
 			<div className="grid-4" style={{ marginBottom: 'var(--space-5)' }}>
 				<StatCard label="Pending" value={(stats?.counts.pending ?? 0).toLocaleString()} urgent={(stats?.counts.pending ?? 0) > 0} />
-				<StatCard label="Completed" value={(stats?.counts.completed ?? 0).toLocaleString()} />
+				<StatCard label="Completed" value={(stats?.counts.completed ?? 0).toLocaleString()} delta={stats?.weekly && stats.weekly.completed_last_week > 0 ? ((stats.weekly.completed_this_week - stats.weekly.completed_last_week) / stats.weekly.completed_last_week) * 100 : null} />
 				<StatCard label="Skipped" value={(stats?.counts.skipped ?? 0).toLocaleString()} />
 				<StatCard label="Total" value={(stats?.counts.total ?? 0).toLocaleString()} />
 			</div>
@@ -133,7 +137,12 @@ export default function InvestorReviewPage() {
 												<td>{a.full_name ?? `${a.assigned_to!.slice(0, 8)}…`}</td>
 												<td className="num">{a.pending}</td>
 												<td className="num">{a.completed}</td>
-												<td className="num">{a.completion_rate}%</td>
+												<td className="num">
+													{a.completion_rate}%
+													<div style={{ height: 4, background: 'var(--bg-2)', borderRadius: 2, marginTop: 3, overflow: 'hidden' }}>
+														<div style={{ height: '100%', width: `${a.completion_rate}%`, background: 'var(--pos)' }} />
+													</div>
+												</td>
 												<td className="num">{t ? fmtTime(t.total_seconds) : '—'}</td>
 											</tr>
 										);
@@ -207,7 +216,9 @@ export default function InvestorReviewPage() {
 									</td>
 									<td style={{ textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
 										{r.status !== 'completed' && <button className="btn" title="Promote to investors" onClick={() => setPromoting(r)}><Rocket size={12} /> Promote</button>}
-										<button className="btn ghost" title="Skip" onClick={() => setSkipping(r)}><SkipForward size={12} /></button>
+										{r.status === 'skipped'
+											? <button className="btn ghost" title="Move back to pending" onClick={() => void unskip(r.id)}><Undo2 size={12} /> Unskip</button>
+											: <button className="btn ghost" title="Skip" onClick={() => setSkipping(r)}><SkipForward size={12} /></button>}
 										<button className="btn ghost" style={{ color: 'var(--accent)' }} title="Delete" onClick={() => remove(r.id)}><Trash2 size={12} /></button>
 									</td>
 								</tr>
@@ -281,10 +292,16 @@ function SkipModal({ row, onClose, onSaved }: { row: QueueRow; onClose: () => vo
 				<button className="btn" disabled={pending} onClick={() => void submit()}>{pending ? 'Saving…' : 'Skip'}</button>
 			</>
 		}>
-			<L label="Reason (optional)"><textarea className="search-input" style={{ minHeight: 70, resize: 'vertical' }} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why is this candidate being skipped?" /></L>
+			<L label="Reason">
+				<div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+					{SKIP_PRESETS.map((p) => <button key={p} type="button" className={`chip ${reason === p ? 'on' : ''}`} onClick={() => setReason(p)}>{p}</button>)}
+				</div>
+				<textarea className="search-input" style={{ minHeight: 60, resize: 'vertical' }} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Pick a preset above or type a reason…" />
+			</L>
 		</Modal>
 	);
 }
+const SKIP_PRESETS = ['Individual', 'Sports Organisation', 'Asset Manager', 'Not an investor', 'Other'];
 
 // Valid investor category enum labels — used to map a free-text queue category
 // onto the investor form's select (left blank if it doesn't match).
@@ -297,13 +314,15 @@ function PromoteModal({ row, onClose, onDone }: { row: QueueRow; onClose: () => 
 
 	const merge = async (investorId: string) => {
 		setBusy(true);
-		try { await api('POST', `/api/admin/investor-review/${row.id}/merge`, { investor_id: investorId }); toast.success('Merged into existing investor'); onDone(); }
+		try { await api('POST', `/api/admin/investor-review/${row.id}/merge`, { investor_id: investorId }); countWorkItem('investor_review'); toast.success('Merged into existing investor'); onDone(); }
 		catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
 	};
-	const onCreated = async (createdId?: string) => {
+	const onCreated = (createdId?: string) => {
+		// The investor create links + marks the review row in its own transaction
+		// (via promoteReviewId), so there's no separate mark-promoted call here.
 		if (!createdId) { setCreateOpen(false); return; }
-		try { await api('POST', `/api/admin/investor-review/${row.id}/mark-promoted`, { investor_id: createdId }); toast.success('Promoted to investors'); onDone(); }
-		catch (e) { toast.error((e as Error).message); }
+		countWorkItem('investor_review');
+		onDone();
 	};
 
 	if (createOpen) {
@@ -313,8 +332,9 @@ function PromoteModal({ row, onClose, onDone }: { row: QueueRow; onClose: () => 
 			<InvestorModal
 				id={null}
 				seed={p ? { name: p.name, website: p.website, category: cat, hq: { country: p.hq_country, city: '', continent: '', region: '', state: '' } } : undefined}
+				promoteReviewId={row.id}
 				onClose={() => setCreateOpen(false)}
-				onSaved={(id) => void onCreated(id)}
+				onSaved={(id) => onCreated(id)}
 			/>
 		);
 	}
@@ -350,14 +370,8 @@ function PromoteModal({ row, onClose, onDone }: { row: QueueRow; onClose: () => 
 function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
 	const [text, setText] = useState('');
 	const [pending, setPending] = useState(false);
-	const parse = () => text.split('\n').map((l) => l.trim()).filter(Boolean).map((line) => {
-		const [a, b] = line.split(/[,\t]/).map((s) => s.trim());
-		if (b) return { name: a, website: b };
-		if (/^https?:\/\//i.test(a)) return { name: a.replace(/^https?:\/\//, '').replace(/\/.*$/, ''), website: a };
-		return { name: a };
-	});
 	const submit = async () => {
-		const rows = parse();
+		const rows = parseCandidates(text);
 		if (!rows.length) { toast.error('Paste at least one line'); return; }
 		setPending(true);
 		try {
@@ -372,10 +386,7 @@ function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 				<button className="btn" disabled={!text.trim() || pending} onClick={() => void submit()}>{pending ? 'Importing…' : 'Import'}</button>
 			</>
 		}>
-			<div style={{ display: 'grid', gap: 8 }}>
-				<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>One per line. Use <code>Name, https://website</code> or paste plain URLs. Duplicates (by website) are skipped.</div>
-				<textarea className="search-input" style={{ minHeight: 180, resize: 'vertical', fontFamily: 'var(--font-mono)', fontSize: 12 }} value={text} onChange={(e) => setText(e.target.value)} placeholder={'Sequoia Capital, https://sequoiacap.com\nhttps://a16z.com'} />
-			</div>
+			<CandidateInput text={text} onText={setText} sampleName="Sequoia Capital" placeholder={'Sequoia Capital, https://sequoiacap.com\nhttps://a16z.com'} />
 		</Modal>
 	);
 }

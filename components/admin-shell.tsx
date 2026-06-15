@@ -7,7 +7,7 @@ import {
 	LayoutDashboard, Briefcase, Users, FilePlus, FileText, Database, Layers,
 	Activity, ShoppingCart, LogOut, ShieldAlert, CreditCard, ToggleLeft,
 	Banknote, Sparkles, Tag, BookOpen, Menu, BarChart3, Gauge,
-	CircleDollarSign, GitMerge,
+	CircleDollarSign, GitMerge, Lightbulb,
 } from 'lucide-react';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useIsAdmin, useUserProfile } from '@/hooks/use-user-profile';
@@ -50,6 +50,7 @@ const NAV_GROUPS: NavGroup[] = [
 		items: [
 			{ href: '/reports', label: 'Reports', Icon: FileText },
 			{ href: '/polls', label: 'Polls', Icon: Sparkles },
+			{ href: '/insights', label: 'Insights', Icon: Lightbulb },
 		],
 	},
 	{

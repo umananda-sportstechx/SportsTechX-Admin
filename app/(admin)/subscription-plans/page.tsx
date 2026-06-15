@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Save } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState } from '@/components/atoms';
 
@@ -37,11 +38,17 @@ interface PlansResponse { data: Plan[] }
 
 export default function PlansEditorialPage() {
 	const { mutate } = useSWRConfig();
+	const ask = useConfirm();
 	const { data, error, isLoading } = useSWR<PlansResponse>(['/api/admin/subscription-plans']);
 	const [editing, setEditing] = useState<Plan | null>(null);
 	const [creating, setCreating] = useState(false);
 
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/admin/subscription-plans');
+	const archive = async (p: Plan) => {
+		if (!(await ask(`Archive "${p.name}"? It stays for existing subscribers but can't be newly subscribed to (Stripe price + product archived).`))) return;
+		try { await api('DELETE', `/api/admin/subscription-plans/${p.id}`); toast.success('Plan archived'); void refresh(); }
+		catch (e) { toast.error((e as Error).message); }
+	};
 	const rows = data?.data ?? [];
 
 	return (
@@ -70,7 +77,10 @@ export default function PlansEditorialPage() {
 								</div>
 								{p.tagline && <div style={{ fontSize: 13, color: 'var(--fg-2)', marginTop: 4 }}>{p.tagline}</div>}
 							</div>
+							<div style={{ display: 'flex', gap: 6 }}>
 							<button className="btn" onClick={() => setEditing(p)}>Edit editorial</button>
+							{p.is_active !== false && <button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => void archive(p)}>Archive</button>}
+						</div>
 						</div>
 						<div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 12, fontSize: 12 }}>
 							<Stat label="Price" value={`${(p.price_amount / 100).toFixed(2)} ${p.currency_code}`} />

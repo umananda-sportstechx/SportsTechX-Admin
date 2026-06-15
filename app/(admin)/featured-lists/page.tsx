@@ -5,9 +5,11 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Trash2, Save, Link2, X, Search } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Tag, Loading } from '@/components/atoms';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
+import { YearSelect } from '@/components/year-select';
 
 const ENTITY_TYPES = ['companies', 'investors', 'deals', 'acquisitions', 'programs', 'events'] as const;
 type EntityType = (typeof ENTITY_TYPES)[number];
@@ -15,7 +17,9 @@ type EntityType = (typeof ENTITY_TYPES)[number];
 interface FeaturedList {
 	id: string; name: string; description: string | null; entity_type: string;
 	share_slug: string | null; is_premium: boolean; show_in_lists: boolean; item_count?: number;
+	filters?: unknown; month?: string | null; year?: number | null;
 }
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 interface ListItem { entity_key: string; entity_label: string | null }
 
 // Map an entity type to its search endpoint + result shape.
@@ -45,6 +49,7 @@ async function searchEntity(type: EntityType, q: string): Promise<Array<{ key: s
 
 export default function FeaturedListsPage() {
 	const { mutate } = useSWRConfig();
+	const ask = useConfirm();
 	const [creating, setCreating] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -52,7 +57,7 @@ export default function FeaturedListsPage() {
 	const refresh = () => mutate((key) => Array.isArray(key) && typeof key[0] === 'string' && key[0].startsWith('/api/admin/featured-lists'));
 
 	const remove = async (id: string, name: string) => {
-		if (!confirm(`Delete "${name}"?`)) return;
+		if (!(await ask(`Delete "${name}"?`))) return;
 		try { await api('DELETE', `/api/admin/featured-lists/${id}`); toast.success('Deleted'); refresh(); }
 		catch (e) { toast.error((e as Error).message); }
 	};
@@ -80,13 +85,16 @@ export default function FeaturedListsPage() {
 			<div className="card">
 				<AsyncState loading={isLoading} error={error} empty={lists.length === 0} emptyMsg="No featured lists yet." onRetry={refresh}>
 					<table className="data-table">
-						<thead><tr><th>Name</th><th>Entity</th><th>Items</th><th>Premium</th><th>Share</th><th style={{ textAlign: 'right' }} /></tr></thead>
+						<thead><tr><th>Name</th><th>Entity</th><th>Mode</th><th>Items</th><th>Period</th><th>Visibility</th><th>Premium</th><th>Share</th><th style={{ textAlign: 'right' }} /></tr></thead>
 						<tbody>
 							{lists.map((l) => (
 								<tr key={l.id}>
 									<td><div style={{ fontWeight: 600 }}>{l.name}</div>{l.description && <div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{l.description}</div>}</td>
 									<td>{l.entity_type}</td>
+									<td>{l.filters ? <Tag>filter</Tag> : <Tag variant="pos">manual</Tag>}</td>
 									<td className="num">{l.item_count ?? 0}</td>
+									<td className="num">{l.year ? `${l.month ? l.month.slice(0, 3) + ' ' : ''}${l.year}` : '—'}</td>
+									<td>{l.show_in_lists ? <Tag variant="pos">in lists</Tag> : <Tag>hidden</Tag>}</td>
 									<td>{l.is_premium ? <Tag variant="warn">premium</Tag> : '—'}</td>
 									<td><button className="btn ghost" disabled={!l.share_slug} onClick={() => copyLink(l.share_slug)}><Link2 size={12} /> Copy</button></td>
 									<td style={{ textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
@@ -106,11 +114,12 @@ export default function FeaturedListsPage() {
 interface ListForm {
 	name: string; description: string; entity_type: EntityType;
 	is_premium: boolean; show_in_lists: boolean; mode: 'manual' | 'filter';
+	month: string; year: string;
 	items: ListItem[]; filtersJson: string;
 }
 const EMPTY: ListForm = {
 	name: '', description: '', entity_type: 'companies', is_premium: false, show_in_lists: true,
-	mode: 'manual', items: [], filtersJson: '',
+	mode: 'manual', month: '', year: '', items: [], filtersJson: '',
 };
 
 interface ListDetail extends FeaturedList { filters: unknown; items: ListItem[] }
@@ -121,6 +130,7 @@ function toListForm(h: ListDetail): ListForm {
 		entity_type: (h.entity_type as EntityType) ?? 'companies',
 		is_premium: !!h.is_premium, show_in_lists: h.show_in_lists !== false,
 		mode: h.filters ? 'filter' : 'manual',
+		month: h.month ?? '', year: h.year ? String(h.year) : '',
 		items: h.items ?? [],
 		filtersJson: h.filters ? JSON.stringify(h.filters, null, 2) : '',
 	};
@@ -147,6 +157,7 @@ function ListForm({ id, initial, onClose, onSaved }: { id: string | null; initia
 			const body: Record<string, unknown> = {
 				name: form.name.trim(), description: form.description.trim() || undefined,
 				entity_type: form.entity_type, is_premium: form.is_premium, show_in_lists: form.show_in_lists,
+				month: form.month || null, year: form.year ? Number(form.year) : null,
 			};
 			if (form.mode === 'filter') {
 				body.filters = form.filtersJson.trim() ? JSON.parse(form.filtersJson) : null;
@@ -175,11 +186,20 @@ function ListForm({ id, initial, onClose, onSaved }: { id: string | null; initia
 						<>
 							<Field label="Name"><input className="search-input" value={form.name} onChange={(e) => set('name', e.target.value)} /></Field>
 							<Field label="Description"><textarea className="search-input" style={{ minHeight: 60, resize: 'vertical' }} value={form.description} onChange={(e) => set('description', e.target.value)} /></Field>
-							<Field label="Entity type" hint={isEdit ? 'changing this clears items' : undefined}>
-								<select className="search-input" value={form.entity_type} onChange={(e) => set('entity_type', e.target.value as EntityType)}>
+							<Field label="Entity type" hint={isEdit ? 'fixed after creation' : undefined}>
+								<select className="search-input" value={form.entity_type} disabled={isEdit} onChange={(e) => set('entity_type', e.target.value as EntityType)}>
 									{ENTITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
 								</select>
 							</Field>
+							<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>
+								<Field label="Month (optional)">
+									<select className="search-input" value={form.month} onChange={(e) => set('month', e.target.value)}>
+										<option value="">—</option>
+										{MONTHS.map((m) => <option key={m} value={m}>{m}</option>)}
+									</select>
+								</Field>
+								<Field label="Year (optional)"><YearSelect value={form.year} onChange={(v) => set('year', v)} placeholder="—" /></Field>
+							</div>
 							<Field label="Mode">
 								<div style={{ display: 'flex', gap: 6 }}>
 									<button type="button" className={`chip ${form.mode === 'manual' ? 'on' : ''}`} onClick={() => set('mode', 'manual')}>Hand-picked</button>

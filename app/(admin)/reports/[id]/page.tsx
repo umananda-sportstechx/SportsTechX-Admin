@@ -14,6 +14,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm';
 import { TiptapEditor } from '@/components/tiptap-editor';
 import { CompanyPicker, SectorPicker, PollPicker } from '@/components/section-pickers';
 import { ImageInput } from '@/components/image-input';
@@ -330,6 +331,7 @@ function SectionEditor({
 	onSaved: () => void;
 	onDeleted: () => void;
 }) {
+	const ask = useConfirm();
 	const [draft, setDraft] = useState<Section>(initial);
 	const [saving, setSaving] = useState(false);
 
@@ -384,7 +386,7 @@ function SectionEditor({
 	};
 
 	const remove = async () => {
-		if (!confirm('Delete this section? This cannot be undone.')) return;
+		if (!(await ask('Delete this section? This cannot be undone.'))) return;
 		try {
 			await api('DELETE', `/api/admin/reports/${draft.report_id}/sections/${draft.id}`);
 			toast.success('Deleted');

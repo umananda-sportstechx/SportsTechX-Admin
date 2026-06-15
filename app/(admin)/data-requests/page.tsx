@@ -235,7 +235,13 @@ export default function DataRequestsPage() {
 													<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Writes <code>{r.field_change ?? '—'}</code> on the {r.entity_type} and marks this request resolved.</div>
 												</div>
 											) : (
-												<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>This request type can’t be auto-applied — review and resolve manually.</div>
+												<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
+													{r.entity_type === 'investor_fund'
+														? 'Fund changes carry derived values (USD, year) — edit on the investor’s Funds tab, then resolve this request.'
+														: r.entity_type === 'investor_portfolio'
+															? 'Portfolio change — review against the investor’s record and resolve manually.'
+															: 'This request type can’t be auto-applied — review and resolve manually.'}
+												</div>
 											)}
 										</div>
 									</td>

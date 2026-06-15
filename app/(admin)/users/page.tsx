@@ -511,10 +511,59 @@ function ReportUsersModal({ onClose }: { onClose: () => void }) {
  */
 function ManagePanel({ user }: { user: User }) {
 	return (
-		<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)' }}>
-			<TierChangeSection user={user} />
-			<GrantAccessSection profileId={user.id} />
-			<FeatureGrantsSection profileId={user.id} />
+		<div style={{ display: 'grid', gap: 'var(--space-4)' }}>
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)' }}>
+				<TierChangeSection user={user} />
+				<GrantAccessSection profileId={user.id} />
+				<FeatureGrantsSection profileId={user.id} />
+			</div>
+			<BillingSection profileId={user.id} />
+		</div>
+	);
+}
+
+interface BillingDetail {
+	local: {
+		stripe_customer_id: string | null; stripe_subscription_id: string | null;
+		active_subscription: boolean; is_trial: boolean; trial_ends_at: string | null;
+		expires_at: string | null; subscription_started_at: string | null;
+	} | null;
+	stripe: {
+		status?: string; cancel_at_period_end?: boolean; current_period_end?: string | null;
+		has_scheduled_change?: boolean; price_nickname?: string | null; amount?: number | null;
+		currency?: string | null; interval?: string | null; error?: string;
+	} | null;
+}
+
+/** Section 4: Stripe billing detail — stored IDs + live status / pending change. */
+function BillingSection({ profileId }: { profileId: string }) {
+	const { data, isLoading } = useSWR<BillingDetail>([`/api/admin/users/${profileId}/billing`], { dedupingInterval: 30_000 });
+	const l = data?.local; const s = data?.stripe;
+	const fmt = (d?: string | null) => (d ? new Date(d).toLocaleDateString() : '—');
+	const cell = (label: string, value: React.ReactNode) => (
+		<div><div className="co-stat-label">{label}</div><div style={{ fontSize: 13 }}>{value}</div></div>
+	);
+	const pending = s?.cancel_at_period_end ? 'Cancels at period end' : s?.has_scheduled_change ? 'Plan change scheduled' : '—';
+	return (
+		<div className="card" style={{ padding: 'var(--space-4)' }}>
+			<div className="co-stat-label" style={{ marginBottom: 10 }}>Billing</div>
+			{isLoading ? (
+				<div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>Loading…</div>
+			) : !l ? (
+				<div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>No subscription record.</div>
+			) : (
+				<div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+					{cell('Plan status', l.active_subscription ? (l.is_trial ? 'Trial' : 'Active') : 'Inactive')}
+					{cell('Renews / expires', fmt(s?.current_period_end ?? l.expires_at))}
+					{cell('Trial ends', fmt(l.trial_ends_at))}
+					{cell('Pending change', <span style={{ color: pending === '—' ? 'var(--fg)' : 'var(--accent)', fontWeight: pending === '—' ? 400 : 600 }}>{pending}</span>)}
+					{cell('Stripe plan', s?.price_nickname ?? (s?.amount != null ? `${s.amount} ${(s.currency ?? '').toUpperCase()}/${s.interval ?? ''}` : '—'))}
+					{cell('Stripe status', s?.status ?? '—')}
+					{cell('Customer ID', <code style={{ fontSize: 11 }}>{l.stripe_customer_id ?? '—'}</code>)}
+					{cell('Subscription ID', <code style={{ fontSize: 11 }}>{l.stripe_subscription_id ?? '—'}</code>)}
+				</div>
+			)}
+			{s?.error && <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 8 }}>Stripe lookup: {s.error}</div>}
 		</div>
 	);
 }

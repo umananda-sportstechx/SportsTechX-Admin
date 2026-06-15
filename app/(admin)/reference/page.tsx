@@ -80,7 +80,7 @@ export default function ReferenceAdminPage() {
 				<RefModal
 					kind={kind}
 					initial={editing}
-					parents={rows.filter((r) => !r.parent_id)}
+					parents={rows.filter((r) => r.id !== editing?.id)}
 					onClose={() => { setCreating(false); setEditing(null); }}
 					onSaved={() => { setCreating(false); setEditing(null); void refresh(); }}
 				/>

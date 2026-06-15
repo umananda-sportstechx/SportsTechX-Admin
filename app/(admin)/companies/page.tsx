@@ -205,6 +205,7 @@ interface CompanyForm {
 	sport_ids: string[];
 	tech_tag_ids: string[];
 	poc_first_name: string; poc_last_name: string; poc_job_position: string; poc_email: string; poc_linkedin: string;
+	poc_personal_email: string; poc_personal_linkedin: string;
 	accelerator: string; cohort: string;
 }
 
@@ -215,7 +216,7 @@ const EMPTY_COMPANY: CompanyForm = {
 	is_verified: false, is_unicorn: false, is_actively_raising: false,
 	raising_amount: '', raising_round: '', raising_valuation: '', raising_pitch_deck_url: '',
 	social: { ...EMPTY_SOCIAL }, sport_ids: [], tech_tag_ids: [],
-	poc_first_name: '', poc_last_name: '', poc_job_position: '', poc_email: '', poc_linkedin: '', accelerator: '', cohort: '',
+	poc_first_name: '', poc_last_name: '', poc_job_position: '', poc_email: '', poc_linkedin: '', poc_personal_email: '', poc_personal_linkedin: '', accelerator: '', cohort: '',
 };
 
 interface CompanyEdit extends Company {
@@ -231,6 +232,7 @@ interface CompanyEdit extends Company {
 	linkedin_url?: string | null; youtube_url?: string | null; email?: string | null;
 	hq_continent?: string | null; hq_region?: string | null; hq_state?: string | null; hq_report_region?: string | null;
 	poc_first_name?: string | null; poc_last_name?: string | null; poc_job_position?: string | null; poc_email?: string | null; poc_linkedin?: string | null;
+	poc_personal_email?: string | null; poc_personal_linkedin?: string | null;
 	accelerator?: string | null; cohort?: string | null;
 	sport_ids?: string[]; tech_tag_ids?: string[];
 }
@@ -253,7 +255,7 @@ function toCompanyForm(h: CompanyEdit): CompanyForm {
 		},
 		sport_ids: h.sport_ids ?? [], tech_tag_ids: h.tech_tag_ids ?? [],
 		poc_first_name: h.poc_first_name ?? '', poc_last_name: h.poc_last_name ?? '', poc_job_position: h.poc_job_position ?? '',
-		poc_email: h.poc_email ?? '', poc_linkedin: h.poc_linkedin ?? '', accelerator: h.accelerator ?? '', cohort: h.cohort ?? '',
+		poc_email: h.poc_email ?? '', poc_linkedin: h.poc_linkedin ?? '', poc_personal_email: h.poc_personal_email ?? '', poc_personal_linkedin: h.poc_personal_linkedin ?? '', accelerator: h.accelerator ?? '', cohort: h.cohort ?? '',
 	};
 }
 
@@ -718,6 +720,8 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 					poc_job_position: form.poc_job_position.trim() || undefined,
 					poc_email: form.poc_email.trim() || undefined,
 					poc_linkedin: form.poc_linkedin.trim() || undefined,
+					poc_personal_email: form.poc_personal_email.trim() || undefined,
+					poc_personal_linkedin: form.poc_personal_linkedin.trim() || undefined,
 					accelerator: form.accelerator.trim() || undefined,
 					cohort: form.cohort.trim() || undefined,
 				};
@@ -807,8 +811,12 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 									</div>
 									<Field label="POC job position"><input className="search-input" value={form.poc_job_position} onChange={(e) => set('poc_job_position', e.target.value)} /></Field>
 									<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-										<Field label="POC email"><input className="search-input" value={form.poc_email} onChange={(e) => set('poc_email', e.target.value)} placeholder="name@company.com" /></Field>
-										<Field label="POC LinkedIn"><input className="search-input" value={form.poc_linkedin} onChange={(e) => set('poc_linkedin', e.target.value)} placeholder="https://linkedin.com/in/…" /></Field>
+										<Field label="POC email (company)"><input className="search-input" value={form.poc_email} onChange={(e) => set('poc_email', e.target.value)} placeholder="name@company.com" /></Field>
+										<Field label="POC LinkedIn (company)"><input className="search-input" value={form.poc_linkedin} onChange={(e) => set('poc_linkedin', e.target.value)} placeholder="https://linkedin.com/in/…" /></Field>
+									</div>
+									<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+										<Field label="POC personal email"><input className="search-input" value={form.poc_personal_email} onChange={(e) => set('poc_personal_email', e.target.value)} placeholder="personal@email.com" /></Field>
+										<Field label="POC personal LinkedIn"><input className="search-input" value={form.poc_personal_linkedin} onChange={(e) => set('poc_personal_linkedin', e.target.value)} placeholder="https://linkedin.com/in/…" /></Field>
 									</div>
 									<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 										<Field label="Accelerator"><input className="search-input" value={form.accelerator} onChange={(e) => set('accelerator', e.target.value)} /></Field>

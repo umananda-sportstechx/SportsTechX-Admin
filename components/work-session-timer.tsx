@@ -49,15 +49,22 @@ export function WorkSessionTimer({ queue }: { queue: WorkQueue }) {
 	const stop = async () => { setBusy(true); try { await api('POST', '/api/admin/work-sessions/end', { queue }); await mutate(null); } finally { setBusy(false); } };
 
 	return (
-		<div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+		<div style={{
+			display: 'inline-flex', alignItems: 'center', gap: 10,
+			padding: '6px 6px 6px 12px', border: '1px solid var(--border)', borderRadius: 999,
+			background: active ? 'color-mix(in srgb, var(--pos) 10%, transparent)' : 'var(--bg-2)',
+		}}>
 			{active ? (
 				<>
-					<span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--pos)' }} title="Active session time">● {fmt(elapsed)}</span>
+					<span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 600, color: 'var(--pos)' }} title="Active session time">● {fmt(elapsed)}</span>
 					<span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{active.items_completed} done</span>
-					<button className="btn ghost" disabled={busy} onClick={() => void stop()}><Square size={12} /> Stop</button>
+					<button className="btn" disabled={busy} onClick={() => void stop()} style={{ background: 'var(--neg, #c0392b)', borderColor: 'transparent', color: '#fff' }}><Square size={12} /> Stop session</button>
 				</>
 			) : (
-				<button className="btn ghost" disabled={busy} onClick={() => void start()}><Play size={12} /> Start session</button>
+				<>
+					<span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Track your review time</span>
+					<button className="btn" disabled={busy} onClick={() => void start()} style={{ fontWeight: 600 }}><Play size={14} /> Start session</button>
+				</>
 			)}
 		</div>
 	);

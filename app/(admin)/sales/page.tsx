@@ -21,6 +21,8 @@ interface SalesResponse { data: Sale[]; total: number }
 interface RevenueByProduct { name: string; mrr: number; activeCount: number }
 interface DailyVolume { date: string; gross: number; net: number; count: number }
 interface StripeAnalytics {
+	currency?: string;
+	unavailable?: boolean;
 	payments: Record<'succeeded' | 'uncaptured' | 'refunded' | 'blocked' | 'failed', { count: number; amount: number }>;
 	grossVolume: number; netVolume: number; mrr: number; arr: number; activeSubscribers: number;
 	revenueByProduct: RevenueByProduct[];
@@ -42,10 +44,18 @@ const PRESETS = [
 ] as const;
 
 const PRODUCT_COLORS = ['#79CABD', '#6CA8FF', '#FFB36C', '#D99CFF', '#FF9CA8', '#9CE0C0'];
-const money = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+// Currency-aware money formatter (the platform bills in EUR; symbol comes from the
+// Stripe payload / per-row currency rather than a hardcoded `$`).
+const fmtMoney = (n: number, currency = 'eur', fractionDigits = 0) => {
+	try {
+		return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency.toUpperCase(), maximumFractionDigits: fractionDigits, minimumFractionDigits: fractionDigits }).format(n);
+	} catch { return `${n.toLocaleString(undefined, { maximumFractionDigits: fractionDigits })} ${currency.toUpperCase()}`; }
+};
+const pctChange = (cur: number, prev: number): number | null => (prev > 0 ? ((cur - prev) / prev) * 100 : null);
 
 export default function SalesAdminPage() {
 	const [preset, setPreset] = useState<(typeof PRESETS)[number]['key']>('30d');
+	// money() is bound to the account currency once the payload loads.
 
 	const startDate = useMemo(() => {
 		const days = PRESETS.find((p) => p.key === preset)!.days;
@@ -59,6 +69,7 @@ export default function SalesAdminPage() {
 		{ dedupingInterval: 60_000 },
 	);
 
+	const money = (n: number) => fmtMoney(n, a?.currency ?? 'eur');
 	const dailyChart = (a?.dailyVolume ?? []).map((d) => ({
 		label: new Date(d.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
 		amt: d.gross,
@@ -81,23 +92,31 @@ export default function SalesAdminPage() {
 		<div>
 			<PageHeader kicker="Revenue · live from Stripe" title="Sales" subtitle="MRR / ARR, volume, churn, and trial conversion. Matches Stripe's own insights." />
 
+			{a?.unavailable && (
+				<div className="card" style={{ padding: 12, marginBottom: 'var(--space-4)', borderTop: '2px solid var(--accent)', color: 'var(--accent)', fontSize: 13 }}>
+					Stripe is currently unreachable — figures below show zero, not actual revenue. Retry shortly.
+				</div>
+			)}
+
 			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)' }}>
 				{PRESETS.map((p) => (
 					<button key={p.key} className={`chip ${preset === p.key ? 'on' : ''}`} onClick={() => setPreset(p.key)}>{p.label}</button>
 				))}
+				<div style={{ flex: 1 }} />
+				<button className="btn ghost" onClick={() => void mutateA()}>Refresh</button>
 			</div>
 
 			<div className="grid-4" style={{ marginBottom: 'var(--space-4)' }}>
 				<StatCard label="MRR" loading={aLoading} value={money(a?.mrr ?? 0)} />
 				<StatCard label="ARR" loading={aLoading} value={money(a?.arr ?? 0)} />
 				<StatCard label="Active subscribers" loading={aLoading} value={(a?.activeSubscribers ?? 0).toLocaleString()} />
-				<StatCard label="Gross volume (period)" loading={aLoading} value={money(a?.grossVolume ?? 0)} />
+				<StatCard label="Gross volume (period)" loading={aLoading} value={money(a?.grossVolume ?? 0)} delta={a ? pctChange(a.grossVolume, a.previousPeriod.grossVolume) : null} />
 			</div>
 			<div className="grid-4" style={{ marginBottom: 'var(--space-5)' }}>
 				<StatCard label="Net volume" loading={aLoading} value={money(a?.netVolume ?? 0)} />
 				<StatCard label="Churned MRR" loading={aLoading} value={money(a?.churnedMrr ?? 0)} urgent={(a?.churnedMrr ?? 0) > 0} />
 				<StatCard label="Trial → paid" loading={aLoading} value={`${(a?.trialConversion.conversionRate ?? 0).toFixed(1)}%`} />
-				<StatCard label="New customers" loading={aLoading} value={(a?.newCustomers ?? 0).toLocaleString()} />
+				<StatCard label="New customers" loading={aLoading} value={(a?.newCustomers ?? 0).toLocaleString()} delta={a ? pctChange(a.newCustomers, a.previousPeriod.newCustomers) : null} />
 			</div>
 
 			<AsyncState loading={aLoading} error={aError} empty={false} onRetry={() => void mutateA()}>
@@ -203,7 +222,7 @@ function BillingLog() {
 								<td className="num">{new Date(r.created_at).toLocaleDateString()}</td>
 								<td>{r.email ?? r.display_name ?? (r.profile_id ? `${r.profile_id.slice(0, 8)}…` : '—')}</td>
 								<td>{r.plan ?? '—'}</td>
-								<td className="num">{r.amount_cents != null ? `$${(r.amount_cents / 100).toFixed(2)}` : '—'}</td>
+								<td className="num">{r.amount_cents != null ? fmtMoney(r.amount_cents / 100, r.currency ?? 'eur', 2) : '—'}</td>
 								<td><Tag variant={r.status === 'active' ? 'pos' : r.status === 'canceled' ? 'neg' : ''}>{r.status ?? '—'}</Tag></td>
 							</tr>
 						))}

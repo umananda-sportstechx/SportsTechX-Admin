@@ -5,6 +5,7 @@ import useSWR from 'swr';
 import { toast } from 'sonner';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState } from '@/components/atoms';
 
@@ -28,6 +29,7 @@ const TIERS: Tier[] = ['free', 'growth', 'pro'];
 interface FeaturesResponse { data: FeatureRow[] }
 
 export default function FeaturesAdminPage() {
+	const ask = useConfirm();
 	const [includeInactive, setIncludeInactive] = useState(false);
 	const { data, mutate, isLoading, error } = useSWR<FeaturesResponse>(['/api/admin/features', { include_inactive: includeInactive || undefined }]);
 	const [creating, setCreating] = useState(false);
@@ -62,7 +64,7 @@ export default function FeaturesAdminPage() {
 	};
 
 	const deactivate = async (row: FeatureRow) => {
-		if (!confirm(`Deactivate "${row.name}"? It stays in the DB but is hidden from the catalog.`)) return;
+		if (!(await ask(`Deactivate "${row.name}"? It stays in the DB but is hidden from the catalog.`))) return;
 		try {
 			await api('DELETE', `/api/admin/features/${row.id}`);
 			toast.success(`Deactivated ${row.slug}`);

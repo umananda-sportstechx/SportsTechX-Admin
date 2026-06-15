@@ -38,6 +38,7 @@ interface User {
 	is_trial?: boolean;
 	trial_ends_at?: string | null;
 	active_subscription?: boolean;
+	login_count?: number;
 }
 interface UsersResponse { data: User[]; total: number; totalPages: number }
 
@@ -64,6 +65,7 @@ export default function UsersAdminPage() {
 	const [to, setTo] = useState('');
 	const [freqBucket, setFreqBucket] = useState<'never' | 'once' | '2-5' | '6+' | null>(null);
 	const [reportUsersOpen, setReportUsersOpen] = useState(false);
+	const [planDetail, setPlanDetail] = useState<string | null>(null);
 
 	const { data, error, isLoading } = useSWR<UsersResponse>(
 		['/api/admin/users', { q: search || undefined, role: role || undefined, tier: tier || undefined, page, limit: 30 }],
@@ -95,8 +97,8 @@ export default function UsersAdminPage() {
 			const rows = res.data ?? [];
 			const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
 			const plan = (u: User) => u.is_trial ? `trial${u.trial_ends_at ? ` until ${u.trial_ends_at.slice(0, 10)}` : ''}` : u.active_subscription ? 'paid' : '';
-			const csv = ['email,name,tier,plan,role,company,joined,last_seen',
-				...rows.map((u) => [u.email, u.display_name, u.user_type, plan(u), u.user_role, u.company_name, u.created_at, u.last_seen_at].map(esc).join(','))].join('\n');
+			const csv = ['email,name,tier,plan,role,company,logins,joined,last_seen',
+				...rows.map((u) => [u.email, u.display_name, u.user_type, plan(u), u.user_role, u.company_name, u.login_count ?? 0, u.created_at, u.last_seen_at].map(esc).join(','))].join('\n');
 			const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
 			const a = document.createElement('a'); a.href = url; a.download = `users-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
 			toast.success(`Exported ${rows.length} users`);
@@ -278,6 +280,8 @@ export default function UsersAdminPage() {
 				</Section>
 			</div>
 
+			<SubscriptionMix onPlan={setPlanDetail} />
+
 			<FilterBar>
 				<input
 					className="search-input"
@@ -299,8 +303,11 @@ export default function UsersAdminPage() {
 						<tr>
 							<th>Email</th>
 							<th>Name</th>
+							<th>Company</th>
 							<th>Tier</th>
 							<th>Role</th>
+							<th>Logins</th>
+							<th>Last seen</th>
 							<th>Joined</th>
 							<th style={{ textAlign: 'right' }}>Actions</th>
 						</tr>
@@ -311,6 +318,7 @@ export default function UsersAdminPage() {
 								<tr>
 									<td>{u.email}</td>
 									<td>{u.display_name ?? '—'}</td>
+									<td style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{u.company_name ?? '—'}</td>
 									<td>
 										<span className="tag">{u.user_type ?? 'free'}</span>
 										{u.is_trial
@@ -318,6 +326,8 @@ export default function UsersAdminPage() {
 											: u.active_subscription ? <span className="tag pos" style={{ marginLeft: 4 }}>paid</span> : null}
 									</td>
 									<td>{u.user_role === 'admin' ? <span className="tag pos">admin</span> : 'user'}</td>
+									<td className="num">{(u.login_count ?? 0).toLocaleString()}</td>
+									<td className="num">{u.last_seen_at ? fmtDate(u.last_seen_at) : '—'}</td>
 									<td className="num">{new Date(u.created_at).toLocaleDateString()}</td>
 									<td style={{ textAlign: 'right' }}>
 										<div style={{ display: 'inline-flex', gap: 6 }}>
@@ -337,7 +347,7 @@ export default function UsersAdminPage() {
 								</tr>
 								{expandedId === u.id && (
 									<tr>
-										<td colSpan={6} style={{ background: 'var(--bg-2)', padding: 'var(--space-4)' }}>
+										<td colSpan={9} style={{ background: 'var(--bg-2)', padding: 'var(--space-4)' }}>
 											<ManagePanel user={u} />
 										</td>
 									</tr>
@@ -361,6 +371,7 @@ export default function UsersAdminPage() {
 
 			{freqBucket && <LoginUsersModal bucket={freqBucket} onClose={() => setFreqBucket(null)} />}
 			{reportUsersOpen && <ReportUsersModal onClose={() => setReportUsersOpen(false)} />}
+			{planDetail && <PlanUsersModal detail={planDetail} onClose={() => setPlanDetail(null)} />}
 		</div>
 	);
 }
@@ -386,6 +397,68 @@ function LoginUsersModal({ bucket, onClose }: { bucket: string; onClose: () => v
 					<tbody>
 						{users.map((u) => (
 							<tr key={u.id}><td>{u.email ?? '—'}</td><td>{u.display_name ?? '—'}</td><td className="num">{u.login_count}</td><td className="num">{u.last_seen_at ? new Date(u.last_seen_at).toLocaleDateString() : '—'}</td></tr>
+						))}
+					</tbody>
+				</table>
+			</AsyncState>
+		</Modal>
+	);
+}
+
+// ─── Subscription mix matrix + monthly churn ─────────────────────────────────
+interface SubsData { matrix: Array<{ detail: string; count: number }>; monthly_churn: Array<{ label: string; value: number }> }
+const prettyDetail = (d: string) => d.replace(/_/g, ' ').replace('trial', '(trial)');
+function SubscriptionMix({ onPlan }: { onPlan: (detail: string) => void }) {
+	const { data, isLoading, error, mutate } = useSWR<SubsData>(['/api/admin/users/analytics/subscriptions'], { dedupingInterval: 60_000 });
+	const matrix = data?.matrix ?? [];
+	const churnChart = (data?.monthly_churn ?? []).map((m) => ({ label: m.label.slice(2), amt: m.value, deals: m.value }));
+	return (
+		<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+			<Section title="Subscription mix" meta="by plan · click to drill in">
+				<AsyncState loading={isLoading} error={error} empty={matrix.length === 0} emptyMsg="No paid/trial plans yet." onRetry={() => void mutate()}>
+					<table className="data-table">
+						<thead><tr><th>Plan</th><th>Users</th><th /></tr></thead>
+						<tbody>
+							{matrix.map((m) => (
+								<tr key={m.detail} style={{ cursor: 'pointer' }} onClick={() => onPlan(m.detail)}>
+									<td>{prettyDetail(m.detail)}{m.detail.includes('trial') && <span className="tag warn" style={{ marginLeft: 6 }}>trial</span>}</td>
+									<td className="num">{m.count.toLocaleString()}</td>
+									<td style={{ textAlign: 'right', color: 'var(--fg-muted)' }}>view →</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</AsyncState>
+			</Section>
+			<Section title="Monthly churn" meta="subscriptions ended, last 12 mo">
+				<AsyncState loading={isLoading} error={error} empty={churnChart.length === 0} emptyMsg="No churn recorded." onRetry={() => void mutate()}>
+					<ComboBarLine data={churnChart} height={200} valueFormatter={(v) => String(Math.round(v))} barLabel="Churned" lineLabel="churned" />
+				</AsyncState>
+			</Section>
+		</div>
+	);
+}
+
+interface PlanUser { id: string; email: string | null; display_name: string | null; company_name: string | null; login_count: number; last_seen_at: string | null }
+function PlanUsersModal({ detail, onClose }: { detail: string; onClose: () => void }) {
+	const [q, setQ] = useState('');
+	const { data, isLoading } = useSWR<{ users: PlanUser[] }>(['/api/admin/users/analytics/plan-users', { detail, q: q || undefined }], { dedupingInterval: 10_000 });
+	const users = data?.users ?? [];
+	const exportCsv = () => {
+		const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+		const csv = ['email,name,company,logins,last_seen', ...users.map((u) => [u.email, u.display_name, u.company_name, u.login_count, u.last_seen_at].map(esc).join(','))].join('\n');
+		const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+		const a = document.createElement('a'); a.href = url; a.download = `plan-${detail}.csv`; a.click(); URL.revokeObjectURL(url);
+	};
+	return (
+		<Modal title={`Users · ${prettyDetail(detail)}`} onClose={onClose} width={640} footer={<><button className="btn ghost" onClick={onClose}>Close</button><button className="btn" disabled={!users.length} onClick={exportCsv}>Export CSV</button></>}>
+			<input className="search-input" style={{ marginBottom: 10 }} placeholder="Search email or name…" value={q} onChange={(e) => setQ(e.target.value)} />
+			<AsyncState loading={isLoading} empty={users.length === 0} emptyMsg="No users on this plan.">
+				<table className="data-table">
+					<thead><tr><th>Email</th><th>Name</th><th>Company</th><th>Logins</th><th>Last seen</th></tr></thead>
+					<tbody>
+						{users.map((u) => (
+							<tr key={u.id}><td>{u.email ?? '—'}</td><td>{u.display_name ?? '—'}</td><td>{u.company_name ?? '—'}</td><td className="num">{u.login_count}</td><td className="num">{u.last_seen_at ? new Date(u.last_seen_at).toLocaleDateString() : '—'}</td></tr>
 						))}
 					</tbody>
 				</table>
@@ -438,10 +511,59 @@ function ReportUsersModal({ onClose }: { onClose: () => void }) {
  */
 function ManagePanel({ user }: { user: User }) {
 	return (
-		<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)' }}>
-			<TierChangeSection user={user} />
-			<GrantAccessSection profileId={user.id} />
-			<FeatureGrantsSection profileId={user.id} />
+		<div style={{ display: 'grid', gap: 'var(--space-4)' }}>
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)' }}>
+				<TierChangeSection user={user} />
+				<GrantAccessSection profileId={user.id} />
+				<FeatureGrantsSection profileId={user.id} />
+			</div>
+			<BillingSection profileId={user.id} />
+		</div>
+	);
+}
+
+interface BillingDetail {
+	local: {
+		stripe_customer_id: string | null; stripe_subscription_id: string | null;
+		active_subscription: boolean; is_trial: boolean; trial_ends_at: string | null;
+		expires_at: string | null; subscription_started_at: string | null;
+	} | null;
+	stripe: {
+		status?: string; cancel_at_period_end?: boolean; current_period_end?: string | null;
+		has_scheduled_change?: boolean; price_nickname?: string | null; amount?: number | null;
+		currency?: string | null; interval?: string | null; error?: string;
+	} | null;
+}
+
+/** Section 4: Stripe billing detail — stored IDs + live status / pending change. */
+function BillingSection({ profileId }: { profileId: string }) {
+	const { data, isLoading } = useSWR<BillingDetail>([`/api/admin/users/${profileId}/billing`], { dedupingInterval: 30_000 });
+	const l = data?.local; const s = data?.stripe;
+	const fmt = (d?: string | null) => (d ? new Date(d).toLocaleDateString() : '—');
+	const cell = (label: string, value: React.ReactNode) => (
+		<div><div className="co-stat-label">{label}</div><div style={{ fontSize: 13 }}>{value}</div></div>
+	);
+	const pending = s?.cancel_at_period_end ? 'Cancels at period end' : s?.has_scheduled_change ? 'Plan change scheduled' : '—';
+	return (
+		<div className="card" style={{ padding: 'var(--space-4)' }}>
+			<div className="co-stat-label" style={{ marginBottom: 10 }}>Billing</div>
+			{isLoading ? (
+				<div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>Loading…</div>
+			) : !l ? (
+				<div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>No subscription record.</div>
+			) : (
+				<div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+					{cell('Plan status', l.active_subscription ? (l.is_trial ? 'Trial' : 'Active') : 'Inactive')}
+					{cell('Renews / expires', fmt(s?.current_period_end ?? l.expires_at))}
+					{cell('Trial ends', fmt(l.trial_ends_at))}
+					{cell('Pending change', <span style={{ color: pending === '—' ? 'var(--fg)' : 'var(--accent)', fontWeight: pending === '—' ? 400 : 600 }}>{pending}</span>)}
+					{cell('Stripe plan', s?.price_nickname ?? (s?.amount != null ? `${s.amount} ${(s.currency ?? '').toUpperCase()}/${s.interval ?? ''}` : '—'))}
+					{cell('Stripe status', s?.status ?? '—')}
+					{cell('Customer ID', <code style={{ fontSize: 11 }}>{l.stripe_customer_id ?? '—'}</code>)}
+					{cell('Subscription ID', <code style={{ fontSize: 11 }}>{l.stripe_subscription_id ?? '—'}</code>)}
+				</div>
+			)}
+			{s?.error && <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 8 }}>Stripe lookup: {s.error}</div>}
 		</div>
 	);
 }

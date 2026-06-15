@@ -5,13 +5,15 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading, StatCard, Section } from '@/components/atoms';
+import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
-import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
+import { FilterBar, FilterSelect, StatStrip, BoolFilter, FilterRange, RefSlugFilter } from '@/components/filters';
+import { downloadCsv } from '@/components/csv-import';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import {
-	SectorCascade, SportsPicker, TechTagsPicker, RoundTypesPicker, LocationFields, SocialLinks,
+	SectorCascade, SportsPicker, TechTagsPicker, RoundTypesPicker, LocationFields, SocialLinks, CurrencySelect,
 	EMPTY_SOCIAL, EMPTY_LOCATION, type SocialValue, type LocationValue,
 } from '@/components/entity-pickers';
 import { YearSelect } from '@/components/year-select';
@@ -38,18 +40,31 @@ const STATUSES = ['active', 'inactive', 'paused'] as const;
 
 export default function InvestorsAdminPage() {
 	const { mutate } = useSWRConfig();
+	const ask = useConfirm();
 	const [search, setSearch] = useState('');
 	const [category, setCategory] = useState('');
 	const [status, setStatus] = useState('');
 	const [verified, setVerified] = useState('');
+	const [sector, setSector] = useState('');
+	const [sport, setSport] = useState('');
+	const [country, setCountry] = useState('');
+	const [investing, setInvesting] = useState('');
+	const [launchedMin, setLaunchedMin] = useState('');
+	const [launchedMax, setLaunchedMax] = useState('');
 	const [page, setPage] = useState(1);
+	const [sort, setSort] = useState('-created_at');
+	const onSort = (s: string) => { setSort(s); setPage(1); };
+	const reset1 = () => setPage(1);
 	const [creating, setCreating] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 
 	const { data, error, isLoading } = useSWR<InvestorsResponse>(
 		['/api/investors', {
 			search: search || undefined, category: category || undefined, status: status || undefined,
-			is_verified: verified || undefined, page, limit: 30,
+			is_verified: verified || undefined, sector_slug: sector || undefined, sport_slug: sport || undefined,
+			country: country.trim() || undefined, actively_investing: investing || undefined,
+			year_launched_min: launchedMin || undefined, year_launched_max: launchedMax || undefined,
+			page, limit: 30, sort,
 		}],
 		{ dedupingInterval: 30_000 },
 	);
@@ -59,8 +74,24 @@ export default function InvestorsAdminPage() {
 
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/investors');
 
+	// Export the full filtered result set (not just the current page) to CSV.
+	const exportCsv = async () => {
+		const params: Record<string, string> = { limit: '5000', sort };
+		const add = (k: string, v: string) => { if (v) params[k] = v; };
+		add('search', search); add('category', category); add('status', status); add('is_verified', verified);
+		add('sector_slug', sector); add('sport_slug', sport); add('country', country.trim());
+		add('actively_investing', investing); add('year_launched_min', launchedMin); add('year_launched_max', launchedMax);
+		try {
+			const r = await api<InvestorsResponse>('GET', `/api/investors?${new URLSearchParams(params)}`);
+			const out = (r?.data ?? []).map((i) => [i.name ?? '', i.website ?? '', i.category ?? '', i.year_launched ? String(i.year_launched) : '', i.status ?? '']);
+			if (out.length === 0) { toast.error('No investors to export'); return; }
+			if (out.length >= 5000) toast.warning('Export capped at 5000 rows — narrow the filters for a complete export.');
+			downloadCsv('investors.csv', ['name', 'website', 'category', 'year_launched', 'status'], out);
+		} catch (e) { toast.error((e as Error).message); }
+	};
+
 	const remove = async (id: string) => {
-		if (!confirm('Delete this investor? This cannot be undone.')) return;
+		if (!(await ask('Delete this investor? This cannot be undone.'))) return;
 		try {
 			await api('DELETE', `/api/admin/investors/${id}`);
 			toast.success('Deleted');
@@ -106,10 +137,16 @@ export default function InvestorsAdminPage() {
 					value={search}
 					onChange={(e) => { setSearch(e.target.value); setPage(1); }}
 				/>
-				<FilterSelect ariaLabel="Category" value={category} onChange={(v) => { setCategory(v); setPage(1); }} options={[...CATEGORIES]} allLabel="All categories" />
-				<FilterSelect ariaLabel="Status" value={status} onChange={(v) => { setStatus(v); setPage(1); }} options={[...STATUSES]} allLabel="All statuses" />
-				<FilterSelect ariaLabel="Verified" value={verified} onChange={(v) => { setVerified(v); setPage(1); }} options={[{ value: 'true', label: 'Verified' }, { value: 'false', label: 'Unverified' }]} allLabel="Any verification" />
+				<FilterSelect ariaLabel="Category" value={category} onChange={(v) => { setCategory(v); reset1(); }} options={[...CATEGORIES]} allLabel="All categories" />
+				<FilterSelect ariaLabel="Status" value={status} onChange={(v) => { setStatus(v); reset1(); }} options={[...STATUSES]} allLabel="All statuses" />
+				<FilterSelect ariaLabel="Verified" value={verified} onChange={(v) => { setVerified(v); reset1(); }} options={[{ value: 'true', label: 'Verified' }, { value: 'false', label: 'Unverified' }]} allLabel="Any verification" />
+				<RefSlugFilter kind="sectors" ariaLabel="Thesis sector" value={sector} onChange={(v) => { setSector(v); reset1(); }} allLabel="Any sector" />
+				<RefSlugFilter kind="sports" ariaLabel="Thesis sport" value={sport} onChange={(v) => { setSport(v); reset1(); }} allLabel="Any sport" />
+				<input className="search-input" style={{ height: 32, width: 130 }} placeholder="Country" value={country} onChange={(e) => { setCountry(e.target.value); reset1(); }} />
+				<BoolFilter ariaLabel="Actively investing" value={investing} onChange={(v) => { setInvesting(v); reset1(); }} yesLabel="Investing" noLabel="Not investing" allLabel="Any activity" />
+				<FilterRange label="Launched" min={launchedMin} max={launchedMax} onMin={(v) => { setLaunchedMin(v); reset1(); }} onMax={(v) => { setLaunchedMax(v); reset1(); }} width={64} />
 				<div style={{ flex: 1 }} />
+				<button className="btn ghost" onClick={() => void exportCsv()}>Export CSV</button>
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add investor</button>
 			</FilterBar>
 
@@ -125,7 +162,7 @@ export default function InvestorsAdminPage() {
 				<AsyncState loading={isLoading} error={error} empty={rows.length === 0} emptyMsg={search ? 'No investors match.' : 'No investors yet.'} onRetry={() => void refresh()}>
 					<table className="data-table" style={{ width: '100%' }}>
 						<thead>
-							<tr><th>Name</th><th>Category</th><th>Launched</th><th>Status</th><th>Verified</th><th /></tr>
+							<tr><SortableTh label="Name" field="name" sort={sort} onSort={onSort} /><SortableTh label="Category" field="category" sort={sort} onSort={onSort} /><SortableTh label="Launched" field="year_launched" sort={sort} onSort={onSort} /><th>Status</th><th>Verified</th><th /></tr>
 						</thead>
 						<tbody>
 							{rows.map((r) => (
@@ -145,9 +182,16 @@ export default function InvestorsAdminPage() {
 					</table>
 				</AsyncState>
 			</div>
+			<Pager page={page} totalPages={data?.totalPages} onPage={setPage} />
 		</div>
 	);
 }
+
+interface FundDraft { fund_name: string; announced_date: string; fund_value: string; currency_code: string; source_url: string }
+const emptyFund = (): FundDraft => ({ fund_name: '', announced_date: '', fund_value: '', currency_code: '', source_url: '' });
+interface GeoScope { scope_type: 'country' | 'region' | 'continent'; scope_value: string }
+const GEO_SCOPES = ['country', 'region', 'continent'] as const;
+const REVENUE_STAGES = ['pre_revenue', 'early_revenue', 'growth', 'profitable', 'other'] as const;
 
 interface InvestorForm {
 	name: string; slug: string; website: string; description: string;
@@ -157,8 +201,13 @@ interface InvestorForm {
 	keywords: string; logo_url: string;
 	num_employees: string; num_investments: string; num_exits: string;
 	total_funding: string; annual_revenue: string; analyst_notes: string;
+	latest_funding: string; latest_funding_amount: string; last_raised_at: string;
+	poc_name: string; poc_position: string; poc_email: string; poc_linkedin: string;
 	thesis_sector_ids: string[]; thesis_sport_ids: string[];
 	thesis_tech_tag_ids: string[]; thesis_round_type_ids: string[];
+	thesis_amount_min: string; thesis_amount_max: string;
+	thesis_revenue_stages: string[]; thesis_geo: GeoScope[];
+	funds: FundDraft[];
 }
 
 const EMPTY_INVESTOR: InvestorForm = {
@@ -166,7 +215,11 @@ const EMPTY_INVESTOR: InvestorForm = {
 	is_verified: false, actively_investing: false, hq: { ...EMPTY_LOCATION }, social: { ...EMPTY_SOCIAL },
 	keywords: '', logo_url: '', num_employees: '', num_investments: '', num_exits: '',
 	total_funding: '', annual_revenue: '', analyst_notes: '',
+	latest_funding: '', latest_funding_amount: '', last_raised_at: '',
+	poc_name: '', poc_position: '', poc_email: '', poc_linkedin: '',
 	thesis_sector_ids: [], thesis_sport_ids: [], thesis_tech_tag_ids: [], thesis_round_type_ids: [],
+	thesis_amount_min: '', thesis_amount_max: '', thesis_revenue_stages: [], thesis_geo: [],
+	funds: [],
 };
 
 interface InvestorEdit extends Investor {
@@ -175,9 +228,14 @@ interface InvestorEdit extends Investor {
 	keywords?: string | null; logo_url?: string | null; analyst_notes?: string | null;
 	num_employees?: number | null; num_investments?: number | null; num_exits?: number | null;
 	total_funding?: string | null; annual_revenue?: string | null; actively_investing?: boolean | null;
+	latest_funding?: string | null; latest_funding_amount?: string | null; last_raised_at?: string | null;
+	poc_name?: string | null; poc_position?: string | null; poc_email?: string | null; poc_linkedin?: string | null;
+	funds?: Array<{ fund_name?: string | null; announced_date?: string | null; fund_value?: string | null; currency_code?: string | null; source_url?: string | null }>;
 	twitter_url?: string | null; instagram_url?: string | null; facebook_url?: string | null;
 	linkedin_url?: string | null; youtube_url?: string | null; email?: string | null;
 	thesis_sector_ids?: string[]; thesis_sport_ids?: string[]; thesis_tech_tag_ids?: string[]; thesis_round_type_ids?: string[];
+	thesis_amount_min?: string | null; thesis_amount_max?: string | null;
+	thesis_revenue_stages?: string[]; thesis_geo?: Array<{ scope_type: string; scope_value: string }>;
 }
 
 function toInvestorForm(h: InvestorEdit): InvestorForm {
@@ -195,19 +253,30 @@ function toInvestorForm(h: InvestorEdit): InvestorForm {
 		num_investments: h.num_investments != null ? String(h.num_investments) : '',
 		num_exits: h.num_exits != null ? String(h.num_exits) : '',
 		total_funding: h.total_funding ?? '', annual_revenue: h.annual_revenue ?? '', analyst_notes: h.analyst_notes ?? '',
+		latest_funding: h.latest_funding ?? '', latest_funding_amount: h.latest_funding_amount ?? '',
+		last_raised_at: h.last_raised_at ? String(h.last_raised_at).slice(0, 10) : '',
+		poc_name: h.poc_name ?? '', poc_position: h.poc_position ?? '', poc_email: h.poc_email ?? '', poc_linkedin: h.poc_linkedin ?? '',
 		thesis_sector_ids: h.thesis_sector_ids ?? [], thesis_sport_ids: h.thesis_sport_ids ?? [],
 		thesis_tech_tag_ids: h.thesis_tech_tag_ids ?? [], thesis_round_type_ids: h.thesis_round_type_ids ?? [],
+		thesis_amount_min: h.thesis_amount_min != null ? String(h.thesis_amount_min) : '',
+		thesis_amount_max: h.thesis_amount_max != null ? String(h.thesis_amount_max) : '',
+		thesis_revenue_stages: h.thesis_revenue_stages ?? [],
+		thesis_geo: (h.thesis_geo ?? []).map((g) => ({ scope_type: g.scope_type as GeoScope['scope_type'], scope_value: g.scope_value })),
+		funds: (h.funds ?? []).map((f) => ({
+			fund_name: f.fund_name ?? '', announced_date: f.announced_date ? String(f.announced_date).slice(0, 10) : '',
+			fund_value: f.fund_value != null ? String(f.fund_value) : '', currency_code: f.currency_code ?? '', source_url: f.source_url ?? '',
+		})),
 	};
 }
 
-export function InvestorModal({ id, onClose, onSaved, seed }: { id: string | null; onClose: () => void; onSaved: (createdId?: string) => void; seed?: Partial<InvestorForm> }) {
+export function InvestorModal({ id, onClose, onSaved, seed, promoteReviewId }: { id: string | null; onClose: () => void; onSaved: (createdId?: string) => void; seed?: Partial<InvestorForm>; promoteReviewId?: string }) {
 	const isEdit = !!id;
 	const { data: hydrated } = useSWR<InvestorEdit>(isEdit ? [`/api/admin/investors/${id}/edit`] : null, { revalidateOnFocus: false });
 	if (isEdit && !hydrated) return <Modal title="Edit investor" onClose={onClose}><Loading msg="Loading investor…" /></Modal>;
-	return <InvestorForm id={id} initial={hydrated ? toInvestorForm(hydrated) : { ...EMPTY_INVESTOR, ...seed }} onClose={onClose} onSaved={onSaved} />;
+	return <InvestorForm id={id} initial={hydrated ? toInvestorForm(hydrated) : { ...EMPTY_INVESTOR, ...seed }} onClose={onClose} onSaved={onSaved} promoteReviewId={promoteReviewId} />;
 }
 
-function InvestorForm({ id, initial, onClose, onSaved }: { id: string | null; initial: InvestorForm; onClose: () => void; onSaved: (createdId?: string) => void }) {
+function InvestorForm({ id, initial, onClose, onSaved, promoteReviewId }: { id: string | null; initial: InvestorForm; onClose: () => void; onSaved: (createdId?: string) => void; promoteReviewId?: string }) {
 	const isEdit = !!id;
 	const [tab, setTab] = useTabs('profile');
 	const [form, setForm] = useState<InvestorForm>(initial);
@@ -242,15 +311,35 @@ function InvestorForm({ id, initial, onClose, onSaved }: { id: string | null; in
 				total_funding: form.total_funding.trim() || null,
 				annual_revenue: form.annual_revenue.trim() || null,
 				analyst_notes: form.analyst_notes.trim() || null,
+				latest_funding: form.latest_funding.trim() || null,
+				latest_funding_amount: form.latest_funding_amount.trim() || null,
+				last_raised_at: form.last_raised_at.trim() || null,
+				poc_name: form.poc_name.trim() || null,
+				poc_position: form.poc_position.trim() || null,
+				poc_email: form.poc_email.trim() || null,
+				poc_linkedin: form.poc_linkedin.trim() || null,
 				social: form.social,
 				thesis_sector_ids: form.thesis_sector_ids,
 				thesis_sport_ids: form.thesis_sport_ids,
 				thesis_tech_tag_ids: form.thesis_tech_tag_ids,
 				thesis_round_type_ids: form.thesis_round_type_ids,
+				thesis_amount_min: form.thesis_amount_min.trim() ? Number(form.thesis_amount_min) : null,
+				thesis_amount_max: form.thesis_amount_max.trim() ? Number(form.thesis_amount_max) : null,
+				thesis_revenue_stages: form.thesis_revenue_stages,
+				thesis_geo: form.thesis_geo.filter((g) => g.scope_value.trim()).map((g) => ({ scope_type: g.scope_type, scope_value: g.scope_value.trim() })),
+				funds: form.funds.filter((f) => f.fund_name.trim()).map((f) => ({
+					fund_name: f.fund_name.trim(), announced_date: f.announced_date || undefined,
+					fund_value: f.fund_value.trim() ? Number(f.fund_value) : undefined,
+					currency_code: f.currency_code || undefined, source_url: f.source_url.trim() || undefined,
+				})),
 			};
 			let createdId: string | undefined;
 			if (isEdit) await api('PATCH', `/api/admin/investors/${id}`, body);
-			else { const created = await api<{ id: string }>('POST', '/api/admin/investors', body); createdId = created?.id; }
+			else {
+				// Promote-from-queue: link the review row in the same create tx.
+				if (promoteReviewId) body.review_id = promoteReviewId;
+				const created = await api<{ id: string }>('POST', '/api/admin/investors', body); createdId = created?.id;
+			}
 			toast.success(isEdit ? 'Saved' : 'Created');
 			onSaved(createdId);
 		} catch (e) {
@@ -327,6 +416,37 @@ function InvestorForm({ id, initial, onClose, onSaved }: { id: string | null; in
 								<Field label="Sports"><SportsPicker value={form.thesis_sport_ids} onChange={(v) => set('thesis_sport_ids', v)} /></Field>
 								<Field label="Tech tags"><TechTagsPicker value={form.thesis_tech_tag_ids} onChange={(v) => set('thesis_tech_tag_ids', v)} /></Field>
 								<Field label="Preferred rounds"><RoundTypesPicker value={form.thesis_round_type_ids} onChange={(v) => set('thesis_round_type_ids', v)} /></Field>
+								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+									<Field label="Cheque min (USD)"><input className="search-input" type="number" value={form.thesis_amount_min} onChange={(e) => set('thesis_amount_min', e.target.value)} /></Field>
+									<Field label="Cheque max (USD)"><input className="search-input" type="number" value={form.thesis_amount_max} onChange={(e) => set('thesis_amount_max', e.target.value)} /></Field>
+								</div>
+								<Field label="Revenue stages">
+									<div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+										{REVENUE_STAGES.map((s) => (
+											<label key={s} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+												<input type="checkbox" checked={form.thesis_revenue_stages.includes(s)} onChange={(e) => set('thesis_revenue_stages', e.target.checked ? [...form.thesis_revenue_stages, s] : form.thesis_revenue_stages.filter((x) => x !== s))} />
+												{s.replace(/_/g, ' ')}
+											</label>
+										))}
+									</div>
+								</Field>
+								<Field label="Geography focus" hint="countries / regions / continents the investor targets">
+									<div style={{ display: 'grid', gap: 8 }}>
+										{form.thesis_geo.map((g, i) => {
+											const upd = (patch: Partial<GeoScope>) => set('thesis_geo', form.thesis_geo.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+											return (
+												<div key={i} style={{ display: 'grid', gridTemplateColumns: '130px 1fr auto', gap: 8, alignItems: 'center' }}>
+													<select className="search-input" value={g.scope_type} onChange={(e) => upd({ scope_type: e.target.value as GeoScope['scope_type'] })}>
+														{GEO_SCOPES.map((t) => <option key={t} value={t}>{t}</option>)}
+													</select>
+													<input className="search-input" placeholder="e.g. United States / Europe" value={g.scope_value} onChange={(e) => upd({ scope_value: e.target.value })} />
+													<button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => set('thesis_geo', form.thesis_geo.filter((_, j) => j !== i))}><Trash2 size={12} /></button>
+												</div>
+											);
+										})}
+										<button className="btn ghost" style={{ justifySelf: 'start' }} onClick={() => set('thesis_geo', [...form.thesis_geo, { scope_type: 'country', scope_value: '' }])}><Plus size={12} /> Add geography</button>
+									</div>
+								</Field>
 							</>
 						) },
 						{ key: 'stats', label: 'Stats & Notes', node: (
@@ -342,8 +462,48 @@ function InvestorForm({ id, initial, onClose, onSaved }: { id: string | null; in
 									<Field label="Total funding (USD)"><input className="search-input" value={form.total_funding} onChange={(e) => set('total_funding', e.target.value)} /></Field>
 									<Field label="Annual revenue (USD)"><input className="search-input" value={form.annual_revenue} onChange={(e) => set('annual_revenue', e.target.value)} /></Field>
 								</div>
+								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+									<Field label="Latest fund / round"><input className="search-input" value={form.latest_funding} onChange={(e) => set('latest_funding', e.target.value)} placeholder="e.g. Fund III" /></Field>
+									<Field label="Latest amount (USD)"><input className="search-input" value={form.latest_funding_amount} onChange={(e) => set('latest_funding_amount', e.target.value)} /></Field>
+									<Field label="Last raised"><input className="search-input" type="date" value={form.last_raised_at} onChange={(e) => set('last_raised_at', e.target.value)} /></Field>
+								</div>
 								<Field label="Analyst notes"><textarea className="search-input" style={{ minHeight: 70, resize: 'vertical' }} value={form.analyst_notes} onChange={(e) => set('analyst_notes', e.target.value)} /></Field>
 							</>
+						) },
+						{ key: 'contact', label: 'Contact', node: (
+							<>
+								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+									<Field label="POC name"><input className="search-input" value={form.poc_name} onChange={(e) => set('poc_name', e.target.value)} /></Field>
+									<Field label="POC position"><input className="search-input" value={form.poc_position} onChange={(e) => set('poc_position', e.target.value)} /></Field>
+								</div>
+								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+									<Field label="POC email"><input className="search-input" value={form.poc_email} onChange={(e) => set('poc_email', e.target.value)} placeholder="name@fund.com" /></Field>
+									<Field label="POC LinkedIn"><input className="search-input" value={form.poc_linkedin} onChange={(e) => set('poc_linkedin', e.target.value)} placeholder="https://linkedin.com/in/…" /></Field>
+								</div>
+							</>
+						) },
+						{ key: 'funds', label: 'Funds', hint: form.funds.length || undefined, node: (
+							<div style={{ display: 'grid', gap: 10 }}>
+								{form.funds.length === 0 && <div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>No funds yet. Add the fund vehicles this investor has raised.</div>}
+								{form.funds.map((f, i) => {
+									const upd = (patch: Partial<FundDraft>) => set('funds', form.funds.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+									return (
+										<div key={i} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, display: 'grid', gap: 8 }}>
+											<div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8 }}>
+												<input className="search-input" placeholder="Fund name" value={f.fund_name} onChange={(e) => upd({ fund_name: e.target.value })} />
+												<input className="search-input" type="date" value={f.announced_date} onChange={(e) => upd({ announced_date: e.target.value })} />
+											</div>
+											<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 2fr auto', gap: 8, alignItems: 'center' }}>
+												<input className="search-input" type="number" placeholder="Value" value={f.fund_value} onChange={(e) => upd({ fund_value: e.target.value })} />
+												<CurrencySelect value={f.currency_code} onChange={(v) => upd({ currency_code: v })} />
+												<input className="search-input" placeholder="Source URL" value={f.source_url} onChange={(e) => upd({ source_url: e.target.value })} />
+												<button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => set('funds', form.funds.filter((_, j) => j !== i))}><Trash2 size={12} /></button>
+											</div>
+										</div>
+									);
+								})}
+								<button className="btn ghost" style={{ justifySelf: 'start' }} onClick={() => set('funds', [...form.funds, emptyFund()])}><Plus size={12} /> Add fund</button>
+							</div>
 						) },
 					]}
 				/>

@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { InvestorSelectOne } from '@/components/entity-pickers';
 
-type EndpointKey = 'apolloBatch' | 'attioSync' | 'recommendations' | 'apolloEnrich';
+type EndpointKey = 'apolloBatch' | 'attioSync' | 'recommendations' | 'apolloEnrich' | 'digestEmail' | 'sweepStuck';
 
 const ENDPOINTS: Array<{ key: EndpointKey; label: string; desc: string; path: string; needsId?: boolean }> = [
 	{
@@ -32,6 +32,18 @@ const ENDPOINTS: Array<{ key: EndpointKey; label: string; desc: string; path: st
 		label: 'Recompute recommendations',
 		desc: 'Re-score the recommendation engine immediately.',
 		path: '/api/admin/jobs/recommendations/score',
+	},
+	{
+		key: 'digestEmail',
+		label: 'Send digest emails',
+		desc: 'Run the digest-email job now (otherwise daily at 09:00 UTC).',
+		path: '/api/admin/jobs/digest-email',
+	},
+	{
+		key: 'sweepStuck',
+		label: 'Sweep stuck jobs',
+		desc: 'Re-queue jobs stuck past their timeout (otherwise every 5 min).',
+		path: '/api/admin/jobs/sweep-stuck',
 	},
 ];
 

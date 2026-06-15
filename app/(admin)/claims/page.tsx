@@ -32,8 +32,16 @@ interface Claim {
 	rejection_reason?: string | null;
 	new_entry_request?: boolean;
 	target_website_snapshot?: string | null;
+	shareable_token?: string | null;
 	created_at: string;
 }
+
+const TYPE_FILTERS: Array<{ label: string; key: string }> = [
+	{ label: 'All types', key: '' },
+	{ label: 'Companies', key: 'company' },
+	{ label: 'Investors', key: 'investor' },
+	{ label: 'Ecosystem', key: 'ecosystem_entity' },
+];
 
 interface ClaimsResponse { data: Claim[]; total: number; totalPages: number }
 
@@ -47,17 +55,21 @@ const STATUS_TABS: Array<{ label: string; key: ClaimStatus }> = [
 export default function ClaimsAdminPage() {
 	const { mutate } = useSWRConfig();
 	const [status, setStatus] = useState<ClaimStatus>('pending');
+	const [claimType, setClaimType] = useState('');
 	const [page, setPage] = useState(1);
 	const [pendingId, setPendingId] = useState<string | null>(null);
 	const [sendEmail, setSendEmail] = useState(true);
 	const [expandedId, setExpandedId] = useState<string | null>(null);
 
 	const { data, error, isLoading } = useSWR<ClaimsResponse>(
-		['/api/admin/claims', { status, page, limit: 30 }],
+		['/api/admin/claims', { status, claim_type: claimType || undefined, page, limit: 30 }],
 		{ dedupingInterval: 30_000 },
 	);
 	const stats = useSWR<QueueStats>(['/api/admin/stats/queues'], { dedupingInterval: 60_000 });
 	const c = stats.data?.claims;
+	const usersResp = useSWR<{ data: Array<{ id: string; full_name?: string | null; display_name?: string | null; email: string; user_role: string }> }>(
+		['/api/admin/users', { limit: 100 }], { dedupingInterval: 5 * 60_000 });
+	const admins = (usersResp.data?.data ?? []).filter((u) => u.user_role === 'admin');
 
 	const claims = data?.data ?? [];
 
@@ -77,6 +89,7 @@ export default function ClaimsAdminPage() {
 	};
 
 	const pickup = (id: string) => act(id, () => api('POST', `/api/admin/claims/${id}/pickup`, { picked_up: true }), 'Claim picked up');
+	const assign = (id: string, adminId: string) => act(id, () => api('POST', `/api/admin/claims/${id}/pickup`, { picked_up: true, assign_to: adminId }), 'Claim assigned');
 	const verify = (id: string) => act(id, () => api('POST', `/api/admin/claims/${id}/verify`, { send_email: sendEmail }), 'Claim verified');
 	const reject = (id: string) => {
 		const reason = window.prompt('Reason for rejection (optional):') ?? undefined;
@@ -84,6 +97,10 @@ export default function ClaimsAdminPage() {
 		void act(id, () => api('POST', `/api/admin/claims/${id}/reject`, { reason }), 'Claim rejected');
 	};
 	const reopen = (id: string) => act(id, () => api('POST', `/api/admin/claims/${id}/reopen`), 'Claim re-opened');
+	const unverify = (id: string) => act(id, () => api('POST', `/api/admin/claims/${id}/unverify`), 'Verification removed');
+	const regenerate = (id: string) => act(id, () => api('POST', `/api/admin/claims/${id}/regenerate-report`), 'Report regeneration queued');
+	const toggleActive = (id: string, active: boolean) => act(id, () => api('POST', `/api/admin/claims/${id}/toggle-active`, { active }), active ? 'Marked active' : 'Marked inactive');
+	const copyShare = (token: string) => { void navigator.clipboard.writeText(`${window.location.origin}/verified/${token}`); toast.success('Share link copied'); };
 
 	return (
 		<div>
@@ -113,6 +130,10 @@ export default function ClaimsAdminPage() {
 						{t.label}
 					</button>
 				))}
+				<span style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 4px' }} />
+				<select className="search-input" style={{ height: 30, width: 150 }} value={claimType} onChange={(e) => { setClaimType(e.target.value); setPage(1); }}>
+					{TYPE_FILTERS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+				</select>
 				<div style={{ flex: 1 }} />
 				<label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--fg-2)' }}>
 					<input type="checkbox" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} /> Send email on verify
@@ -165,11 +186,25 @@ export default function ClaimsAdminPage() {
 											{c.status === 'pending' && (
 												<button className="btn ghost" disabled={pendingId === c.id} onClick={() => void pickup(c.id)}>Pick up</button>
 											)}
+											{(c.status === 'pending' || c.status === 'picked_up') && admins.length > 0 && (
+												<select className="search-input" style={{ height: 30, maxWidth: 150 }} value="" disabled={pendingId === c.id}
+													onChange={(e) => { if (e.target.value) void assign(c.id, e.target.value); }} aria-label="Assign claim to admin">
+													<option value="">Assign to…</option>
+													{admins.map((a) => <option key={a.id} value={a.id}>{a.full_name || a.display_name || a.email}</option>)}
+												</select>
+											)}
 											{c.status !== 'verified' && c.status !== 'rejected' && (
 												<button className="btn" disabled={pendingId === c.id} onClick={() => void verify(c.id)}>Verify</button>
 											)}
 											{c.status !== 'rejected' && (
 												<button className="btn ghost" style={{ color: 'var(--accent)' }} disabled={pendingId === c.id} onClick={() => reject(c.id)}>Reject</button>
+											)}
+											{c.status === 'verified' && (
+												<>
+													{c.shareable_token && <button className="btn ghost" disabled={pendingId === c.id} onClick={() => copyShare(c.shareable_token!)} title="Copy verified share link">Copy link</button>}
+													<button className="btn ghost" disabled={pendingId === c.id} onClick={() => void regenerate(c.id)} title="Re-run the verified-company report">Regenerate report</button>
+													<button className="btn ghost" disabled={pendingId === c.id} onClick={() => void unverify(c.id)}>Un-verify</button>
+												</>
 											)}
 											{c.status === 'rejected' && (
 												<button className="btn ghost" disabled={pendingId === c.id} onClick={() => void reopen(c.id)}>Re-open</button>
@@ -195,8 +230,18 @@ export default function ClaimsAdminPage() {
 											{c.new_entry_request && !c.entity_id ? (
 												<CreateEntityPanel claim={c} onDone={() => void refresh()} />
 											) : (
-												<div style={{ padding: '0 4px 10px', fontSize: 11, color: 'var(--fg-muted)' }}>
-													Verifying applies the claim to the live {c.entity_type ?? 'record'} (and emails the claimant if enabled). Field-level edits submitted with this claim appear under Data requests.
+												<div style={{ padding: '0 4px 10px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+													<span style={{ fontSize: 11, color: 'var(--fg-muted)', flex: 1 }}>
+														Verifying applies the claim to the live {c.entity_type ?? 'record'} (and emails the claimant if enabled). Field-level edits appear under Data requests.
+													</span>
+													{c.entity_id && (c.claim_type === 'company' || c.claim_type === 'investor') && (
+														<>
+															<button className="btn ghost" disabled={pendingId === c.id} onClick={() => void toggleActive(c.id, true)}>
+																Mark {c.claim_type === 'company' ? 'actively raising' : 'actively investing'}
+															</button>
+															<button className="btn ghost" disabled={pendingId === c.id} onClick={() => void toggleActive(c.id, false)}>Mark inactive</button>
+														</>
+													)}
 												</div>
 											)}
 										</td>

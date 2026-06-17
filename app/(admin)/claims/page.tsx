@@ -227,6 +227,7 @@ export default function ClaimsAdminPage() {
 												<div><div className="co-stat-label">Verified</div>{c.verified_at ? new Date(c.verified_at).toLocaleString() : '—'}</div>
 												{c.rejection_reason && <div style={{ gridColumn: '1 / -1' }}><div className="co-stat-label">Rejection reason</div>{c.rejection_reason}</div>}
 											</div>
+											{c.claim_type === 'company' && <DeckAnalysisPanel claimId={c.id} />}
 											{c.new_entry_request && !c.entity_id ? (
 												<CreateEntityPanel claim={c} onDone={() => void refresh()} />
 											) : (
@@ -261,6 +262,101 @@ export default function ClaimsAdminPage() {
 					</span>
 					<button className="btn ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
 					<button className="btn ghost" disabled={page >= data.totalPages} onClick={() => setPage((p) => p + 1)}>Next</button>
+				</div>
+			)}
+		</div>
+	);
+}
+
+interface DeckAnalysis {
+	status: string;
+	error: string | null;
+	stage: string | null;
+	raise_amount_usd: string | null;
+	traction_summary: string | null;
+	team_summary: string | null;
+	market_summary: string | null;
+	business_model: string | null;
+	strengths: unknown;
+	risks: unknown;
+	overall_score: number | null;
+	score_rationale: string | null;
+	market_context: string | null;
+	analyzed_at: string | null;
+}
+
+/**
+ * Pitch-deck analysis panel for a company claim. Shows an "Analyze deck" button
+ * (admin-triggered) and renders Claude's extracted fields + score once ready.
+ * Renders nothing if the claim has no deck.
+ */
+function DeckAnalysisPanel({ claimId }: { claimId: string }) {
+	const { data, mutate, isLoading } = useSWR<{ hasDeck: boolean; analysis: DeckAnalysis | null }>(
+		[`/api/admin/claims/${claimId}/deck-analysis`],
+		{
+			refreshInterval: (d) => {
+				const s = d?.analysis?.status;
+				return s === 'pending' || s === 'processing' ? 3000 : 0;
+			},
+		},
+	);
+	const [busy, setBusy] = useState(false);
+
+	if (isLoading || !data || !data.hasDeck) return null;
+	const a = data.analysis;
+	const running = a?.status === 'pending' || a?.status === 'processing';
+	const strengths = Array.isArray(a?.strengths) ? (a!.strengths as string[]) : [];
+	const risks = Array.isArray(a?.risks) ? (a!.risks as string[]) : [];
+
+	const analyze = async () => {
+		setBusy(true);
+		try {
+			await api('POST', `/api/admin/claims/${claimId}/analyze-deck`);
+			await mutate();
+		} catch (e) {
+			toast.error((e as Error).message);
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	return (
+		<div style={{ padding: '0 4px 12px' }}>
+			<div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+				<div className="co-stat-label" style={{ flex: 1 }}>Pitch deck analysis</div>
+				<button className="btn ghost" disabled={busy || running} onClick={() => void analyze()}>
+					{running ? 'Analyzing…' : a?.status === 'done' ? 'Re-analyze' : 'Analyze deck'}
+				</button>
+			</div>
+			{!a && <div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>Not analyzed yet.</div>}
+			{running && <div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>Analysis in progress…</div>}
+			{a?.status === 'failed' && <div style={{ fontSize: 12, color: 'var(--neg)' }}>Failed: {a.error ?? 'unknown error'}</div>}
+			{a?.status === 'unsupported' && <div style={{ fontSize: 12, color: 'var(--neg)' }}>{a.error ?? 'Unsupported deck format.'}</div>}
+			{a?.status === 'done' && (
+				<div style={{ display: 'grid', gap: 10, fontSize: 12 }}>
+					<div style={{ display: 'flex', gap: 16, alignItems: 'baseline' }}>
+						{a.overall_score != null && (
+							<div style={{ fontSize: 22, fontWeight: 700 }}>
+								{a.overall_score}<span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>/100</span>
+							</div>
+						)}
+						<div style={{ color: 'var(--fg-2)' }}>{a.score_rationale}</div>
+					</div>
+					<div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+						<div><div className="co-stat-label">Stage</div>{a.stage ?? '—'}</div>
+						<div><div className="co-stat-label">Raising</div>{a.raise_amount_usd ? `$${Number(a.raise_amount_usd).toLocaleString()}` : '—'}</div>
+						<div><div className="co-stat-label">Business model</div>{a.business_model ?? '—'}</div>
+						<div><div className="co-stat-label">Team</div>{a.team_summary ?? '—'}</div>
+						<div style={{ gridColumn: '1 / -1' }}><div className="co-stat-label">Traction</div>{a.traction_summary ?? '—'}</div>
+						<div style={{ gridColumn: '1 / -1' }}><div className="co-stat-label">Market</div>{a.market_summary ?? '—'}</div>
+					</div>
+					{strengths.length > 0 && (
+						<div><div className="co-stat-label">Strengths</div><ul style={{ margin: '4px 0 0 16px' }}>{strengths.map((s, i) => <li key={i}>{s}</li>)}</ul></div>
+					)}
+					{risks.length > 0 && (
+						<div><div className="co-stat-label">Risks</div><ul style={{ margin: '4px 0 0 16px' }}>{risks.map((s, i) => <li key={i}>{s}</li>)}</ul></div>
+					)}
+					{a.market_context && <div><div className="co-stat-label">Market context</div>{a.market_context}</div>}
 				</div>
 			)}
 		</div>

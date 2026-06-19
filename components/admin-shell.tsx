@@ -7,7 +7,7 @@ import {
 	LayoutDashboard, Briefcase, Users, FilePlus, FileText, Database, Layers,
 	Activity, ShoppingCart, LogOut, ShieldAlert, CreditCard, ToggleLeft,
 	Banknote, Sparkles, Tag, BookOpen, Menu, BarChart3, Gauge,
-	CircleDollarSign, GitMerge, Lightbulb,
+	CircleDollarSign, GitMerge, Lightbulb, Receipt, Package,
 } from 'lucide-react';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useIsAdmin, useUserProfile } from '@/hooks/use-user-profile';
@@ -59,6 +59,7 @@ const NAV_GROUPS: NavGroup[] = [
 			{ href: '/users', label: 'Users', Icon: Users },
 			{ href: '/billing', label: 'Billing tools', Icon: CreditCard },
 			{ href: '/subscription-plans', label: 'Plans', Icon: Tag },
+			{ href: '/credit-packs', label: 'Credit packs', Icon: Package },
 			{ href: '/features', label: 'Feature flags', Icon: ToggleLeft },
 		],
 	},
@@ -67,6 +68,7 @@ const NAV_GROUPS: NavGroup[] = [
 		items: [
 			{ href: '/sales', label: 'Sales', Icon: ShoppingCart },
 			{ href: '/jobs', label: 'Jobs & integrations', Icon: Activity },
+			{ href: '/ai-usage', label: 'AI usage & cost', Icon: Receipt },
 			{ href: '/performance', label: 'Performance', Icon: Gauge },
 		],
 	},

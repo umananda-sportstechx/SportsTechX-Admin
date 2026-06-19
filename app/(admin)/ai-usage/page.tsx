@@ -178,7 +178,7 @@ function UserCell({ row, router }: { row: LedgerRow; router: ReturnType<typeof u
 	const isAdmin = !!row.profile_is_admin;
 	const tier = (row.profile_tier ?? 'free').toLowerCase();
 	const badge = isAdmin ? 'Admin' : tier === 'free' ? 'Free · top-up/granted' : tier;
-	const badgeColor = isAdmin ? 'var(--accent)' : tier === 'pro' ? 'var(--pos)' : tier === 'growth' ? 'var(--fg)' : 'var(--fg-muted)';
+	const badgeColor = isAdmin ? 'var(--accent)' : tier === 'free' ? 'var(--fg-muted)' : 'var(--fg-2)';
 
 	const open = () => {
 		const params = new URLSearchParams();

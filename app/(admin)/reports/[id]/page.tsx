@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { use, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { Trash2, Plus, GripVertical, Lock, Unlock, Eye, EyeOff, X } from 'lucide-react';
+import { Trash2, Plus, GripVertical, Lock, Unlock, Eye, EyeOff, X, Sparkles } from 'lucide-react';
 import {
 	DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors,
 	closestCenter,
@@ -68,6 +68,81 @@ interface Section {
 	poll_id: string | null;
 }
 
+// ---- AI generate modal -------------------------------------------------------
+
+function AiGenerateModal(
+	{ reportId, onClose, onDone }: { reportId: string; onClose: () => void; onDone: () => void },
+) {
+	const [brief, setBrief] = useState('');
+	const [count, setCount] = useState(6);
+	const [busy, setBusy] = useState(false);
+
+	const generate = async () => {
+		if (brief.trim().length < 10) {
+			toast.error('Give a brief of at least 10 characters.');
+			return;
+		}
+		setBusy(true);
+		try {
+			const r = await api<{ created: number; skipped: number }>(
+				'POST', `/api/admin/reports/${reportId}/ai-generate`, { brief: brief.trim(), count },
+			);
+			toast.success(`Drafted ${r.created} section${r.created === 1 ? '' : 's'}${r.skipped ? ` · ${r.skipped} skipped` : ''}`);
+			onDone();
+			onClose();
+		} catch (e) {
+			toast.error((e as Error).message);
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	return (
+		<div
+			onClick={onClose}
+			style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }}
+		>
+			<div
+				onClick={(e) => e.stopPropagation()}
+				style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 8, padding: 16, width: 480, maxWidth: '90vw', display: 'grid', gap: 10 }}
+			>
+				<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+					<Sparkles size={16} />
+					<div style={{ fontWeight: 700, flex: 1 }}>Generate sections with AI</div>
+					<button className="btn ghost" onClick={onClose} aria-label="Close"><X size={14} /></button>
+				</div>
+				<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
+					Describe the report. The AI drafts unpublished sections you can edit, reorder, and publish.
+				</div>
+				<textarea
+					className="search-input"
+					style={{ minHeight: 120, resize: 'vertical' }}
+					placeholder="e.g. 2026 European fan-engagement funding overview for an investor audience — key trends, top deals, a funding-by-year chart, and a takeaway."
+					value={brief}
+					onChange={(e) => setBrief(e.target.value)}
+					disabled={busy}
+				/>
+				<div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+					<label style={{ fontSize: 12, color: 'var(--fg-2)' }}>
+						Sections:
+						<input
+							type="number" min={3} max={12} value={count}
+							onChange={(e) => setCount(Math.min(12, Math.max(3, Number(e.target.value) || 6)))}
+							disabled={busy}
+							className="search-input"
+							style={{ width: 56, marginLeft: 6, display: 'inline-block' }}
+						/>
+					</label>
+					<div style={{ flex: 1 }} />
+					<button className="btn" onClick={() => void generate()} disabled={busy}>
+						{busy ? 'Generating…' : 'Generate'}
+					</button>
+				</div>
+			</div>
+		</div>
+	);
+}
+
 // ---- page --------------------------------------------------------------------
 
 export default function ReportSectionsEditorPage(
@@ -83,6 +158,7 @@ export default function ReportSectionsEditorPage(
 
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [pickerOpen, setPickerOpen] = useState(false);
+	const [aiOpen, setAiOpen] = useState(false);
 	const active = sections.find((s) => s.id === activeId) ?? null;
 
 	const reload = () => mutate((k) => Array.isArray(k) && typeof k[0] === 'string' && k[0].includes(`/admin/reports/${reportId}/sections`));
@@ -141,9 +217,13 @@ export default function ReportSectionsEditorPage(
 							<button className="btn" onClick={() => setPickerOpen(!pickerOpen)} title="Add section">
 								<Plus size={12} /> Add
 							</button>
+							<button className="btn ghost" onClick={() => setAiOpen(true)} title="Generate sections with AI">
+								<Sparkles size={12} /> AI
+							</button>
 						</div>
 					</div>
 					{pickerOpen && <KindPicker onPick={onAddKind} onClose={() => setPickerOpen(false)} />}
+					{aiOpen && <AiGenerateModal reportId={reportId} onClose={() => setAiOpen(false)} onDone={reload} />}
 					<SectionList
 						sections={sections}
 						activeId={activeId}

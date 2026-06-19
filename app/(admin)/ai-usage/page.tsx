@@ -1,6 +1,7 @@
 'use client';
 
 import useSWR from 'swr';
+import { useRouter } from 'next/navigation';
 import { Receipt, RefreshCw } from 'lucide-react';
 
 /**
@@ -43,6 +44,10 @@ interface LedgerRow {
 	cache_write_tokens: number;
 	usd_cost: string;
 	profile_id: string | null;
+	profile_name: string | null;
+	profile_email: string | null;
+	profile_tier: string | null;
+	profile_is_admin: boolean | null;
 	credited: boolean;
 	credits_charged: number;
 	ref_entity_type: string | null;
@@ -55,6 +60,7 @@ const usd = (v: string | number | undefined) =>
 const num = (v: string | number | undefined) => Number(v ?? 0).toLocaleString();
 
 export default function AiUsagePage() {
+	const router = useRouter();
 	const { data: summary, mutate: mutateSummary, isLoading } = useSWR<Summary>(
 		['/api/admin/ai-usage/summary'],
 		{ dedupingInterval: 30_000 },
@@ -144,8 +150,8 @@ export default function AiUsagePage() {
 											? <span className="chip on">{r.credits_charged} cr</span>
 											: <span style={{ color: 'var(--fg-muted)' }}>—</span>}
 									</td>
-									<td style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)' }}>
-										{r.profile_id ? r.profile_id.slice(0, 8) : 'system'}
+									<td>
+										<UserCell row={r} router={router} />
 									</td>
 								</tr>
 							))}
@@ -157,6 +163,39 @@ export default function AiUsagePage() {
 				</div>
 			</div>
 		</div>
+	);
+}
+
+/**
+ * User column: name + a badge (Admin, or plan tier — a "free" tier spending
+ * credits is using top-up/granted credits). Clicking opens the user in the
+ * admin Users page (filtered + expanded).
+ */
+function UserCell({ row, router }: { row: LedgerRow; router: ReturnType<typeof useRouter> }) {
+	if (!row.profile_id) return <span style={{ color: 'var(--fg-muted)', fontSize: 12 }}>system</span>;
+
+	const name = row.profile_name || row.profile_email || `${row.profile_id.slice(0, 8)}…`;
+	const isAdmin = !!row.profile_is_admin;
+	const tier = (row.profile_tier ?? 'free').toLowerCase();
+	const badge = isAdmin ? 'Admin' : tier === 'free' ? 'Free · top-up/granted' : tier;
+	const badgeColor = isAdmin ? 'var(--accent)' : tier === 'free' ? 'var(--fg-muted)' : 'var(--fg-2)';
+
+	const open = () => {
+		const params = new URLSearchParams();
+		params.set('q', row.profile_email ?? row.profile_id!);
+		params.set('focus', row.profile_id!);
+		router.push(`/users?${params.toString()}`);
+	};
+
+	return (
+		<button
+			onClick={open}
+			title="Open in Users"
+			style={{ background: 'transparent', border: 0, padding: 0, cursor: 'pointer', textAlign: 'left', maxWidth: 200 }}
+		>
+			<div style={{ fontSize: 12, color: 'var(--accent)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
+			<div style={{ fontSize: 10, color: badgeColor, textTransform: 'capitalize' }}>{badge}</div>
+		</button>
 	);
 }
 

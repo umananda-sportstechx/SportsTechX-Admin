@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -66,6 +66,17 @@ export default function UsersAdminPage() {
 	const [freqBucket, setFreqBucket] = useState<'never' | 'once' | '2-5' | '6+' | null>(null);
 	const [reportUsersOpen, setReportUsersOpen] = useState(false);
 	const [planDetail, setPlanDetail] = useState<string | null>(null);
+
+	// Deep-link support: /users?q=<email>&focus=<id> (e.g. from the AI-usage page)
+	// pre-fills the search and expands that user's row.
+	useEffect(() => {
+		if (typeof window === 'undefined') return;
+		const sp = new URLSearchParams(window.location.search);
+		const q = sp.get('q');
+		if (q) setSearch(q);
+		const focus = sp.get('focus');
+		if (focus) setExpandedId(focus);
+	}, []);
 
 	const { data, error, isLoading } = useSWR<UsersResponse>(
 		['/api/admin/users', { q: search || undefined, role: role || undefined, tier: tier || undefined, page, limit: 30 }],

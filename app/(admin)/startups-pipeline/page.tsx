@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Check, X, Trash2, Upload, Rocket } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, StatCard, Section, Tag } from '@/components/atoms';
@@ -47,6 +48,7 @@ export default function StartupsPipelinePage() {
 	const [status, setStatus] = useState<Status | ''>('new');
 	const [assigned, setAssigned] = useState('');
 	const [search, setSearch] = useState('');
+	const debouncedSearch = useDebouncedValue(search);
 	const [from, setFrom] = useState('');
 	const [to, setTo] = useState('');
 	const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -56,7 +58,7 @@ export default function StartupsPipelinePage() {
 	const [promoting, setPromoting] = useState<Entry | null>(null);
 
 	const { data, error, isLoading } = useSWR<Response>(
-		['/api/admin/startups-pipeline', { status: status || undefined, assigned_to: assigned || undefined, q: search || undefined, from: from || undefined, to: to || undefined, limit: 50 }],
+		['/api/admin/startups-pipeline', { status: status || undefined, assigned_to: assigned || undefined, q: debouncedSearch || undefined, from: from || undefined, to: to || undefined, limit: 50 }],
 		{ dedupingInterval: 15_000 },
 	);
 	const { data: stats } = useSWR<Stats>(['/api/admin/startups-pipeline/stats'], { dedupingInterval: 30_000 });

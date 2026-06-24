@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, StatCard, Section } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, Funnel, toSegments, type Bucket } from '@/components/charts';
@@ -78,8 +79,9 @@ export default function UsersAdminPage() {
 		if (focus) setExpandedId(focus);
 	}, []);
 
+	const debouncedSearch = useDebouncedValue(search);
 	const { data, error, isLoading } = useSWR<UsersResponse>(
-		['/api/admin/users', { q: search || undefined, role: role || undefined, tier: tier || undefined, page, limit: 30 }],
+		['/api/admin/users', { q: debouncedSearch || undefined, role: role || undefined, tier: tier || undefined, page, limit: 30 }],
 		{ dedupingInterval: 15_000 },
 	);
 	const stats = useSWR<UserStats>(['/api/admin/stats/users'], { dedupingInterval: 60_000 });
@@ -391,7 +393,8 @@ export default function UsersAdminPage() {
 interface LoginUser { id: string; email: string | null; display_name: string | null; login_count: number; last_seen_at: string | null; created_at: string }
 function LoginUsersModal({ bucket, onClose }: { bucket: string; onClose: () => void }) {
 	const [q, setQ] = useState('');
-	const { data, isLoading } = useSWR<{ users: LoginUser[] }>([`/api/admin/users/analytics/login-users`, { bucket, q: q || undefined }], { dedupingInterval: 10_000 });
+	const dq = useDebouncedValue(q);
+	const { data, isLoading } = useSWR<{ users: LoginUser[] }>([`/api/admin/users/analytics/login-users`, { bucket, q: dq || undefined }], { dedupingInterval: 10_000 });
 	const users = data?.users ?? [];
 	const exportCsv = () => {
 		const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -453,7 +456,8 @@ function SubscriptionMix({ onPlan }: { onPlan: (detail: string) => void }) {
 interface PlanUser { id: string; email: string | null; display_name: string | null; company_name: string | null; login_count: number; last_seen_at: string | null }
 function PlanUsersModal({ detail, onClose }: { detail: string; onClose: () => void }) {
 	const [q, setQ] = useState('');
-	const { data, isLoading } = useSWR<{ users: PlanUser[] }>(['/api/admin/users/analytics/plan-users', { detail, q: q || undefined }], { dedupingInterval: 10_000 });
+	const dq = useDebouncedValue(q);
+	const { data, isLoading } = useSWR<{ users: PlanUser[] }>(['/api/admin/users/analytics/plan-users', { detail, q: dq || undefined }], { dedupingInterval: 10_000 });
 	const users = data?.users ?? [];
 	const exportCsv = () => {
 		const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -483,8 +487,9 @@ interface ReportUser { id: string; email: string | null; display_name: string | 
 function ReportUsersModal({ onClose }: { onClose: () => void }) {
 	const [q, setQ] = useState('');
 	const [page, setPage] = useState(1);
+	const dq = useDebouncedValue(q);
 	const { data, isLoading } = useSWR<{ data: ReportUser[]; total: number; totalPages: number }>(
-		[`/api/admin/users/analytics/report-users`, { q: q || undefined, page, limit: 25 }], { dedupingInterval: 10_000 },
+		[`/api/admin/users/analytics/report-users`, { q: dq || undefined, page, limit: 25 }], { dedupingInterval: 10_000 },
 	);
 	const rows = data?.data ?? [];
 	return (
@@ -529,7 +534,59 @@ function ManagePanel({ user }: { user: User }) {
 				<FeatureGrantsSection profileId={user.id} />
 			</div>
 			<BillingSection profileId={user.id} />
+			<PersonalizationSection profileId={user.id} />
 		</div>
+	);
+}
+
+interface PersonalizationProfile {
+	interests: { sectors: string[]; sports: string[]; regions: string[]; topics: string[]; tech_tags: string[]; intents: string[]; entity_interests: string[] };
+	summary: string | null;
+	metrics: { engagement_level: string; chat_signals: number; search_signals: number; total_signals: number; top_terms: Array<{ term: string; count: number }>; last_signal_at: string | null };
+	last_analyzed_at: string | null;
+}
+
+/** Read-only view of a user's AI-derived personalization profile (interests +
+ *  deterministic metrics). Their own distilled data — no billing/account info. */
+function PersonalizationSection({ profileId }: { profileId: string }) {
+	const { data, isLoading } = useSWR<{ profile: PersonalizationProfile | null }>(
+		[`/api/admin/users/${profileId}/personalization`], { dedupingInterval: 30_000 },
+	);
+	const p = data?.profile;
+	const chips = (label: string, items: string[]) => items.length > 0 && (
+		<div style={{ marginBottom: 6 }}>
+			<span style={{ fontSize: 11, color: 'var(--fg-muted)', marginRight: 6 }}>{label}</span>
+			{items.map((t) => <span key={t} className="chip" style={{ marginRight: 4 }}>{t}</span>)}
+		</div>
+	);
+	return (
+		<Section title="Personalization" meta="AI-derived interests + metrics · read-only">
+			{isLoading ? <div style={{ color: 'var(--fg-muted)', fontSize: 13 }}>Loading…</div>
+				: !p ? <div style={{ color: 'var(--fg-muted)', fontSize: 13 }}>No personalization yet — builds as the user uses chat + search.</div>
+				: (
+					<div>
+						{p.summary && <p style={{ fontSize: 13, color: 'var(--fg-2)', margin: '0 0 10px' }}>{p.summary}</p>}
+						{chips('Sectors', p.interests.sectors)}
+						{chips('Sports', p.interests.sports)}
+						{chips('Topics', p.interests.topics)}
+						{chips('Tech', p.interests.tech_tags)}
+						{chips('Regions', p.interests.regions)}
+						{chips('Intents', p.interests.intents)}
+						{chips('Entities', p.interests.entity_interests)}
+						<div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 12, color: 'var(--fg-muted)' }}>
+							<span>Engagement: <b style={{ color: 'var(--fg-2)' }}>{p.metrics.engagement_level}</b></span>
+							<span>Signals: {p.metrics.total_signals} ({p.metrics.chat_signals} chat / {p.metrics.search_signals} search)</span>
+							{p.metrics.last_signal_at && <span>Last: {new Date(p.metrics.last_signal_at).toLocaleDateString()}</span>}
+						</div>
+						{p.metrics.top_terms.length > 0 && (
+							<div style={{ marginTop: 8 }}>
+								<span style={{ fontSize: 11, color: 'var(--fg-muted)', marginRight: 6 }}>Top terms</span>
+								{p.metrics.top_terms.map((t) => <span key={t.term} className="chip" style={{ marginRight: 4 }}>{t.term} · {t.count}</span>)}
+							</div>
+						)}
+					</div>
+				)}
+		</Section>
 	);
 }
 

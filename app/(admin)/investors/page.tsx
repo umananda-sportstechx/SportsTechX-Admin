@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh } from '@/components/atoms';
@@ -42,6 +43,7 @@ export default function InvestorsAdminPage() {
 	const { mutate } = useSWRConfig();
 	const ask = useConfirm();
 	const [search, setSearch] = useState('');
+	const debouncedSearch = useDebouncedValue(search);
 	const [category, setCategory] = useState('');
 	const [status, setStatus] = useState('');
 	const [verified, setVerified] = useState('');
@@ -60,7 +62,7 @@ export default function InvestorsAdminPage() {
 
 	const { data, error, isLoading } = useSWR<InvestorsResponse>(
 		['/api/investors', {
-			search: search || undefined, category: category || undefined, status: status || undefined,
+			search: debouncedSearch || undefined, category: category || undefined, status: status || undefined,
 			is_verified: verified || undefined, sector_slug: sector || undefined, sport_slug: sport || undefined,
 			country: country.trim() || undefined, actively_investing: investing || undefined,
 			year_launched_min: launchedMin || undefined, year_launched_max: launchedMax || undefined,

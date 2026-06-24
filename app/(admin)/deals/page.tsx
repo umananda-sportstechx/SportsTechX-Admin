@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh } from '@/components/atoms';
@@ -50,6 +51,7 @@ export default function DealsAdminPage() {
 	const { mutate } = useSWRConfig();
 	const ask = useConfirm();
 	const [search, setSearch] = useState('');
+	const debouncedSearch = useDebouncedValue(search);
 	const [status, setStatus] = useState('');
 	const [businessModel, setBusinessModel] = useState('');
 	const [sizeBucket, setSizeBucket] = useState('');
@@ -69,7 +71,7 @@ export default function DealsAdminPage() {
 
 	const { data, error, isLoading } = useSWR<DealsResponse>(
 		['/api/deals', {
-			q: search || undefined, status: status || undefined, business_model: businessModel || undefined,
+			q: debouncedSearch || undefined, status: status || undefined, business_model: businessModel || undefined,
 			deal_size_bucket: sizeBucket || undefined, year: year || undefined,
 			sector_slug: sector || undefined, sport_slug: sport || undefined, round_type_slug: roundType || undefined,
 			amount_usd_min: amountMin || undefined, amount_usd_max: amountMax || undefined, disclosed_only: disclosed || undefined,

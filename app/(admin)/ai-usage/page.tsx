@@ -1,8 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import useSWR from 'swr';
 import { useRouter } from 'next/navigation';
-import { Receipt, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
+import { Receipt, RefreshCw, Save, Plus } from 'lucide-react';
+import { api } from '@/lib/api';
 
 /**
  * AI usage & cost ledger.
@@ -86,7 +89,7 @@ export default function AiUsagePage() {
 					<p style={{ fontSize: 14, color: 'var(--fg-2)', maxWidth: 720, margin: '6px 0 0' }}>
 						Token spend across every Anthropic + Voyage call. <b>Credited</b> = charged to the
 						user&apos;s credits; <b>uncredited</b> = company-borne (embeddings, report generation,
-						background jobs). Pricing is editable in <code style={{ background: 'var(--bg-2)', padding: '0 4px' }}>ai_model_pricing</code>.
+						background jobs). Edit model pricing and the credit conversion rate below.
 					</p>
 				</div>
 				<button className="btn ghost" onClick={refresh}><RefreshCw size={12} /> Refresh</button>
@@ -100,6 +103,9 @@ export default function AiUsagePage() {
 				<StatCard label="AI calls" value={num(t?.calls)} loading={isLoading} />
 				<StatCard label="Credits charged" value={num(t?.credits_charged)} loading={isLoading} />
 			</div>
+
+			{/* Cost configuration */}
+			<PricingConfig />
 
 			{/* By feature */}
 			<div className="card" style={{ padding: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
@@ -196,6 +202,124 @@ function UserCell({ row, router }: { row: LedgerRow; router: ReturnType<typeof u
 			<div style={{ fontSize: 12, color: 'var(--accent)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</div>
 			<div style={{ fontSize: 10, color: badgeColor, textTransform: 'capitalize' }}>{badge}</div>
 		</button>
+	);
+}
+
+// ─── Cost configuration: model pricing ($/MTok) + credit conversion rate ──────
+
+interface PricingModel {
+	id: string;
+	provider: string;
+	model: string;
+	input_usd_per_mtok: string;
+	output_usd_per_mtok: string;
+	cache_read_usd_per_mtok: string;
+	cache_write_usd_per_mtok: string;
+	is_active: boolean;
+}
+interface PricingConfigResp { models: PricingModel[]; usd_per_credit: number }
+
+const BLANK_MODEL: PricingModel = {
+	id: '', provider: 'anthropic', model: '',
+	input_usd_per_mtok: '0', output_usd_per_mtok: '0',
+	cache_read_usd_per_mtok: '0', cache_write_usd_per_mtok: '0', is_active: true,
+};
+
+function PricingConfig() {
+	const { data, mutate, isLoading } = useSWR<PricingConfigResp>(['/api/admin/ai-usage/pricing'], { dedupingInterval: 30_000 });
+	const [rate, setRate] = useState('');
+	const [savingRate, setSavingRate] = useState(false);
+	const [adding, setAdding] = useState(false);
+
+	const effectiveRate = rate !== '' ? rate : String(data?.usd_per_credit ?? '');
+
+	const saveRate = async () => {
+		const v = Number(effectiveRate);
+		if (!Number.isFinite(v) || v <= 0) { toast.error('Enter a positive USD-per-credit value'); return; }
+		setSavingRate(true);
+		try { await api('PATCH', '/api/admin/ai-usage/credit-rate', { usd_per_credit: v }); toast.success('Credit rate saved'); setRate(''); void mutate(); }
+		catch (e) { toast.error((e as Error).message); }
+		finally { setSavingRate(false); }
+	};
+
+	return (
+		<div className="card" style={{ padding: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
+			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+				<div style={{ fontWeight: 700 }}>Cost configuration</div>
+				<button className="btn ghost" onClick={() => setAdding((a) => !a)}><Plus size={12} /> Add model</button>
+			</div>
+
+			{/* Credit conversion rate — the margin lever */}
+			<div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+				<span style={{ fontSize: 13, color: 'var(--fg-2)' }}>USD per credit</span>
+				<input
+					className="search-input" style={{ width: 120, height: 30 }} type="number" step="0.0001" min="0"
+					value={effectiveRate} onChange={(e) => setRate(e.target.value)} disabled={isLoading}
+				/>
+				<button className="btn" disabled={savingRate} onClick={() => void saveRate()}><Save size={12} /> Save rate</button>
+				<span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>
+					Lower rate = more credits charged per $ of tokens (higher margin). Applies to new calls within ~minutes.
+				</span>
+			</div>
+
+			<div style={{ overflowX: 'auto' }}>
+				<table className="data-table">
+					<thead>
+						<tr>
+							<th>Provider</th><th>Model</th>
+							<th>Input $/M</th><th>Output $/M</th><th>Cache-read $/M</th><th>Cache-write $/M</th>
+							<th>Active</th><th></th>
+						</tr>
+					</thead>
+					<tbody>
+						{adding && <ModelRow key="__new" initial={BLANK_MODEL} isNew onSaved={() => { setAdding(false); void mutate(); }} />}
+						{(data?.models ?? []).map((m) => <ModelRow key={m.id} initial={m} onSaved={() => void mutate()} />)}
+						{!isLoading && (data?.models?.length ?? 0) === 0 && !adding && (
+							<tr><td colSpan={8} style={{ color: 'var(--fg-muted)' }}>No models priced yet.</td></tr>
+						)}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	);
+}
+
+function ModelRow({ initial, isNew, onSaved }: { initial: PricingModel; isNew?: boolean; onSaved: () => void }) {
+	const [m, setM] = useState<PricingModel>(initial);
+	const [saving, setSaving] = useState(false);
+	const set = (k: keyof PricingModel, v: string | boolean) => setM((p) => ({ ...p, [k]: v }));
+	const numInput = (k: keyof PricingModel) => (
+		<input
+			className="search-input" style={{ width: 90, height: 28 }} type="number" step="0.01" min="0"
+			value={m[k] as string} onChange={(e) => set(k, e.target.value)}
+		/>
+	);
+	const save = async () => {
+		if (!m.model.trim() || !m.provider.trim()) { toast.error('Provider and model are required'); return; }
+		setSaving(true);
+		try {
+			await api('PATCH', '/api/admin/ai-usage/pricing/model', {
+				provider: m.provider.trim(), model: m.model.trim(),
+				input_usd_per_mtok: Number(m.input_usd_per_mtok), output_usd_per_mtok: Number(m.output_usd_per_mtok),
+				cache_read_usd_per_mtok: Number(m.cache_read_usd_per_mtok), cache_write_usd_per_mtok: Number(m.cache_write_usd_per_mtok),
+				is_active: m.is_active,
+			});
+			toast.success(isNew ? 'Model added' : 'Pricing saved');
+			onSaved();
+		} catch (e) { toast.error((e as Error).message); }
+		finally { setSaving(false); }
+	};
+	return (
+		<tr>
+			<td>{isNew ? <input className="search-input" style={{ width: 100, height: 28 }} value={m.provider} onChange={(e) => set('provider', e.target.value)} /> : m.provider}</td>
+			<td>{isNew ? <input className="search-input" style={{ width: 160, height: 28 }} placeholder="model id" value={m.model} onChange={(e) => set('model', e.target.value)} /> : <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{m.model}</span>}</td>
+			<td>{numInput('input_usd_per_mtok')}</td>
+			<td>{numInput('output_usd_per_mtok')}</td>
+			<td>{numInput('cache_read_usd_per_mtok')}</td>
+			<td>{numInput('cache_write_usd_per_mtok')}</td>
+			<td><input type="checkbox" checked={m.is_active} onChange={(e) => set('is_active', e.target.checked)} /></td>
+			<td><button className="btn" disabled={saving} onClick={() => void save()}><Save size={11} /> Save</button></td>
+		</tr>
 	);
 }
 

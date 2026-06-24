@@ -534,7 +534,59 @@ function ManagePanel({ user }: { user: User }) {
 				<FeatureGrantsSection profileId={user.id} />
 			</div>
 			<BillingSection profileId={user.id} />
+			<PersonalizationSection profileId={user.id} />
 		</div>
+	);
+}
+
+interface PersonalizationProfile {
+	interests: { sectors: string[]; sports: string[]; regions: string[]; topics: string[]; tech_tags: string[]; intents: string[]; entity_interests: string[] };
+	summary: string | null;
+	metrics: { engagement_level: string; chat_signals: number; search_signals: number; total_signals: number; top_terms: Array<{ term: string; count: number }>; last_signal_at: string | null };
+	last_analyzed_at: string | null;
+}
+
+/** Read-only view of a user's AI-derived personalization profile (interests +
+ *  deterministic metrics). Their own distilled data — no billing/account info. */
+function PersonalizationSection({ profileId }: { profileId: string }) {
+	const { data, isLoading } = useSWR<{ profile: PersonalizationProfile | null }>(
+		[`/api/admin/users/${profileId}/personalization`], { dedupingInterval: 30_000 },
+	);
+	const p = data?.profile;
+	const chips = (label: string, items: string[]) => items.length > 0 && (
+		<div style={{ marginBottom: 6 }}>
+			<span style={{ fontSize: 11, color: 'var(--fg-muted)', marginRight: 6 }}>{label}</span>
+			{items.map((t) => <span key={t} className="chip" style={{ marginRight: 4 }}>{t}</span>)}
+		</div>
+	);
+	return (
+		<Section title="Personalization" meta="AI-derived interests + metrics · read-only">
+			{isLoading ? <div style={{ color: 'var(--fg-muted)', fontSize: 13 }}>Loading…</div>
+				: !p ? <div style={{ color: 'var(--fg-muted)', fontSize: 13 }}>No personalization yet — builds as the user uses chat + search.</div>
+				: (
+					<div>
+						{p.summary && <p style={{ fontSize: 13, color: 'var(--fg-2)', margin: '0 0 10px' }}>{p.summary}</p>}
+						{chips('Sectors', p.interests.sectors)}
+						{chips('Sports', p.interests.sports)}
+						{chips('Topics', p.interests.topics)}
+						{chips('Tech', p.interests.tech_tags)}
+						{chips('Regions', p.interests.regions)}
+						{chips('Intents', p.interests.intents)}
+						{chips('Entities', p.interests.entity_interests)}
+						<div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 12, color: 'var(--fg-muted)' }}>
+							<span>Engagement: <b style={{ color: 'var(--fg-2)' }}>{p.metrics.engagement_level}</b></span>
+							<span>Signals: {p.metrics.total_signals} ({p.metrics.chat_signals} chat / {p.metrics.search_signals} search)</span>
+							{p.metrics.last_signal_at && <span>Last: {new Date(p.metrics.last_signal_at).toLocaleDateString()}</span>}
+						</div>
+						{p.metrics.top_terms.length > 0 && (
+							<div style={{ marginTop: 8 }}>
+								<span style={{ fontSize: 11, color: 'var(--fg-muted)', marginRight: 6 }}>Top terms</span>
+								{p.metrics.top_terms.map((t) => <span key={t.term} className="chip" style={{ marginRight: 4 }}>{t.term} · {t.count}</span>)}
+							</div>
+						)}
+					</div>
+				)}
+		</Section>
 	);
 }
 

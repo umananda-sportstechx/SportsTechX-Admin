@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Trash2, Check, SkipForward, Rocket, Undo2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, StatCard, AsyncState, Tag, Chip, Section } from '@/components/atoms';
@@ -40,6 +41,7 @@ export default function InvestorReviewPage() {
 	const [status, setStatus] = useState<string>('pending');
 	const [assigned, setAssigned] = useState<string>('');
 	const [search, setSearch] = useState('');
+	const debouncedSearch = useDebouncedValue(search);
 	const [from, setFrom] = useState('');
 	const [to, setTo] = useState('');
 	const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -50,7 +52,7 @@ export default function InvestorReviewPage() {
 	const [bulkAssignee, setBulkAssignee] = useState('');
 
 	const { data, error, isLoading } = useSWR<QueueResponse>(
-		['/api/admin/investor-review', { status: status || undefined, assigned_to: assigned || undefined, q: search || undefined, from: from || undefined, to: to || undefined, limit: 50 }],
+		['/api/admin/investor-review', { status: status || undefined, assigned_to: assigned || undefined, q: debouncedSearch || undefined, from: from || undefined, to: to || undefined, limit: 50 }],
 		{ dedupingInterval: 15_000 },
 	);
 	const { data: stats } = useSWR<Stats>(['/api/admin/investor-review/stats'], { dedupingInterval: 15_000 });

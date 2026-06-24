@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, Section, Pager } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
@@ -37,6 +38,7 @@ export default function EcosystemAdminPage() {
 	const ask = useConfirm();
 	const [type, setType] = useState<'program' | 'event'>('program');
 	const [search, setSearch] = useState('');
+	const debouncedSearch = useDebouncedValue(search);
 	const [status, setStatus] = useState('');
 	const [country, setCountry] = useState('');
 	const [category, setCategory] = useState('');
@@ -55,7 +57,7 @@ export default function EcosystemAdminPage() {
 
 	const { data, error, isLoading } = useSWR<Response>(
 		['/api/ecosystem-entities', {
-			entity_type: type, q: search || undefined, status: status || undefined,
+			entity_type: type, q: debouncedSearch || undefined, status: status || undefined,
 			country: country.trim() || undefined, category: category.trim() || undefined, sport_slug: sport || undefined,
 			founded_year_min: foundedMin || undefined, founded_year_max: foundedMax || undefined,
 			...(type === 'event'

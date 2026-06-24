@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh } from '@/components/atoms';
@@ -43,6 +44,7 @@ export default function AcquisitionsAdminPage() {
 	const { mutate } = useSWRConfig();
 	const ask = useConfirm();
 	const [search, setSearch] = useState('');
+	const debouncedSearch = useDebouncedValue(search);
 	const [type, setType] = useState('');
 	const [year, setYear] = useState('');
 	const [sector, setSector] = useState('');
@@ -60,7 +62,7 @@ export default function AcquisitionsAdminPage() {
 
 	const { data, error, isLoading } = useSWR<AcqResponse>(
 		['/api/acquisitions', {
-			q: search || undefined, acquisition_type: type || undefined, year: year || undefined,
+			q: debouncedSearch || undefined, acquisition_type: type || undefined, year: year || undefined,
 			sector_slug: sector || undefined, sport_slug: sport || undefined, country: country.trim() || undefined,
 			acquiree_is_sportstech: stech || undefined,
 			amount_usd_min: amountMin || undefined, amount_usd_max: amountMax || undefined,

@@ -4,6 +4,7 @@ import { Fragment, useEffect, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, StatCard, Section } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, Funnel, toSegments, type Bucket } from '@/components/charts';
@@ -78,8 +79,9 @@ export default function UsersAdminPage() {
 		if (focus) setExpandedId(focus);
 	}, []);
 
+	const debouncedSearch = useDebouncedValue(search);
 	const { data, error, isLoading } = useSWR<UsersResponse>(
-		['/api/admin/users', { q: search || undefined, role: role || undefined, tier: tier || undefined, page, limit: 30 }],
+		['/api/admin/users', { q: debouncedSearch || undefined, role: role || undefined, tier: tier || undefined, page, limit: 30 }],
 		{ dedupingInterval: 15_000 },
 	);
 	const stats = useSWR<UserStats>(['/api/admin/stats/users'], { dedupingInterval: 60_000 });
@@ -391,7 +393,8 @@ export default function UsersAdminPage() {
 interface LoginUser { id: string; email: string | null; display_name: string | null; login_count: number; last_seen_at: string | null; created_at: string }
 function LoginUsersModal({ bucket, onClose }: { bucket: string; onClose: () => void }) {
 	const [q, setQ] = useState('');
-	const { data, isLoading } = useSWR<{ users: LoginUser[] }>([`/api/admin/users/analytics/login-users`, { bucket, q: q || undefined }], { dedupingInterval: 10_000 });
+	const dq = useDebouncedValue(q);
+	const { data, isLoading } = useSWR<{ users: LoginUser[] }>([`/api/admin/users/analytics/login-users`, { bucket, q: dq || undefined }], { dedupingInterval: 10_000 });
 	const users = data?.users ?? [];
 	const exportCsv = () => {
 		const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -453,7 +456,8 @@ function SubscriptionMix({ onPlan }: { onPlan: (detail: string) => void }) {
 interface PlanUser { id: string; email: string | null; display_name: string | null; company_name: string | null; login_count: number; last_seen_at: string | null }
 function PlanUsersModal({ detail, onClose }: { detail: string; onClose: () => void }) {
 	const [q, setQ] = useState('');
-	const { data, isLoading } = useSWR<{ users: PlanUser[] }>(['/api/admin/users/analytics/plan-users', { detail, q: q || undefined }], { dedupingInterval: 10_000 });
+	const dq = useDebouncedValue(q);
+	const { data, isLoading } = useSWR<{ users: PlanUser[] }>(['/api/admin/users/analytics/plan-users', { detail, q: dq || undefined }], { dedupingInterval: 10_000 });
 	const users = data?.users ?? [];
 	const exportCsv = () => {
 		const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -483,8 +487,9 @@ interface ReportUser { id: string; email: string | null; display_name: string | 
 function ReportUsersModal({ onClose }: { onClose: () => void }) {
 	const [q, setQ] = useState('');
 	const [page, setPage] = useState(1);
+	const dq = useDebouncedValue(q);
 	const { data, isLoading } = useSWR<{ data: ReportUser[]; total: number; totalPages: number }>(
-		[`/api/admin/users/analytics/report-users`, { q: q || undefined, page, limit: 25 }], { dedupingInterval: 10_000 },
+		[`/api/admin/users/analytics/report-users`, { q: dq || undefined, page, limit: 25 }], { dedupingInterval: 10_000 },
 	);
 	const rows = data?.data ?? [];
 	return (

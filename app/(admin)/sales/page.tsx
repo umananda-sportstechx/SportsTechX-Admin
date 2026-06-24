@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { PageHeader, StatCard, AsyncState, Section, Tag } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, Funnel, toSegments, type PieSegment } from '@/components/charts';
 
@@ -202,8 +203,9 @@ export default function SalesAdminPage() {
 
 function BillingLog() {
 	const [search, setSearch] = useState('');
+	const debouncedSearch = useDebouncedValue(search);
 	const { data, error, isLoading, mutate } = useSWR<SalesResponse>(
-		['/api/admin/sales', { q: search || undefined, limit: 50 }],
+		['/api/admin/sales', { q: debouncedSearch || undefined, limit: 50 }],
 		{ dedupingInterval: 30_000 },
 	);
 	const rows = data?.data ?? [];

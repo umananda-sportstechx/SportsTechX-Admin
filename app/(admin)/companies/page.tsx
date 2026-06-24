@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh } from '@/components/atoms';
@@ -46,6 +47,7 @@ export default function CompaniesAdminPage() {
 	const { mutate } = useSWRConfig();
 	const ask = useConfirm();
 	const [search, setSearch] = useState('');
+	const debouncedSearch = useDebouncedValue(search);
 	const [status, setStatus] = useState('');
 	const [sector, setSector] = useState('');
 	const [verified, setVerified] = useState('');
@@ -67,7 +69,7 @@ export default function CompaniesAdminPage() {
 
 	const { data, error, isLoading } = useSWR<CompaniesResponse>(
 		['/api/companies', {
-			search: search || undefined, status: status || undefined, sector: sector || undefined,
+			search: debouncedSearch || undefined, status: status || undefined, sector: sector || undefined,
 			is_verified: verified || undefined, sport: sport || undefined, country: country.trim() || undefined,
 			is_actively_raising: raising || undefined, is_unicorn: unicorn || undefined,
 			founded_year_min: foundedMin || undefined, founded_year_max: foundedMax || undefined,

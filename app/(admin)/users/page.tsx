@@ -322,6 +322,7 @@ export default function UsersAdminPage() {
 							<th>Logins</th>
 							<th>Last seen</th>
 							<th>Joined</th>
+							<th>Access expires</th>
 							<th style={{ textAlign: 'right' }}>Actions</th>
 						</tr>
 					</thead>
@@ -342,6 +343,13 @@ export default function UsersAdminPage() {
 									<td className="num">{(u.login_count ?? 0).toLocaleString()}</td>
 									<td className="num">{u.last_seen_at ? fmtDate(u.last_seen_at) : '—'}</td>
 									<td className="num">{new Date(u.created_at).toLocaleDateString()}</td>
+									<td className="num">
+										{u.is_trial && u.trial_ends_at
+											? <span className={new Date(u.trial_ends_at) < new Date() ? 'tag' : 'tag warn'} title={`Access expires ${fmtDate(u.trial_ends_at)}`}>{fmtDate(u.trial_ends_at)}</span>
+											: (u.user_type && u.user_type !== 'free')
+												? <span style={{ color: 'var(--fg-muted)', fontSize: 12 }}>Permanent</span>
+												: <span style={{ color: 'var(--fg-muted)' }}>—</span>}
+									</td>
 									<td style={{ textAlign: 'right' }}>
 										<div style={{ display: 'inline-flex', gap: 6 }}>
 											{u.user_role === 'admin' ? (
@@ -360,7 +368,7 @@ export default function UsersAdminPage() {
 								</tr>
 								{expandedId === u.id && (
 									<tr>
-										<td colSpan={9} style={{ background: 'var(--bg-2)', padding: 'var(--space-4)' }}>
+										<td colSpan={10} style={{ background: 'var(--bg-2)', padding: 'var(--space-4)' }}>
 											<ManagePanel user={u} />
 										</td>
 									</tr>
@@ -534,8 +542,39 @@ function ManagePanel({ user }: { user: User }) {
 				<FeatureGrantsSection profileId={user.id} />
 			</div>
 			<BillingSection profileId={user.id} />
+			<CreditGrantSection profileId={user.id} />
 			<PersonalizationSection profileId={user.id} />
 		</div>
+	);
+}
+
+/** Grant extra non-expiring credits (AI or integration/export) to this user. */
+function CreditGrantSection({ profileId }: { profileId: string }) {
+	const [amount, setAmount] = useState('');
+	const [type, setType] = useState<'ai' | 'integration'>('ai');
+	const [pending, setPending] = useState(false);
+	const grant = async () => {
+		const n = Number(amount);
+		if (!Number.isFinite(n) || n < 1) { toast.error('Enter a positive amount'); return; }
+		setPending(true);
+		try {
+			await api('POST', '/api/admin/billing/bulk-credit-grant', { profile_ids: [profileId], credits: Math.floor(n), credit_type: type });
+			toast.success(`Granted ${Math.floor(n).toLocaleString()} ${type === 'ai' ? 'AI' : 'integration'} credits`);
+			setAmount('');
+		} catch (e) { toast.error((e as Error).message); }
+		finally { setPending(false); }
+	};
+	return (
+		<Section title="Grant credits" meta="non-expiring top-up · used after monthly plan credits">
+			<div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+				<select className="search-input" style={{ height: 32, width: 180 }} value={type} onChange={(e) => setType(e.target.value as 'ai' | 'integration')}>
+					<option value="ai">AI credits</option>
+					<option value="integration">Integration / export credits</option>
+				</select>
+				<input className="search-input" type="number" min="1" step="1" style={{ height: 32, width: 140 }} placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
+				<button className="btn" disabled={pending} onClick={() => void grant()}>Grant</button>
+			</div>
+		</Section>
 	);
 }
 

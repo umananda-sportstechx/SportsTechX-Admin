@@ -11,8 +11,8 @@ import { PageHeader, AsyncState } from '@/components/atoms';
 
 interface Plan {
 	id: string;
-	stripe_price_id: string;
-	stripe_product_id: string;
+	stripe_price_id: string | null;
+	stripe_product_id: string | null;
 	name: string;
 	slug: string;
 	description: string | null;
@@ -86,7 +86,7 @@ export default function PlansEditorialPage() {
 							<Stat label="Price" value={`${(p.price_amount / 100).toFixed(2)} ${p.currency_code}`} />
 							<Stat label="AI credits / mo" value={p.ai_credits_monthly} />
 							<Stat label="Integration credits / mo" value={p.integration_credits_monthly} />
-							<Stat label="Stripe price" value={<span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{p.stripe_price_id.slice(0, 14)}…</span>} />
+							<Stat label="Stripe price" value={<span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{p.stripe_price_id ? `${p.stripe_price_id.slice(0, 14)}…` : '—'}</span>} />
 						</div>
 						{p.feature_highlights && p.feature_highlights.length > 0 && (
 							<div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>

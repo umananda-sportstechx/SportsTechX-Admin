@@ -533,18 +533,77 @@ function ReportUsersModal({ onClose }: { onClose: () => void }) {
  * away. State is local to the panel; mutations invalidate the parent /users
  * list when relevant.
  */
+const MANAGE_TABS = ['Access', 'Billing & credits', 'Personalization'] as const;
+type ManageTab = (typeof MANAGE_TABS)[number];
+
 function ManagePanel({ user }: { user: User }) {
+	const [tab, setTab] = useState<ManageTab>('Access');
 	return (
 		<div style={{ display: 'grid', gap: 'var(--space-4)' }}>
-			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)' }}>
-				<TierChangeSection user={user} />
-				<GrantAccessSection profileId={user.id} />
-				<FeatureGrantsSection profileId={user.id} />
+			{/* Tabs — declutter the per-user admin surface into focused groups. */}
+			<div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border)' }}>
+				{MANAGE_TABS.map((t) => (
+					<button
+						key={t}
+						onClick={() => setTab(t)}
+						className="btn ghost"
+						style={{
+							borderRadius: 0, borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent',
+							color: tab === t ? 'var(--fg)' : 'var(--fg-muted)', fontWeight: tab === t ? 700 : 400,
+						}}
+					>
+						{t}
+					</button>
+				))}
 			</div>
-			<BillingSection profileId={user.id} />
-			<CreditGrantSection profileId={user.id} />
-			<PersonalizationSection profileId={user.id} />
+
+			{tab === 'Access' && (
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)' }}>
+					<TierChangeSection user={user} />
+					<GrantAccessSection profileId={user.id} />
+					<FeatureGrantsSection profileId={user.id} />
+				</div>
+			)}
+
+			{tab === 'Billing & credits' && (
+				<div style={{ display: 'grid', gap: 'var(--space-4)' }}>
+					<CreditBalancesSection profileId={user.id} />
+					<BillingSection profileId={user.id} />
+					<CreditGrantSection profileId={user.id} />
+				</div>
+			)}
+
+			{tab === 'Personalization' && <PersonalizationSection profileId={user.id} />}
 		</div>
+	);
+}
+
+interface AdminCreditPool { monthly_balance: number; topup_balance: number; total_available: number; monthly_grant: number }
+interface AdminCredits { ai: AdminCreditPool; integration: AdminCreditPool }
+
+/** Live credit balances for both pools — so admins can SEE what a user has
+ *  (and confirm grants landed) instead of only being able to grant blindly. */
+function CreditBalancesSection({ profileId }: { profileId: string }) {
+	const { data, isLoading } = useSWR<AdminCredits>([`/api/admin/users/${profileId}/credits`], { dedupingInterval: 15_000 });
+	const pool = (label: string, p?: AdminCreditPool) => (
+		<div className="card" style={{ padding: 'var(--space-4)' }}>
+			<div className="co-stat-label">{label}</div>
+			<div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, lineHeight: 1.1, marginTop: 4 }}>
+				{isLoading ? '…' : (p?.total_available ?? 0).toLocaleString()}
+			</div>
+			<div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 6 }}>
+				{(p?.monthly_balance ?? 0).toLocaleString()} / {(p?.monthly_grant ?? 0).toLocaleString()} monthly
+				{(p?.topup_balance ?? 0) > 0 ? ` · +${(p!.topup_balance).toLocaleString()} top-up` : ''}
+			</div>
+		</div>
+	);
+	return (
+		<Section title="Credit balances" meta="live · AI + export (integration) pools">
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)' }}>
+				{pool('AI credits', data?.ai)}
+				{pool('Export credits', data?.integration)}
+			</div>
+		</Section>
 	);
 }
 
@@ -553,14 +612,17 @@ function CreditGrantSection({ profileId }: { profileId: string }) {
 	const [amount, setAmount] = useState('');
 	const [type, setType] = useState<'ai' | 'integration'>('ai');
 	const [pending, setPending] = useState(false);
+	const { mutate } = useSWRConfig();
 	const grant = async () => {
 		const n = Number(amount);
 		if (!Number.isFinite(n) || n < 1) { toast.error('Enter a positive amount'); return; }
 		setPending(true);
 		try {
 			await api('POST', '/api/admin/billing/bulk-credit-grant', { profile_ids: [profileId], credits: Math.floor(n), credit_type: type });
-			toast.success(`Granted ${Math.floor(n).toLocaleString()} ${type === 'ai' ? 'AI' : 'integration'} credits`);
+			toast.success(`Granted ${Math.floor(n).toLocaleString()} ${type === 'ai' ? 'AI' : 'export'} credits`);
 			setAmount('');
+			// Refresh the balances panel so the grant shows immediately.
+			void mutate([`/api/admin/users/${profileId}/credits`]);
 		} catch (e) { toast.error((e as Error).message); }
 		finally { setPending(false); }
 	};

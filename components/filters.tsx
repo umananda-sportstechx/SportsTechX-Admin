@@ -107,14 +107,14 @@ export function SectorTierFilter({
 	// Page-level "clear filters" sets the value back to '' — mirror that here.
 	useEffect(() => { if (!value) { setTop(''); setSub(''); setSubSub(''); } }, [value]);
 
-	const { byId, bySlug, childrenByParent, tops } = useMemo(() => {
+	const { bySlug, childrenByParent, tops } = useMemo(() => {
 		const byId = new Map(rows.map((r) => [r.id, r]));
 		const bySlug = new Map(rows.map((r) => [r.slug, r]));
 		const childrenByParent = new Map<string, SectorRow[]>();
 		rows.forEach((r) => { if (r.parent_id) { const a = childrenByParent.get(r.parent_id) ?? []; a.push(r); childrenByParent.set(r.parent_id, a); } });
 		const depthOf = (r: SectorRow) => { let d = 0; let cur: SectorRow | undefined = r; while (cur?.parent_id && d < 6) { d++; cur = byId.get(cur.parent_id); } return d; };
 		const tops = rows.filter((r) => depthOf(r) === 0);
-		return { byId, bySlug, childrenByParent, tops };
+		return { bySlug, childrenByParent, tops };
 	}, [rows]);
 
 	const topRow = top ? bySlug.get(top) : undefined;

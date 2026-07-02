@@ -363,7 +363,8 @@ function DeckAnalysisPanel({ claimId }: { claimId: string }) {
 	);
 }
 
-const BUSINESS_MODELS = ['b2b', 'b2c', 'b2b2c', 'd2c', 'b2g', 'other'] as const;
+// d2c/b2g/other dropped - unused across all records (verified) and not wanted.
+const BUSINESS_MODELS = ['b2b', 'b2c', 'b2b2c'] as const;
 const INVESTOR_CATEGORIES = ['venture_capital', 'private_equity', 'financial_services', 'family_investment_office', 'sovereign_wealth_fund', 'angel', 'other'] as const;
 const ECOSYSTEM_TYPES = ['program', 'event', 'organization', 'initiative'] as const;
 

@@ -221,30 +221,23 @@ export function PieDonut({
 						onMouseMove={move}
 					/>
 				))}
-				{largest && largest.pct > 14 && (() => {
-					const words = largest.name.split(' ');
-					return (
-						<text
-							x={largest.midX}
-							y={largest.midY}
-							textAnchor="middle"
-							fill="#fff"
-							fontSize="12"
-							fontWeight="700"
-							pointerEvents="none"
-							fontFamily="var(--font-display)"
-						>
-							{words.length > 1 ? (
-								<>
-									<tspan x={largest.midX} dy="-4">{words[0]}</tspan>
-									<tspan x={largest.midX} dy="14">{words.slice(1).join(' ')}</tspan>
-								</>
-							) : (
-								<tspan>{largest.name}</tspan>
-							)}
-						</text>
-					);
-				})()}
+				{/* In-slice label only for a single short word — multi-word names like
+				    "Venture Capital" overflow the small SVG and get clipped, so we
+				    let the legend carry them fully instead of showing a trimmed label. */}
+				{largest && largest.pct > 14 && !largest.name.includes(' ') && largest.name.length <= 12 && (
+					<text
+						x={largest.midX}
+						y={largest.midY}
+						textAnchor="middle"
+						fill="#fff"
+						fontSize="12"
+						fontWeight="700"
+						pointerEvents="none"
+						fontFamily="var(--font-display)"
+					>
+						{largest.name}
+					</text>
+				)}
 			</svg>
 			{hoveredSlice && (
 				<div className="pie-tip" style={{ left: pos.x, top: pos.y }}>

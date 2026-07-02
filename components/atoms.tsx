@@ -252,11 +252,17 @@ interface SectionProps {
 	action?: React.ReactNode;
 	children: React.ReactNode;
 	padded?: boolean;
+	/**
+	 * Fill the (equal-height) grid cell and vertically centre the body. Use for
+	 * short charts sitting beside a taller card, so they sit centred instead of
+	 * leaving dead space at the bottom. Opt-in — default layout is unchanged.
+	 */
+	center?: boolean;
 }
 
-export function Section({ title, meta, action, children, padded = true }: SectionProps) {
+export function Section({ title, meta, action, children, padded = true, center = false }: SectionProps) {
 	return (
-		<div className="card">
+		<div className="card" style={center ? { display: 'flex', flexDirection: 'column', height: '100%' } : undefined}>
 			<div
 				style={{
 					display: 'flex',
@@ -285,7 +291,14 @@ export function Section({ title, meta, action, children, padded = true }: Sectio
 				</div>
 				{action}
 			</div>
-			<div style={padded ? { padding: 'var(--space-4)' } : undefined}>{children}</div>
+			<div
+				style={{
+					...(padded ? { padding: 'var(--space-4)' } : {}),
+					...(center ? { flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' } : {}),
+				}}
+			>
+				{children}
+			</div>
 		</div>
 	);
 }

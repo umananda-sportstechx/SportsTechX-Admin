@@ -112,7 +112,7 @@ export default function CompaniesAdminPage() {
 			</StatStrip>
 
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-				<Section title="By status" meta="companies">
+				<Section title="By status" meta="companies" center>
 					<AsyncState loading={stats.isLoading} error={stats.error} empty={statusSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
 						<div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
 							<PieDonut segments={statusSegments} size={170} mode="donut" />
@@ -120,7 +120,7 @@ export default function CompaniesAdminPage() {
 						</div>
 					</AsyncState>
 				</Section>
-				<Section title="Top sectors" meta="companies">
+				<Section title="Top sectors" meta="companies" center>
 					<AsyncState loading={stats.isLoading} error={stats.error} empty={sectorSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
 						<PieDonut segments={sectorSegments} mode="bar" />
 					</AsyncState>

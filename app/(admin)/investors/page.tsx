@@ -116,7 +116,7 @@ export default function InvestorsAdminPage() {
 			</StatStrip>
 
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-				<Section title="By category" meta="investors">
+				<Section title="By category" meta="investors" center>
 					<AsyncState loading={stats.isLoading} error={stats.error} empty={categorySegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
 						<div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
 							<PieDonut segments={categorySegments} size={170} mode="donut" />
@@ -124,7 +124,7 @@ export default function InvestorsAdminPage() {
 						</div>
 					</AsyncState>
 				</Section>
-				<Section title="By status" meta="investors">
+				<Section title="By status" meta="investors" center>
 					<AsyncState loading={stats.isLoading} error={stats.error} empty={statusSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
 						<PieDonut segments={statusSegments} mode="bar" />
 					</AsyncState>

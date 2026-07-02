@@ -10,7 +10,7 @@ import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
-import { FilterBar, FilterSelect, StatStrip, BoolFilter, FilterRange, RefSlugFilter } from '@/components/filters';
+import { FilterBar, FilterSelect, StatStrip, BoolFilter, FilterRange, RefSlugFilter, SectorTierFilter } from '@/components/filters';
 import { downloadCsv } from '@/components/csv-import';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import {
@@ -142,7 +142,7 @@ export default function InvestorsAdminPage() {
 				<FilterSelect ariaLabel="Category" value={category} onChange={(v) => { setCategory(v); reset1(); }} options={[...CATEGORIES]} allLabel="All categories" />
 				<FilterSelect ariaLabel="Status" value={status} onChange={(v) => { setStatus(v); reset1(); }} options={[...STATUSES]} allLabel="All statuses" />
 				<FilterSelect ariaLabel="Verified" value={verified} onChange={(v) => { setVerified(v); reset1(); }} options={[{ value: 'true', label: 'Verified' }, { value: 'false', label: 'Unverified' }]} allLabel="Any verification" />
-				<RefSlugFilter kind="sectors" ariaLabel="Thesis sector" value={sector} onChange={(v) => { setSector(v); reset1(); }} allLabel="Any sector" />
+				<SectorTierFilter value={sector} onChange={(v) => { setSector(v); reset1(); }} allTopLabel="Any sector" />
 				<RefSlugFilter kind="sports" ariaLabel="Thesis sport" value={sport} onChange={(v) => { setSport(v); reset1(); }} allLabel="Any sport" />
 				<input className="search-input" style={{ height: 32, width: 130 }} placeholder="Country" value={country} onChange={(e) => { setCountry(e.target.value); reset1(); }} />
 				<BoolFilter ariaLabel="Actively investing" value={investing} onChange={(v) => { setInvesting(v); reset1(); }} yesLabel="Investing" noLabel="Not investing" allLabel="Any activity" />

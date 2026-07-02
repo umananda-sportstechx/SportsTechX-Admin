@@ -107,7 +107,7 @@ export default function EcosystemAdminPage() {
 			</StatStrip>
 
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-				<Section title="By type" meta="entities">
+				<Section title="By type" meta="entities" center>
 					<AsyncState loading={stats.isLoading} error={stats.error} empty={typeSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
 						<div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
 							<PieDonut segments={typeSegments} size={170} mode="donut" />
@@ -115,7 +115,7 @@ export default function EcosystemAdminPage() {
 						</div>
 					</AsyncState>
 				</Section>
-				<Section title="By status" meta="entities">
+				<Section title="By status" meta="entities" center>
 					<AsyncState loading={stats.isLoading} error={stats.error} empty={statusSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
 						<PieDonut segments={statusSegments} mode="bar" />
 					</AsyncState>

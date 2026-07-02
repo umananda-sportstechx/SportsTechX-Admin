@@ -98,12 +98,12 @@ export default function AcquisitionsAdminPage() {
 			</StatStrip>
 
 			<div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-				<Section title="Acquisitions by year" meta="value · count">
+				<Section title="Acquisitions by year" meta="value · count" center>
 					<AsyncState loading={stats.isLoading} error={stats.error} empty={yearChart.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
 						<ComboBarLine data={yearChart} height={240} valueFormatter={fmtMoney} barLabel="Value" lineLabel="deals" />
 					</AsyncState>
 				</Section>
-				<Section title="By type" meta="deals">
+				<Section title="By type" meta="deals" center>
 					<AsyncState loading={stats.isLoading} error={stats.error} empty={typeSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
 						<div style={{ display: 'grid', placeItems: 'center', gap: 12 }}>
 							<PieDonut segments={typeSegments} size={170} mode="donut" />

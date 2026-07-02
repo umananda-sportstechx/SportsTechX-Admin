@@ -22,7 +22,7 @@ import { ImageInput } from '@/components/image-input';
 // ---- types matching the server registry --------------------------------------
 
 type SectionKind =
-	| 'hero' | 'narrative' | 'kpi_grid' | 'trend_card_list'
+	| 'hero' | 'narrative' | 'kpi_grid' | 'trend_card_list' | 'people_grid'
 	| 'company_grid' | 'deal_table' | 'data_chart'
 	| 'poll' | 'quote' | 'embed' | 'ecosystem_map';
 
@@ -30,7 +30,8 @@ const KIND_LABELS: Record<SectionKind, string> = {
 	hero: 'Hero',
 	narrative: 'Narrative (rich text)',
 	kpi_grid: 'KPI grid',
-	trend_card_list: 'Trend cards',
+	trend_card_list: 'Trend / tabbed cards',
+	people_grid: 'People grid',
 	company_grid: 'Company grid',
 	deal_table: 'Deal table (live)',
 	data_chart: 'Data chart (live)',
@@ -45,14 +46,18 @@ const KIND_DEFAULTS: Record<SectionKind, Record<string, unknown>> = {
 	narrative: { doc: { type: 'doc', content: [] } },
 	kpi_grid: { columns: 3, items: [] },
 	trend_card_list: { items: [] },
+	people_grid: { people: [] },
 	company_grid: { mode: 'static', company_ids: [] },
 	deal_table: { deal_type: 'funding', query: { limit: 10 } },
-	data_chart: { chart_type: 'bar', metric: 'funding_by_year', filters: {} },
+	data_chart: { chart_type: 'bar', display: 'chart', metric: 'funding_by_year', filters: {} },
 	poll: { caption: '' },
 	quote: { author: '', body: { type: 'doc', content: [] } },
 	embed: { provider: 'youtube', url: '' },
 	ecosystem_map: { query: {} },
 };
+
+/** Icon keys usable in hero/kpi/trend cards (must match the client ICONS map). */
+const ICON_KEYS = ['', 'dollar-sign', 'trophy', 'users', 'globe', 'trending-up', 'activity', 'bar-chart', 'zap', 'building', 'rocket', 'star', 'heart', 'flag', 'handshake', 'landmark', 'footprints', 'monitor', 'git-merge', 'lightbulb', 'bot'] as const;
 
 interface Section {
 	id: string;
@@ -579,6 +584,8 @@ function KindBody({
 			/>;
 		case 'trend_card_list':
 			return <TrendCardListBody content={c} patch={patchContent} />;
+		case 'people_grid':
+			return <PeopleGridBody content={c} patch={patchContent} patchAndSave={patchContentAndSave} sectionId={section.id} />;
 		default:
 			return <JsonFallback content={c} patch={(v) => patchContent(v)} />;
 	}
@@ -597,7 +604,7 @@ function HeroBody({
 	sectionId: string;
 }) {
 	const subtitle = content.subtitle as unknown;
-	const kpis = (content.kpis as Array<{ label: unknown; value: unknown; delta?: string }>) ?? [];
+	const kpis = (content.kpis as Array<{ label: unknown; value: unknown; delta?: string; icon?: string; sublabel?: unknown }>) ?? [];
 	const coverUrl = (content.cover_url as string) ?? '';
 	return (
 		<div className="card" style={{ padding: 12, display: 'grid', gap: 12 }}>
@@ -618,11 +625,17 @@ function HeroBody({
 				<FieldLabel>KPIs ({kpis.length}/8)</FieldLabel>
 				<div style={{ display: 'grid', gap: 8 }}>
 					{kpis.map((k, i) => (
-						<div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 100px auto', gap: 6, alignItems: 'start' }}>
-							<TiptapEditor mode="inline" value={k.label} onChange={(doc) => patch({ kpis: kpis.map((x, j) => j === i ? { ...x, label: doc } : x) })} placeholder="Label" />
-							<TiptapEditor mode="inline" value={k.value} onChange={(doc) => patch({ kpis: kpis.map((x, j) => j === i ? { ...x, value: doc } : x) })} placeholder="Value" />
-							<input className="search-input" placeholder="Δ %" value={k.delta ?? ''} onChange={(e) => patch({ kpis: kpis.map((x, j) => j === i ? { ...x, delta: e.target.value || undefined } : x) })} />
-							<button className="btn ghost" onClick={() => patch({ kpis: kpis.filter((_, j) => j !== i) })}><Trash2 size={12} /></button>
+						<div key={i} style={{ display: 'grid', gap: 6, border: '1px solid var(--border)', borderRadius: 6, padding: 8 }}>
+							<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 90px 130px auto', gap: 6, alignItems: 'center' }}>
+								<TiptapEditor mode="inline" value={k.value} onChange={(doc) => patch({ kpis: kpis.map((x, j) => j === i ? { ...x, value: doc } : x) })} placeholder="Value (e.g. $35.8B)" />
+								<TiptapEditor mode="inline" value={k.label} onChange={(doc) => patch({ kpis: kpis.map((x, j) => j === i ? { ...x, label: doc } : x) })} placeholder="Label" />
+								<input className="search-input" placeholder="Δ %" value={k.delta ?? ''} onChange={(e) => patch({ kpis: kpis.map((x, j) => j === i ? { ...x, delta: e.target.value || undefined } : x) })} />
+								<select className="search-input" value={k.icon ?? ''} onChange={(e) => patch({ kpis: kpis.map((x, j) => j === i ? { ...x, icon: e.target.value || undefined } : x) })}>
+									{ICON_KEYS.map((ic) => <option key={ic} value={ic}>{ic || 'no icon'}</option>)}
+								</select>
+								<button className="btn ghost" onClick={() => patch({ kpis: kpis.filter((_, j) => j !== i) })}><Trash2 size={12} /></button>
+							</div>
+							<TiptapEditor mode="inline" value={k.sublabel} onChange={(doc) => patch({ kpis: kpis.map((x, j) => j === i ? { ...x, sublabel: doc } : x) })} placeholder="Sublabel (supporting one-liner, optional)" />
 						</div>
 					))}
 					{kpis.length < 8 && (
@@ -650,7 +663,7 @@ function NarrativeBody({ content, patch }: { content: Record<string, unknown>; p
 
 function KpiGridBody({ content, patch }: { content: Record<string, unknown>; patch: (p: Record<string, unknown>) => void }) {
 	const columns = (content.columns as 2 | 3 | 4) ?? 3;
-	const items = (content.items as Array<{ label: unknown; value: unknown; hint?: unknown }>) ?? [];
+	const items = (content.items as Array<{ label: unknown; value: unknown; hint?: unknown; icon?: string }>) ?? [];
 	return (
 		<div className="card" style={{ padding: 12, display: 'grid', gap: 12 }}>
 			<div>
@@ -665,10 +678,13 @@ function KpiGridBody({ content, patch }: { content: Record<string, unknown>; pat
 				<FieldLabel>Items ({items.length}/12)</FieldLabel>
 				<div style={{ display: 'grid', gap: 8 }}>
 					{items.map((it, i) => (
-						<div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr auto', gap: 6, alignItems: 'start' }}>
-							<TiptapEditor mode="inline" value={it.label} onChange={(doc) => patch({ items: items.map((x, j) => j === i ? { ...x, label: doc } : x) })} placeholder="Label" />
+						<div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr 130px auto', gap: 6, alignItems: 'center' }}>
 							<TiptapEditor mode="inline" value={it.value} onChange={(doc) => patch({ items: items.map((x, j) => j === i ? { ...x, value: doc } : x) })} placeholder="Value" />
+							<TiptapEditor mode="inline" value={it.label} onChange={(doc) => patch({ items: items.map((x, j) => j === i ? { ...x, label: doc } : x) })} placeholder="Label" />
 							<TiptapEditor mode="inline" value={it.hint} onChange={(doc) => patch({ items: items.map((x, j) => j === i ? { ...x, hint: doc } : x) })} placeholder="Hint (optional)" />
+							<select className="search-input" value={it.icon ?? ''} onChange={(e) => patch({ items: items.map((x, j) => j === i ? { ...x, icon: e.target.value || undefined } : x) })}>
+								{ICON_KEYS.map((ic) => <option key={ic} value={ic}>{ic || 'no icon'}</option>)}
+							</select>
 							<button className="btn ghost" onClick={() => patch({ items: items.filter((_, j) => j !== i) })}><Trash2 size={12} /></button>
 						</div>
 					))}
@@ -797,18 +813,27 @@ function DataChartBody({ content, patch }: { content: Record<string, unknown>; p
 		<div className="card" style={{ padding: 12, display: 'grid', gap: 8 }}>
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
 				<div>
-					<FieldLabel>Chart type</FieldLabel>
+					<FieldLabel>Display</FieldLabel>
+					<select className="search-input" value={(content.display as string) ?? 'chart'} onChange={(e) => patch({ display: e.target.value })}>
+						<option value="chart">chart</option>
+						<option value="region_cards">region cards</option>
+						<option value="bar_list">bar list</option>
+					</select>
+				</div>
+				<div>
+					<FieldLabel>Chart type (when display = chart)</FieldLabel>
 					<select className="search-input" value={(content.chart_type as string) ?? 'bar'} onChange={(e) => patch({ chart_type: e.target.value })}>
 						<option value="bar">bar</option>
 						<option value="line">line</option>
 						<option value="pie">pie</option>
 					</select>
 				</div>
-				<div>
+				<div style={{ gridColumn: '1 / -1' }}>
 					<FieldLabel>Metric</FieldLabel>
 					<select className="search-input" value={(content.metric as string) ?? 'funding_by_year'} onChange={(e) => patch({ metric: e.target.value })}>
 						<option value="funding_by_year">funding by year</option>
 						<option value="funding_by_country">funding by country</option>
+						<option value="funding_by_region">funding by region</option>
 						<option value="funding_by_sector">funding by sector</option>
 						<option value="funding_by_company">funding by company</option>
 						<option value="ma_by_year">M&amp;A by year</option>
@@ -965,26 +990,106 @@ function PollBody({
 }
 
 function TrendCardListBody({ content, patch }: { content: Record<string, unknown>; patch: (p: Record<string, unknown>) => void }) {
-	const items = (content.items as Array<{ title: unknown; body: Record<string, unknown>; table?: { headers: string[]; rows: string[][] } }>) ?? [];
+	const intro = content.intro as unknown;
+	const tabs = (content.tabs as Array<{ key: string; label: unknown }>) ?? [];
+	const items = (content.items as Array<{ tab?: string; icon?: string; eyebrow?: unknown; title: unknown; stat?: unknown; stat_label?: unknown; body: Record<string, unknown>; detail?: Record<string, unknown>; table?: { headers: string[]; rows: string[][] } }>) ?? [];
 	return (
-		<div style={{ display: 'grid', gap: 8 }}>
+		<div style={{ display: 'grid', gap: 10 }}>
+			<div className="card" style={{ padding: 12, display: 'grid', gap: 8 }}>
+				<FieldLabel>Intro (optional)</FieldLabel>
+				<TiptapEditor mode="inline" value={intro} onChange={(doc) => patch({ intro: doc })} placeholder="Section intro line…" />
+				<FieldLabel>Tabs (optional — group cards; leave empty for no tabs)</FieldLabel>
+				{tabs.map((t, i) => (
+					<div key={i} style={{ display: 'grid', gridTemplateColumns: '160px 1fr auto', gap: 6, alignItems: 'center' }}>
+						<input className="search-input" value={t.key} onChange={(e) => patch({ tabs: tabs.map((x, j) => j === i ? { ...x, key: e.target.value } : x) })} placeholder="key (e.g. trends)" />
+						<TiptapEditor mode="inline" value={t.label} onChange={(doc) => patch({ tabs: tabs.map((x, j) => j === i ? { ...x, label: doc } : x) })} placeholder="Tab label" />
+						<button className="btn ghost" onClick={() => patch({ tabs: tabs.filter((_, j) => j !== i) })}><Trash2 size={12} /></button>
+					</div>
+				))}
+				{tabs.length < 6 && <button className="btn ghost" onClick={() => patch({ tabs: [...tabs, { key: '', label: '' }] })}><Plus size={12} /> Add tab</button>}
+			</div>
 			{items.map((it, i) => (
 				<div key={i} className="card" style={{ padding: 12, display: 'grid', gap: 8 }}>
-					<div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'start' }}>
-						<TiptapEditor mode="inline" value={it.title} onChange={(doc) => patch({ items: items.map((x, j) => j === i ? { ...x, title: doc } : x) })} placeholder="Trend title" />
+					<div style={{ display: 'grid', gridTemplateColumns: '130px 130px 1fr auto', gap: 6, alignItems: 'center' }}>
+						<select className="search-input" value={it.tab ?? ''} onChange={(e) => patch({ items: items.map((x, j) => j === i ? { ...x, tab: e.target.value || undefined } : x) })}>
+							<option value="">(no tab)</option>
+							{tabs.map((t) => <option key={t.key} value={t.key}>{t.key}</option>)}
+						</select>
+						<select className="search-input" value={it.icon ?? ''} onChange={(e) => patch({ items: items.map((x, j) => j === i ? { ...x, icon: e.target.value || undefined } : x) })}>
+							{ICON_KEYS.map((ic) => <option key={ic} value={ic}>{ic || 'no icon'}</option>)}
+						</select>
+						<TiptapEditor mode="inline" value={it.eyebrow} onChange={(doc) => patch({ items: items.map((x, j) => j === i ? { ...x, eyebrow: doc } : x) })} placeholder="Eyebrow / kicker (optional)" />
 						<button className="btn ghost" onClick={() => patch({ items: items.filter((_, j) => j !== i) })}><Trash2 size={12} /></button>
 					</div>
-					<TiptapEditor value={it.body} onChange={(doc) => patch({ items: items.map((x, j) => j === i ? { ...x, body: doc } : x) })} minHeight={120} />
-					<TrendCardTableEditor
-						table={it.table}
-						onChange={(table) => patch({ items: items.map((x, j) => j === i ? { ...x, table } : x) })}
-					/>
+					<TiptapEditor mode="inline" value={it.title} onChange={(doc) => patch({ items: items.map((x, j) => j === i ? { ...x, title: doc } : x) })} placeholder="Card title" />
+					<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+						<TiptapEditor mode="inline" value={it.stat} onChange={(doc) => patch({ items: items.map((x, j) => j === i ? { ...x, stat: doc } : x) })} placeholder="Stat (optional)" />
+						<TiptapEditor mode="inline" value={it.stat_label} onChange={(doc) => patch({ items: items.map((x, j) => j === i ? { ...x, stat_label: doc } : x) })} placeholder="Stat label (optional)" />
+					</div>
+					<FieldLabel>Summary (always visible)</FieldLabel>
+					<TiptapEditor value={it.body} onChange={(doc) => patch({ items: items.map((x, j) => j === i ? { ...x, body: doc } : x) })} minHeight={90} />
+					<FieldLabel>Detail (revealed on &ldquo;Read more&rdquo; — optional)</FieldLabel>
+					<TiptapEditor value={it.detail} onChange={(doc) => patch({ items: items.map((x, j) => j === i ? { ...x, detail: doc } : x) })} minHeight={90} />
+					<TrendCardTableEditor table={it.table} onChange={(table) => patch({ items: items.map((x, j) => j === i ? { ...x, table } : x) })} />
 				</div>
 			))}
-			{items.length < 20 && (
+			{items.length < 40 && (
 				<button className="btn ghost" onClick={() => patch({ items: [...items, { title: '', body: { type: 'doc', content: [] } }] })}>
-					<Plus size={12} /> Add trend card
+					<Plus size={12} /> Add card
 				</button>
+			)}
+		</div>
+	);
+}
+
+function PeopleGridBody({
+	content, patch, patchAndSave, sectionId,
+}: {
+	content: Record<string, unknown>;
+	patch: (p: Record<string, unknown>) => void;
+	patchAndSave: (p: Record<string, unknown>) => Promise<void>;
+	sectionId: string;
+}) {
+	const intro = content.intro as unknown;
+	const regions = (content.regions as Array<{ key: string; label: unknown; color?: string }>) ?? [];
+	const people = (content.people as Array<{ name: unknown; org?: unknown; region?: string; photo_url?: string; detail?: unknown; link?: string }>) ?? [];
+	return (
+		<div style={{ display: 'grid', gap: 10 }}>
+			<div className="card" style={{ padding: 12, display: 'grid', gap: 8 }}>
+				<FieldLabel>Intro (optional)</FieldLabel>
+				<TiptapEditor mode="inline" value={intro} onChange={(doc) => patch({ intro: doc })} placeholder="Section intro line…" />
+				<FieldLabel>Regions (optional — for the colour legend + ring colour)</FieldLabel>
+				{regions.map((r, i) => (
+					<div key={i} style={{ display: 'grid', gridTemplateColumns: '140px 1fr 110px auto', gap: 6, alignItems: 'center' }}>
+						<input className="search-input" value={r.key} onChange={(e) => patch({ regions: regions.map((x, j) => j === i ? { ...x, key: e.target.value } : x) })} placeholder="key (e.g. europe)" />
+						<TiptapEditor mode="inline" value={r.label} onChange={(doc) => patch({ regions: regions.map((x, j) => j === i ? { ...x, label: doc } : x) })} placeholder="Label" />
+						<input className="search-input" type="color" value={r.color ?? '#5B7FFF'} onChange={(e) => patch({ regions: regions.map((x, j) => j === i ? { ...x, color: e.target.value } : x) })} />
+						<button className="btn ghost" onClick={() => patch({ regions: regions.filter((_, j) => j !== i) })}><Trash2 size={12} /></button>
+					</div>
+				))}
+				{regions.length < 8 && <button className="btn ghost" onClick={() => patch({ regions: [...regions, { key: '', label: '', color: '#5B7FFF' }] })}><Plus size={12} /> Add region</button>}
+			</div>
+			{people.map((p, i) => (
+				<div key={i} className="card" style={{ padding: 12, display: 'grid', gap: 8 }}>
+					<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 140px auto', gap: 6, alignItems: 'center' }}>
+						<TiptapEditor mode="inline" value={p.name} onChange={(doc) => patch({ people: people.map((x, j) => j === i ? { ...x, name: doc } : x) })} placeholder="Name" />
+						<TiptapEditor mode="inline" value={p.org} onChange={(doc) => patch({ people: people.map((x, j) => j === i ? { ...x, org: doc } : x) })} placeholder="Org / role" />
+						<select className="search-input" value={p.region ?? ''} onChange={(e) => patch({ people: people.map((x, j) => j === i ? { ...x, region: e.target.value || undefined } : x) })}>
+							<option value="">(no region)</option>
+							{regions.map((r) => <option key={r.key} value={r.key}>{r.key}</option>)}
+						</select>
+						<button className="btn ghost" onClick={() => patch({ people: people.filter((_, j) => j !== i) })}><Trash2 size={12} /></button>
+					</div>
+					<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+						<ImageInput value={p.photo_url ?? ''} onChange={(url) => void patchAndSave({ people: people.map((x, j) => j === i ? { ...x, photo_url: url || undefined } : x) })} pathPrefix={`sections/${sectionId}`} placeholder="Photo URL" />
+						<input className="search-input" value={p.link ?? ''} onChange={(e) => patch({ people: people.map((x, j) => j === i ? { ...x, link: e.target.value || undefined } : x) })} placeholder="Profile link (optional)" />
+					</div>
+					<FieldLabel>Detail (shown in the click-through panel — optional)</FieldLabel>
+					<TiptapEditor mode="inline" value={p.detail} onChange={(doc) => patch({ people: people.map((x, j) => j === i ? { ...x, detail: doc } : x) })} placeholder="Bio / quote…" />
+				</div>
+			))}
+			{people.length < 80 && (
+				<button className="btn ghost" onClick={() => patch({ people: [...people, { name: '' }] })}><Plus size={12} /> Add person</button>
 			)}
 		</div>
 	);

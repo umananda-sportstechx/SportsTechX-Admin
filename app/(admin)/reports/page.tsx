@@ -28,9 +28,12 @@ interface Response { data: Report[]; total: number }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const emptyDraft = {
-	title: '', short_title: '', description: '', summary_points: '', drive_link: '', pdf_url: '',
+	title: '', short_title: '', slug: '', description: '', summary_points: '', drive_link: '', pdf_url: '',
 	report_month: '', report_year: String(new Date().getFullYear()), show_on_dashboard: false, has_sections: true,
 };
+
+/** Slugify a title/code into a URL-safe report slug. */
+const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
 export default function ReportsAdminPage() {
 	const { mutate } = useSWRConfig();
@@ -55,6 +58,7 @@ export default function ReportsAdminPage() {
 			const created = await api<{ id: string }>('POST', '/api/admin/reports', {
 				title: rest.title,
 				short_title: rest.short_title || undefined,
+				slug: (rest.slug || rest.short_title || rest.title) ? slugify(rest.slug || rest.short_title || rest.title) : undefined,
 				description: rest.description || undefined,
 				summary_points: rest.summary_points || undefined,
 				drive_link: rest.drive_link || undefined,
@@ -114,6 +118,7 @@ export default function ReportsAdminPage() {
 					<input className="search-input" placeholder="Title" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
 					<input className="search-input" placeholder="Short title" value={draft.short_title} onChange={(e) => setDraft({ ...draft, short_title: e.target.value })} />
 				</div>
+				<input className="search-input" placeholder="URL slug (auto from short title / title)" value={draft.slug} onChange={(e) => setDraft({ ...draft, slug: e.target.value })} onBlur={(e) => setDraft({ ...draft, slug: slugify(e.target.value) })} style={{ marginTop: 8, fontFamily: 'var(--font-mono)', fontSize: 12 }} />
 				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 8 }}>
 					<select className="search-input" value={draft.report_month} onChange={(e) => setDraft({ ...draft, report_month: e.target.value })}>
 						<option value="">Month —</option>
@@ -235,7 +240,7 @@ function ReportAnalytics() {
 }
 
 interface ReportEdit {
-	id: string; title: string; short_title?: string | null; report_month?: number | null; report_year?: number | null;
+	id: string; title: string; short_title?: string | null; slug?: string | null; report_month?: number | null; report_year?: number | null;
 	show_on_dashboard?: boolean; description?: string | null; summary_points?: string | null; drive_link?: string | null; pdf_url?: string | null; cover_url?: string | null;
 }
 
@@ -247,7 +252,7 @@ function EditReportModal({ id, onClose, onSaved }: { id: string; onClose: () => 
 
 function EditReportForm({ id, initial, onClose, onSaved }: { id: string; initial: ReportEdit; onClose: () => void; onSaved: () => void }) {
 	const [f, setF] = useState({
-		title: initial.title ?? '', short_title: initial.short_title ?? '',
+		title: initial.title ?? '', short_title: initial.short_title ?? '', slug: initial.slug ?? '',
 		report_month: initial.report_month ? String(initial.report_month) : '',
 		report_year: initial.report_year ? String(initial.report_year) : '',
 		show_on_dashboard: !!initial.show_on_dashboard,
@@ -262,6 +267,7 @@ function EditReportForm({ id, initial, onClose, onSaved }: { id: string; initial
 			await api('PATCH', `/api/admin/reports/${id}`, {
 				title: f.title.trim(),
 				short_title: f.short_title.trim() || undefined,
+				slug: f.slug.trim() ? slugify(f.slug) : undefined,
 				report_month: f.report_month ? Number(f.report_month) : null,
 				report_year: f.report_year ? Number(f.report_year) : null,
 				show_on_dashboard: f.show_on_dashboard,
@@ -287,6 +293,7 @@ function EditReportForm({ id, initial, onClose, onSaved }: { id: string; initial
 					<input className="search-input" placeholder="Title" value={f.title} onChange={(e) => set('title', e.target.value)} />
 					<input className="search-input" placeholder="Short title" value={f.short_title} onChange={(e) => set('short_title', e.target.value)} />
 				</div>
+				<input className="search-input" placeholder="URL slug" value={f.slug} onChange={(e) => set('slug', e.target.value)} onBlur={(e) => set('slug', slugify(e.target.value))} style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }} />
 				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
 					<select className="search-input" value={f.report_month} onChange={(e) => set('report_month', e.target.value)}>
 						<option value="">Month —</option>

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { qk } from '@/lib/query-keys';
 
@@ -82,6 +83,64 @@ export function RefSlugFilter({
 }: { kind: keyof typeof REF_KEY; value: string; onChange: (v: string) => void; allLabel: string; ariaLabel?: string }) {
 	const { data } = useSWR<RefRow[]>(REF_KEY[kind](), { dedupingInterval: 60 * 60_000 });
 	return <FilterSelect ariaLabel={ariaLabel} value={value} onChange={onChange} options={(data ?? []).map((r) => ({ value: r.slug, label: r.name }))} allLabel={allLabel} />;
+}
+
+interface SectorRow { id: string; name: string; slug: string; parent_id?: string | null }
+
+/**
+ * Cascading sector filter: Sector (pillar) → Sub-sector → Sub-sub-sector,
+ * replacing the old flat "all sectors in one" dropdown. Selecting a level emits
+ * that slug plus every descendant slug as a comma-joined string via `onChange`,
+ * because the list endpoints match `sector_id` by an exact slug list — a pillar
+ * selection must expand to all leaves beneath it. `value === ''` (a page-level
+ * clear) resets all three selects. Mirrors the client list pages' sector facets.
+ */
+export function SectorTierFilter({
+	value, onChange, allTopLabel = 'All sectors',
+}: { value: string; onChange: (csv: string) => void; allTopLabel?: string }) {
+	const { data } = useSWR<SectorRow[]>(qk.reference.sectors(), { dedupingInterval: 60 * 60_000 });
+	const rows = useMemo(() => data ?? [], [data]);
+	const [top, setTop] = useState('');
+	const [sub, setSub] = useState('');
+	const [subSub, setSubSub] = useState('');
+
+	// Page-level "clear filters" sets the value back to '' — mirror that here.
+	useEffect(() => { if (!value) { setTop(''); setSub(''); setSubSub(''); } }, [value]);
+
+	const { byId, bySlug, childrenByParent, tops } = useMemo(() => {
+		const byId = new Map(rows.map((r) => [r.id, r]));
+		const bySlug = new Map(rows.map((r) => [r.slug, r]));
+		const childrenByParent = new Map<string, SectorRow[]>();
+		rows.forEach((r) => { if (r.parent_id) { const a = childrenByParent.get(r.parent_id) ?? []; a.push(r); childrenByParent.set(r.parent_id, a); } });
+		const depthOf = (r: SectorRow) => { let d = 0; let cur: SectorRow | undefined = r; while (cur?.parent_id && d < 6) { d++; cur = byId.get(cur.parent_id); } return d; };
+		const tops = rows.filter((r) => depthOf(r) === 0);
+		return { byId, bySlug, childrenByParent, tops };
+	}, [rows]);
+
+	const topRow = top ? bySlug.get(top) : undefined;
+	const subRow = sub ? bySlug.get(sub) : undefined;
+	const subs = topRow ? (childrenByParent.get(topRow.id) ?? []) : [];
+	const subSubs = subRow ? (childrenByParent.get(subRow.id) ?? []) : [];
+
+	// A slug plus every descendant slug beneath it.
+	const expand = (slug: string): string[] => {
+		const root = bySlug.get(slug); if (!root) return [slug];
+		const out = [slug]; const stack = [root.id];
+		while (stack.length) { const id = stack.pop()!; for (const c of childrenByParent.get(id) ?? []) { out.push(c.slug); stack.push(c.id); } }
+		return out;
+	};
+	const emit = (t: string, s: string, ss: string) => {
+		const deepest = ss || s || t;
+		onChange(deepest ? expand(deepest).join(',') : '');
+	};
+
+	return (
+		<>
+			<FilterSelect ariaLabel="Sector" value={top} onChange={(v) => { setTop(v); setSub(''); setSubSub(''); emit(v, '', ''); }} options={tops.map((r) => ({ value: r.slug, label: r.name }))} allLabel={allTopLabel} />
+			<FilterSelect ariaLabel="Sub-sector" value={sub} onChange={(v) => { setSub(v); setSubSub(''); emit(top, v, ''); }} options={subs.map((r) => ({ value: r.slug, label: r.name }))} allLabel="All sub-sectors" />
+			<FilterSelect ariaLabel="Sub-sub-sector" value={subSub} onChange={(v) => { setSubSub(v); emit(top, sub, v); }} options={subSubs.map((r) => ({ value: r.slug, label: r.name }))} allLabel="All sub-sub-sectors" />
+		</>
+	);
 }
 
 /** A reusable strip of KPI StatCards using the admin grid. */

@@ -28,6 +28,33 @@ interface RefRow {
 
 interface RefResponse { data: RefRow[] }
 
+/**
+ * Order a flat reference list into a parent→child tree (DFS) and tag each row
+ * with its `depth`, so the table can indent sub-sectors and sub-sub-sectors
+ * distinctly instead of lumping every child at one indent level (BUG-057).
+ * Any row whose parent isn't present is appended at depth 0 so nothing is hidden.
+ */
+function orderTree(rows: RefRow[]): Array<RefRow & { depth: number }> {
+	const childrenOf = new Map<string | null, RefRow[]>();
+	for (const r of rows) {
+		const p = r.parent_id ?? null;
+		const arr = childrenOf.get(p) ?? [];
+		arr.push(r);
+		childrenOf.set(p, arr);
+	}
+	const out: Array<RefRow & { depth: number }> = [];
+	const walk = (parent: string | null, depth: number) => {
+		for (const r of childrenOf.get(parent) ?? []) {
+			out.push({ ...r, depth });
+			walk(r.id, depth + 1);
+		}
+	};
+	walk(null, 0);
+	const seen = new Set(out.map((r) => r.id));
+	for (const r of rows) if (!seen.has(r.id)) out.push({ ...r, depth: 0 });
+	return out;
+}
+
 export default function ReferenceAdminPage() {
 	const { mutate } = useSWRConfig();
 	const ask = useConfirm();
@@ -100,11 +127,11 @@ export default function ReferenceAdminPage() {
 					<tbody>
 						{rows.length === 0 ? (
 							<tr><td colSpan={5} style={{ textAlign: 'center', padding: 24, color: 'var(--fg-muted)' }}>No entries.</td></tr>
-						) : rows.map((r) => {
+						) : orderTree(rows).map((r) => {
 							const parent = r.parent_id ? rows.find((x) => x.id === r.parent_id) : null;
 							return (
 								<tr key={r.id}>
-									<td style={{ fontWeight: 600, paddingLeft: r.parent_id ? 28 : 12 }}>{r.name}</td>
+									<td style={{ fontWeight: r.depth === 0 ? 700 : 500, paddingLeft: 12 + r.depth * 22, color: r.depth === 0 ? undefined : 'var(--fg-2)' }}>{r.name}</td>
 									<td style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{r.slug}</td>
 									{showParent && <td style={{ color: 'var(--fg-muted)' }}>{parent?.name ?? '—'}</td>}
 									{showSortOrder && <td>{r.sort_order ?? '—'}</td>}

@@ -10,7 +10,7 @@ import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
-import { FilterBar, FilterSelect, StatStrip, BoolFilter, FilterRange, RefSlugFilter } from '@/components/filters';
+import { FilterBar, FilterSelect, StatStrip, BoolFilter, FilterRange, RefSlugFilter, SectorTierFilter } from '@/components/filters';
 import { CsvImportButton } from '@/components/csv-import';
 import { YearSelect } from '@/components/year-select';
 import { ImageInput } from '@/components/image-input';
@@ -38,10 +38,10 @@ interface Company {
 }
 interface CompaniesResponse { data: Company[]; total: number; totalPages: number }
 interface CompanyStats { total: number; verified: number; unicorn: number; raising: number; by_status: Bucket[]; by_sector: Bucket[]; by_business_model: Bucket[] }
-interface SectorRow { id: string; name: string; slug: string }
 
 const STATUSES = ['active', 'inactive', 'needs_review', 'dead', 'acquired', 'ipo', 'not_sportstech'] as const;
-const BUSINESS_MODELS = ['b2b', 'b2c', 'b2b2c', 'd2c', 'b2g', 'other'] as const;
+// d2c/b2g/other dropped - unused across all records (verified) and not wanted.
+const BUSINESS_MODELS = ['b2b', 'b2c', 'b2b2c'] as const;
 
 export default function CompaniesAdminPage() {
 	const { mutate } = useSWRConfig();
@@ -79,7 +79,6 @@ export default function CompaniesAdminPage() {
 		{ dedupingInterval: 30_000 },
 	);
 	const stats = useSWR<CompanyStats>(['/api/admin/stats/companies'], { dedupingInterval: 60_000 });
-	const sectorOpts = useSWR<SectorRow[]>(['/api/sectors'], { dedupingInterval: 60 * 60_000 });
 	const statusSegments = toSegments(stats.data?.by_status ?? []);
 	const sectorSegments = toSegments(stats.data?.by_sector ?? []);
 
@@ -137,7 +136,7 @@ export default function CompaniesAdminPage() {
 					onChange={(e) => { setSearch(e.target.value); setPage(1); }}
 				/>
 				<FilterSelect ariaLabel="Status" value={status} onChange={(v) => { setStatus(v); reset1(); }} options={[...STATUSES]} allLabel="All statuses" />
-				<FilterSelect ariaLabel="Sector" value={sector} onChange={(v) => { setSector(v); reset1(); }} options={(sectorOpts.data ?? []).map((s) => ({ value: s.slug, label: s.name }))} allLabel="All sectors" />
+				<SectorTierFilter value={sector} onChange={(v) => { setSector(v); reset1(); }} allTopLabel="All sectors" />
 				<RefSlugFilter kind="sports" ariaLabel="Sport" value={sport} onChange={(v) => { setSport(v); reset1(); }} allLabel="All sports" />
 				<FilterSelect ariaLabel="Verified" value={verified} onChange={(v) => { setVerified(v); reset1(); }} options={[{ value: 'true', label: 'Verified' }, { value: 'false', label: 'Unverified' }]} allLabel="Any verification" />
 				<input className="search-input" style={{ height: 32, width: 130 }} placeholder="Country" value={country} onChange={(e) => { setCountry(e.target.value); reset1(); }} />
@@ -369,7 +368,7 @@ function CompanyMaTab({ companyId }: { companyId: string }) {
 const DEAL_STATUSES = ['active', 'inactive', 'not_sportstech', 'website_error'] as const;
 const SIZE_BUCKETS = ['under_1m', 'from_1m_to_10m', 'from_10m_to_100m', 'over_100m'] as const;
 const ACQ_TYPES = ['acquisition', 'merger', 'asset_purchase'] as const;
-const PARTY_MODELS = ['b2b', 'b2c', 'b2b2c', 'd2c', 'b2g', 'other'] as const;
+const PARTY_MODELS = ['b2b', 'b2c', 'b2b2c'] as const;
 
 function fmtStagedAmount(v: string): string {
 	const n = Number(v);

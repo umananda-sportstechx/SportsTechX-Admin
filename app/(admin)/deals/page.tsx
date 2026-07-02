@@ -10,7 +10,7 @@ import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
-import { FilterBar, FilterSelect, StatStrip, FilterRange, RefSlugFilter } from '@/components/filters';
+import { FilterBar, FilterSelect, StatStrip, FilterRange, RefSlugFilter, SectorTierFilter } from '@/components/filters';
 import { CsvImportButton } from '@/components/csv-import';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import {
@@ -33,7 +33,8 @@ interface DealsResponse { data: Deal[]; total: number; totalPages: number }
 interface DealStats { total: number; total_amount: number; by_year: Array<{ year: number; deals: number; amt: number }>; by_round_type: Bucket[]; by_size_bucket: Bucket[] }
 
 const STATUSES = ['active', 'inactive', 'not_sportstech', 'website_error'] as const;
-const BUSINESS_MODELS = ['b2b', 'b2c', 'b2b2c', 'd2c', 'b2g', 'other'] as const;
+// d2c/b2g/other dropped - unused across all records (verified) and not wanted.
+const BUSINESS_MODELS = ['b2b', 'b2c', 'b2b2c'] as const;
 const SIZE_BUCKETS = ['under_1m', 'from_1m_to_10m', 'from_10m_to_100m', 'over_100m'] as const;
 
 function fmtAmount(v?: string | null): string {
@@ -127,7 +128,7 @@ export default function DealsAdminPage() {
 				<FilterSelect ariaLabel="Business model" value={businessModel} onChange={(v) => { setBusinessModel(v); setPage(1); }} options={[...BUSINESS_MODELS]} allLabel="All models" />
 				<FilterSelect ariaLabel="Deal size" value={sizeBucket} onChange={(v) => { setSizeBucket(v); setPage(1); }} options={SIZE_BUCKETS.map((s) => ({ value: s, label: s.replace(/_/g, ' ').replace('from ', '').replace('to', '–') }))} allLabel="Any size" />
 				<FilterSelect ariaLabel="Year" value={year} onChange={(v) => { setYear(v); reset1(); }} options={yearOpts} allLabel="All years" />
-				<RefSlugFilter kind="sectors" ariaLabel="Sector" value={sector} onChange={(v) => { setSector(v); reset1(); }} allLabel="All sectors" />
+				<SectorTierFilter value={sector} onChange={(v) => { setSector(v); reset1(); }} allTopLabel="All sectors" />
 				<RefSlugFilter kind="sports" ariaLabel="Sport" value={sport} onChange={(v) => { setSport(v); reset1(); }} allLabel="All sports" />
 				<RefSlugFilter kind="round-types" ariaLabel="Round" value={roundType} onChange={(v) => { setRoundType(v); reset1(); }} allLabel="All rounds" />
 				<FilterRange label="Amount $" min={amountMin} max={amountMax} onMin={(v) => { setAmountMin(v); reset1(); }} onMax={(v) => { setAmountMax(v); reset1(); }} />

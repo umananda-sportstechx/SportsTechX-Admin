@@ -100,12 +100,12 @@ export default function AdminDashboard() {
 
 			{/* Funding trend + ecosystem mix */}
 			<div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-				<Section title="Funding by year" meta="amount · rounds">
+				<Section title="Funding by year" meta="amount · rounds" center>
 					<AsyncState loading={annual.isLoading} error={annual.error} empty={annualChart.length === 0} emptyMsg="No funding data" onRetry={() => void annual.mutate()}>
 						<ComboBarLine data={annualChart} height={260} valueFormatter={fmtMoney} barLabel="Funding" lineLabel="rounds" />
 					</AsyncState>
 				</Section>
-				<Section title="Top sectors" meta="by rounds">
+				<Section title="Top sectors" meta="by rounds" center>
 					<AsyncState loading={sectorHeat.isLoading} error={sectorHeat.error} empty={sectorSegments.length === 0} emptyMsg="No sector data" onRetry={() => void sectorHeat.mutate()}>
 						<div style={{ display: 'grid', placeItems: 'center', gap: 12 }}>
 							<PieDonut segments={sectorSegments} size={180} mode="donut" />
@@ -116,7 +116,7 @@ export default function AdminDashboard() {
 			</div>
 
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-				<Section title="Investors by type" meta="count">
+				<Section title="Investors by type" meta="count" center>
 					<AsyncState loading={invByType.isLoading} error={invByType.error} empty={investorSegments.length === 0} emptyMsg="No investor data" onRetry={() => void invByType.mutate()}>
 						<div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
 							<PieDonut segments={investorSegments} size={180} mode="donut" />
@@ -124,7 +124,7 @@ export default function AdminDashboard() {
 						</div>
 					</AsyncState>
 				</Section>
-				<Section title="Funding mix" meta="rounds by sector">
+				<Section title="Funding mix" meta="rounds by sector" center>
 					<AsyncState loading={sectorHeat.isLoading} error={sectorHeat.error} empty={sectorSegments.length === 0} emptyMsg="No data" onRetry={() => void sectorHeat.mutate()}>
 						<PieDonut segments={sectorSegments} mode="bar" />
 					</AsyncState>

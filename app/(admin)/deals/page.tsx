@@ -107,12 +107,12 @@ export default function DealsAdminPage() {
 			</StatStrip>
 
 			<div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-				<Section title="Funding by year" meta="amount · deals">
+				<Section title="Funding by year" meta="amount · deals" center>
 					<AsyncState loading={stats.isLoading} error={stats.error} empty={yearChart.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
 						<ComboBarLine data={yearChart} height={240} valueFormatter={fmtMoney} barLabel="Funding" lineLabel="deals" />
 					</AsyncState>
 				</Section>
-				<Section title="By deal size" meta="deals">
+				<Section title="By deal size" meta="deals" center>
 					<AsyncState loading={stats.isLoading} error={stats.error} empty={sizeSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
 						<div style={{ display: 'grid', placeItems: 'center', gap: 12 }}>
 							<PieDonut segments={sizeSegments} size={170} mode="donut" />

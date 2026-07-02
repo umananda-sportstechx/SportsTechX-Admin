@@ -112,8 +112,10 @@ export function SectorTierFilter({
 		const bySlug = new Map(rows.map((r) => [r.slug, r]));
 		const childrenByParent = new Map<string, SectorRow[]>();
 		rows.forEach((r) => { if (r.parent_id) { const a = childrenByParent.get(r.parent_id) ?? []; a.push(r); childrenByParent.set(r.parent_id, a); } });
-		const depthOf = (r: SectorRow) => { let d = 0; let cur: SectorRow | undefined = r; while (cur?.parent_id && d < 6) { d++; cur = byId.get(cur.parent_id); } return d; };
-		const tops = rows.filter((r) => depthOf(r) === 0);
+		// Roots = no parent OR a dangling parent (deleted/missing). Including
+		// orphans keeps a sector selectable instead of vanishing from the filter
+		// (matches the reference page's orderTree, and the old flat filter).
+		const tops = rows.filter((r) => !r.parent_id || !byId.has(r.parent_id));
 		return { bySlug, childrenByParent, tops };
 	}, [rows]);
 

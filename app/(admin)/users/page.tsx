@@ -168,7 +168,7 @@ export default function UsersAdminPage() {
 						<ComboBarLine data={signupChart} height={240} valueFormatter={(v) => String(Math.round(v))} barLabel="Signups" lineLabel="signups" />
 					</AsyncState>
 				</Section>
-				<Section title="By tier" meta="users">
+				<Section title="By tier" meta="users" center>
 					<AsyncState loading={stats.isLoading} error={stats.error} empty={tierSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
 						<div style={{ display: 'grid', placeItems: 'center', gap: 12 }}>
 							<PieDonut segments={tierSegments} size={170} mode="donut" />
@@ -226,7 +226,7 @@ export default function UsersAdminPage() {
 						</table>
 					</AsyncState>
 				</Section>
-				<Section title="Login method" meta="all auth users">
+				<Section title="Login method" meta="all auth users" center>
 					<AsyncState loading={auth.isLoading} error={auth.error} empty={providerSegments.length === 0} emptyMsg="No data" onRetry={() => void auth.mutate()}>
 						<div style={{ display: 'grid', placeItems: 'center', gap: 12 }}>
 							<PieDonut segments={providerSegments} size={150} mode="donut" />
@@ -268,7 +268,7 @@ export default function UsersAdminPage() {
 				</Section>
 			</div>
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-				<Section title="Signup recency" meta="account age">
+				<Section title="Signup recency" meta="account age" center>
 					<AsyncState loading={an.isLoading} error={an.error} empty={signupRecencySeg.length === 0} emptyMsg="No data" onRetry={() => void an.mutate()}>
 						<div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
 							<PieDonut segments={signupRecencySeg} size={160} mode="donut" />
@@ -283,7 +283,7 @@ export default function UsersAdminPage() {
 				</Section>
 			</div>
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-				<Section title="Login recency" meta="last seen">
+				<Section title="Login recency" meta="last seen" center>
 					<AsyncState loading={an.isLoading} error={an.error} empty={loginRecencySeg.length === 0} emptyMsg="No data" onRetry={() => void an.mutate()}>
 						<div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
 							<PieDonut segments={loginRecencySeg} size={160} mode="donut" />

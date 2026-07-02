@@ -326,6 +326,7 @@ export default function UsersAdminPage() {
 
 			<div className="card">
 				<AsyncState loading={isLoading} error={error} empty={users.length === 0} emptyMsg={search ? 'No users match.' : 'No users yet.'} onRetry={() => void refresh()}>
+				<div className="table-scroll">
 				<table className="data-table">
 					<thead>
 						<tr>
@@ -378,6 +379,7 @@ export default function UsersAdminPage() {
 						))}
 					</tbody>
 				</table>
+				</div>
 				</AsyncState>
 			</div>
 

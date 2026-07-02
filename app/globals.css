@@ -120,9 +120,11 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 ::selection { background: var(--accent); color: var(--accent-fg); }
-::-webkit-scrollbar { width: 10px; height: 10px; }
+/* Thin scrollbars everywhere in the admin (Chromium + Firefox). */
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+::-webkit-scrollbar { width: 7px; height: 7px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-strong); }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 6px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--fg-muted); }
 
 /* ============================================================================
@@ -198,8 +200,15 @@ body {
 /* Scroll the CARD horizontally (not the <table>) when a data-table is wider
  * than the column. Keeping the table as a real `display:table` preserves
  * proper column sizing — turning the table itself into a block element breaks
- * column widths. Form cards have no .data-table, so they're unaffected. */
-.card:has(> .data-table) { overflow-x: auto; }
+ * column widths. Form cards have no .data-table, so they're unaffected.
+ * Descendant (not direct-child) match: some tables are wrapped in an
+ * <AsyncState>/loading container, so `:has(> …)` would miss them and the card
+ * would clip trailing columns (e.g. the Users "Actions" column) instead of
+ * scrolling. */
+.card:has(.data-table) { overflow-x: auto; }
+/* Explicit horizontal-scroll wrapper for tables that need it guaranteed
+ * (used where the table sits behind a loading wrapper). */
+.table-scroll { overflow-x: auto; width: 100%; }
 .data-table { width: 100%; }
 main { min-width: 0; }
 

@@ -10,7 +10,7 @@ import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
-import { FilterBar, FilterSelect, StatStrip, FilterRange, RefSlugFilter } from '@/components/filters';
+import { FilterBar, FilterSelect, StatStrip, FilterRange, RefSlugFilter, SectorTierFilter } from '@/components/filters';
 import { CsvImportButton } from '@/components/csv-import';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import { CompanySelectOne, SectorCascade, SportsPicker, CurrencySelect, LocationFields, EMPTY_LOCATION, type LocationValue } from '@/components/entity-pickers';
@@ -28,7 +28,8 @@ interface AcqResponse { data: Acquisition[]; total: number; totalPages: number }
 interface AcqStats { total: number; total_amount: number; sportstech: number; by_year: Array<{ year: number; deals: number; amt: number }>; by_type: Bucket[] }
 
 const TYPES = ['acquisition', 'merger', 'asset_purchase'] as const;
-const BUSINESS_MODELS = ['b2b', 'b2c', 'b2b2c', 'd2c', 'b2g', 'other'] as const;
+// d2c/b2g/other dropped - unused across all records (verified) and not wanted.
+const BUSINESS_MODELS = ['b2b', 'b2c', 'b2b2c'] as const;
 
 function fmtAmount(v?: string | null): string {
 	if (!v) return '—';
@@ -116,7 +117,7 @@ export default function AcquisitionsAdminPage() {
 				<input className="search-input" style={{ flex: '0 0 280px', height: 32 }} placeholder="Search acquiree / acquirer…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
 				<FilterSelect ariaLabel="Type" value={type} onChange={(v) => { setType(v); reset1(); }} options={[...TYPES]} allLabel="All types" />
 				<FilterSelect ariaLabel="Year" value={year} onChange={(v) => { setYear(v); reset1(); }} options={yearOpts} allLabel="All years" />
-				<RefSlugFilter kind="sectors" ariaLabel="Sector (either side)" value={sector} onChange={(v) => { setSector(v); reset1(); }} allLabel="Any sector" />
+				<SectorTierFilter value={sector} onChange={(v) => { setSector(v); reset1(); }} allTopLabel="Any sector" />
 				<RefSlugFilter kind="sports" ariaLabel="Sport (either side)" value={sport} onChange={(v) => { setSport(v); reset1(); }} allLabel="Any sport" />
 				<input className="search-input" style={{ height: 32, width: 130 }} placeholder="Country" value={country} onChange={(e) => { setCountry(e.target.value); reset1(); }} />
 				<FilterSelect ariaLabel="SportsTech acquiree" value={stech} onChange={(v) => { setStech(v); reset1(); }} options={[{ value: 'true', label: 'SportsTech acquiree' }]} allLabel="Any acquiree" />

@@ -11,7 +11,7 @@ import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading } from '@/components/atoms';
 import { YearSelect } from '@/components/year-select';
 import { ImageInput } from '@/components/image-input';
-import { FileInput } from '@/components/file-input';
+import { ReportPdfInput } from '@/components/report-pdf-input';
 import { ReportEditionsModal } from '@/components/report-editions-modal';
 
 interface Report {
@@ -128,7 +128,7 @@ export default function ReportsAdminPage() {
 				<input className="search-input" placeholder="Drive link" value={draft.drive_link} onChange={(e) => setDraft({ ...draft, drive_link: e.target.value })} style={{ marginTop: 8 }} />
 				<div style={{ marginTop: 8 }}>
 					<div className="co-stat-label" style={{ marginBottom: 4 }}>PDF</div>
-					<FileInput value={draft.pdf_url} onChange={(u) => setDraft({ ...draft, pdf_url: u })} pathPrefix="reports/pdfs" />
+					<ReportPdfInput value={draft.pdf_url} onChange={(u) => setDraft({ ...draft, pdf_url: u })} />
 				</div>
 				<textarea
 					className="search-input"
@@ -298,7 +298,7 @@ function EditReportForm({ id, initial, onClose, onSaved }: { id: string; initial
 					</label>
 				</div>
 				<input className="search-input" placeholder="Drive link" value={f.drive_link} onChange={(e) => set('drive_link', e.target.value)} />
-				<div><div className="co-stat-label" style={{ marginBottom: 4 }}>PDF</div><FileInput value={f.pdf_url} onChange={(u) => set('pdf_url', u)} pathPrefix="reports/pdfs" /></div>
+				<div><div className="co-stat-label" style={{ marginBottom: 4 }}>PDF</div><ReportPdfInput value={f.pdf_url} onChange={(u) => set('pdf_url', u)} /></div>
 				<div><div className="co-stat-label" style={{ marginBottom: 4 }}>Cover image</div><ImageInput value={f.cover_url} onChange={(u) => set('cover_url', u)} pathPrefix="reports/covers" /></div>
 				<textarea className="search-input" placeholder="Description" value={f.description} onChange={(e) => set('description', e.target.value)} style={{ minHeight: 70, resize: 'vertical' }} />
 				<textarea className="search-input" placeholder="Summary points (one per line)" value={f.summary_points} onChange={(e) => set('summary_points', e.target.value)} style={{ minHeight: 60, resize: 'vertical' }} />

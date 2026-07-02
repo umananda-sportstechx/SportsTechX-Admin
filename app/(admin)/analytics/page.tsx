@@ -77,9 +77,9 @@ export default function AdminAnalyticsPage() {
 			</div>
 
 			<div className="grid-2" style={{ marginBottom: 'var(--space-5)' }}>
-				<div className="card">
+				<div className="card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
 					<div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--border)', fontWeight: 700 }}>Activity trend <span style={{ fontWeight: 400, color: 'var(--fg-muted)', fontSize: 12 }}>· bars = events · line = active users</span></div>
-					<div style={{ padding: 'var(--space-4)' }}>
+					<div style={{ padding: 'var(--space-4)', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
 						<AsyncState loading={analyticsLoading} error={analyticsError} empty={chartData.length === 0} emptyMsg="No events recorded in this range yet" onRetry={() => void mutateAnalytics()}>
 							<ComboBarLine data={chartData} height={260} barLabel="Events" lineLabel="active users" valueFormatter={(v) => v.toLocaleString()} />
 						</AsyncState>

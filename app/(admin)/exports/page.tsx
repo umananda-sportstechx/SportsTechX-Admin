@@ -15,13 +15,13 @@ import { api } from '@/lib/api';
  * withholds it from every user's export + CRM mapping.
  *
  *   GET /api/admin/exports/config         → { [entity]: { label, columns[] } }
- *   PUT /api/admin/exports/config/:entity → persist on/off overrides
+ *   PUT /api/admin/exports/config/:entity → persist on/off + per-column credit
  *
- * Exporting costs users 1 export credit per row (integration-credit pool); that
- * cost is fixed and not configured here.
+ * Each column has a per-row credit cost (default 0.5). An export/sync costs the
+ * user ceil( sum(selected column costs) × rows ) from the integration-credit pool.
  */
 
-interface ColumnRow { key: string; label: string; enabled: boolean; sort_order: number }
+interface ColumnRow { key: string; label: string; enabled: boolean; sort_order: number; credit_cost: number }
 type ConfigResp = Record<string, { label: string; columns: ColumnRow[] }>;
 
 export default function ExportsConfigPage() {
@@ -38,9 +38,9 @@ export default function ExportsConfigPage() {
 						Export columns
 					</h1>
 					<p style={{ fontSize: 14, color: 'var(--fg-2)', maxWidth: 760, margin: '6px 0 0' }}>
-						Choose which columns users can export to CSV/XLSX or map to their CRM, per dataset.
-						Disabled columns are hidden from every user&apos;s export picker. Exports cost users
-						<b> 1 export credit per row</b> (the same pool covers CRM syncs).
+						Choose which columns users can export to CSV/XLSX or map to their CRM, and set each
+						column&apos;s per-row <b>credit cost</b> (default 0.5). An export costs
+						<b> ceil(sum of selected column costs × rows)</b> from the export-credit pool.
 					</p>
 				</div>
 				<button className="btn ghost" onClick={() => void mutate()}><RefreshCw size={12} /> Refresh</button>
@@ -61,19 +61,28 @@ function EntityCard({
 	const [state, setState] = useState<Record<string, boolean>>(
 		() => Object.fromEntries(columns.map((c) => [c.key, c.enabled])),
 	);
+	const [costs, setCosts] = useState<Record<string, string>>(
+		() => Object.fromEntries(columns.map((c) => [c.key, String(c.credit_cost)])),
+	);
 	const [saving, setSaving] = useState(false);
 
-	const dirty = columns.some((c) => state[c.key] !== c.enabled);
+	const dirty = columns.some((c) => state[c.key] !== c.enabled || Number(costs[c.key]) !== c.credit_cost);
 	const enabledCount = columns.filter((c) => state[c.key]).length;
 
 	const toggle = (key: string) => setState((s) => ({ ...s, [key]: !s[key] }));
+	const setCost = (key: string, v: string) => setCosts((s) => ({ ...s, [key]: v }));
 
 	const save = async () => {
 		if (enabledCount === 0) { toast.error('Keep at least one column exportable'); return; }
 		setSaving(true);
 		try {
 			await api('PUT', `/api/admin/exports/config/${entity}`, {
-				columns: columns.map((c, i) => ({ column_key: c.key, is_enabled: !!state[c.key], sort_order: i })),
+				columns: columns.map((c, i) => ({
+					column_key: c.key,
+					is_enabled: !!state[c.key],
+					sort_order: i,
+					credit_cost: Math.max(0, Math.min(999.99, Number(costs[c.key]) || 0)),
+				})),
 			});
 			toast.success(`${label} export columns saved`);
 			onSaved();
@@ -107,8 +116,18 @@ function EntityCard({
 						}}
 					>
 						<input type="checkbox" checked={!!state[c.key]} onChange={() => toggle(c.key)} />
-						<span style={{ fontSize: 13 }}>{c.label}</span>
-						<span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-muted)' }}>{c.key}</span>
+						<span style={{ fontSize: 13, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.key}>{c.label}</span>
+						<span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 3 }} onClick={(e) => e.preventDefault()}>
+							<input
+								type="number" step="0.5" min="0"
+								value={costs[c.key] ?? ''}
+								onChange={(e) => setCost(c.key, e.target.value)}
+								disabled={!state[c.key]}
+								title="Per-row credit cost"
+								style={{ width: 52, height: 24, padding: '0 6px', fontSize: 12, fontFamily: 'var(--font-mono)', textAlign: 'right', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg-1)' }}
+							/>
+							<span style={{ fontSize: 10, color: 'var(--fg-muted)' }}>cr</span>
+						</span>
 					</label>
 				))}
 			</div>

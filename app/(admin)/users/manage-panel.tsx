@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
+import useSWRInfinite from 'swr/infinite';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { Section } from '@/components/atoms';
@@ -58,6 +59,7 @@ export function ManagePanel({ user }: { user: ManageUser }) {
 			{tab === 'Billing & credits' && (
 				<div style={{ display: 'grid', gap: 'var(--space-4)' }}>
 					<CreditBalancesSection profileId={user.id} />
+					<CreditLedgerSection profileId={user.id} />
 					<BillingSection profileId={user.id} />
 					<CreditGrantSection profileId={user.id} />
 				</div>
@@ -92,6 +94,103 @@ function CreditBalancesSection({ profileId }: { profileId: string }) {
 				{pool('AI credits', data?.ai)}
 				{pool('Export credits', data?.integration)}
 			</div>
+		</Section>
+	);
+}
+
+interface AdminLedgerRow {
+	id: string; credit_type: string; transaction_type: string; amount: number; balance_after: number;
+	description: string | null; operation_key: string | null; display_name: string | null; occurred_at: string;
+}
+interface AdminLedgerPage { data: AdminLedgerRow[]; nextCursor: string | null }
+
+const LEDGER_TXN_LABEL: Record<string, string> = {
+	monthly_grant: 'Monthly grant', topup_purchase: 'Top-up', refund: 'Refund',
+	expiry: 'Expired', adjustment: 'Adjustment', spend: 'Usage',
+};
+function ledgerLabel(r: AdminLedgerRow): string {
+	const d = r.description?.trim();
+	if (d && /\s/.test(d)) return d;
+	if (r.display_name) return r.display_name;
+	if (d) return d.replace(/^ai\./, '').replace(/[._]/g, ' ');
+	return LEDGER_TXN_LABEL[r.transaction_type] ?? r.transaction_type;
+}
+function fmtLedgerWhen(iso: string): string {
+	const dt = new Date(iso);
+	return Number.isNaN(dt.getTime()) ? '' : dt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+const LEDGER_FILTERS: Array<{ k: 'all' | 'ai' | 'integration'; label: string }> = [
+	{ k: 'all', label: 'All' }, { k: 'ai', label: 'AI' }, { k: 'integration', label: 'Export' },
+];
+
+/** Itemized credit-spend history for this user (every spend, grant & refund). */
+function CreditLedgerSection({ profileId }: { profileId: string }) {
+	const [type, setType] = useState<'all' | 'ai' | 'integration'>('all');
+	const getKey = (index: number, prev: AdminLedgerPage | null) => {
+		if (prev && !prev.nextCursor) return null;
+		const cursor = index === 0 ? undefined : (prev?.nextCursor ?? undefined);
+		return [`/api/admin/users/${profileId}/ledger`, { type, cursor, limit: 25 }];
+	};
+	const { data, size, setSize, isLoading, isValidating } = useSWRInfinite<AdminLedgerPage>(getKey, { revalidateFirstPage: false });
+	useEffect(() => { setSize(1); }, [type, setSize]);
+	const rows = data ? data.flatMap((p) => p.data) : [];
+	const hasMore = Boolean(data?.[data.length - 1]?.nextCursor);
+	const loadingMore = isValidating && size > (data?.length ?? 0);
+
+	return (
+		<Section
+			title="Credit activity"
+			meta="every spend, grant & refund"
+			action={
+				<div style={{ display: 'flex', gap: 4 }}>
+					{LEDGER_FILTERS.map((f) => (
+						<button
+							key={f.k}
+							className="btn ghost"
+							style={{ height: 26, padding: '0 10px', fontSize: 12, borderBottom: type === f.k ? '2px solid var(--accent)' : '2px solid transparent', color: type === f.k ? 'var(--fg)' : 'var(--fg-muted)' }}
+							onClick={() => setType(f.k)}
+						>
+							{f.label}
+						</button>
+					))}
+				</div>
+			}
+		>
+			{isLoading && rows.length === 0 ? (
+				<div style={{ padding: 16, color: 'var(--fg-muted)', fontSize: 13 }}>Loading…</div>
+			) : rows.length === 0 ? (
+				<div style={{ padding: 16, color: 'var(--fg-muted)', fontSize: 13 }}>No credit activity.</div>
+			) : (
+				<div className="table-scroll">
+					<table className="data-table">
+						<thead>
+							<tr>
+								<th>When</th><th>Pool</th><th>Activity</th>
+								<th style={{ textAlign: 'right' }}>Amount</th><th style={{ textAlign: 'right' }}>Balance</th>
+							</tr>
+						</thead>
+						<tbody>
+							{rows.map((r) => {
+								const spend = r.amount < 0;
+								return (
+									<tr key={r.id}>
+										<td style={{ whiteSpace: 'nowrap', color: 'var(--fg-muted)', fontSize: 12 }}>{fmtLedgerWhen(r.occurred_at)}</td>
+										<td>{r.credit_type === 'ai' ? 'AI' : 'Export'}</td>
+										<td>{ledgerLabel(r)}{r.transaction_type !== 'spend' ? ` (${LEDGER_TXN_LABEL[r.transaction_type] ?? r.transaction_type})` : ''}</td>
+										<td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700, color: spend ? 'var(--neg)' : 'var(--pos)' }}>{spend ? '' : '+'}{r.amount.toLocaleString()}</td>
+										<td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: 'var(--fg-muted)' }}>{r.balance_after.toLocaleString()}</td>
+									</tr>
+								);
+							})}
+						</tbody>
+					</table>
+					{hasMore && (
+						<div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
+							<button className="btn ghost" disabled={loadingMore} onClick={() => setSize(size + 1)}>{loadingMore ? 'Loading…' : 'Load more'}</button>
+						</div>
+					)}
+				</div>
+			)}
 		</Section>
 	);
 }

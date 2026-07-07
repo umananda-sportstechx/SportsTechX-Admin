@@ -52,10 +52,10 @@ const STATUS_TABS: Array<{ label: string; key: ClaimStatus }> = [
 	{ label: 'Rejected', key: 'rejected' },
 ];
 
-export default function ClaimsAdminPage() {
+export function ClaimsView({ embedded = false, lockType }: { embedded?: boolean; lockType?: 'company' | 'investor' | 'ecosystem_entity' }) {
 	const { mutate } = useSWRConfig();
 	const [status, setStatus] = useState<ClaimStatus>('pending');
-	const [claimType, setClaimType] = useState('');
+	const [claimType, setClaimType] = useState<string>(lockType ?? '');
 	const [page, setPage] = useState(1);
 	const [pendingId, setPendingId] = useState<string | null>(null);
 	const [sendEmail, setSendEmail] = useState(true);
@@ -104,23 +104,27 @@ export default function ClaimsAdminPage() {
 
 	return (
 		<div>
-			<PageHeader kicker={`Queues · ${(data?.total ?? 0).toLocaleString()} in ${status}`} title="Claims" />
+			{!embedded && <PageHeader kicker={`Queues · ${(data?.total ?? 0).toLocaleString()} in ${status}`} title="Claims" />}
 
-			<StatStrip cols={4}>
-				<StatCard label="Pending" loading={stats.isLoading} value={(c?.pending ?? 0).toLocaleString()} urgent={(c?.pending ?? 0) > 0} />
-				<StatCard label="Picked up" loading={stats.isLoading} value={(c?.picked_up ?? 0).toLocaleString()} />
-				<StatCard label="Verified" loading={stats.isLoading} value={(c?.verified ?? 0).toLocaleString()} />
-				<StatCard label="Rejected" loading={stats.isLoading} value={(c?.rejected ?? 0).toLocaleString()} />
-			</StatStrip>
+			{!embedded && (
+				<StatStrip cols={4}>
+					<StatCard label="Pending" loading={stats.isLoading} value={(c?.pending ?? 0).toLocaleString()} urgent={(c?.pending ?? 0) > 0} />
+					<StatCard label="Picked up" loading={stats.isLoading} value={(c?.picked_up ?? 0).toLocaleString()} />
+					<StatCard label="Verified" loading={stats.isLoading} value={(c?.verified ?? 0).toLocaleString()} />
+					<StatCard label="Rejected" loading={stats.isLoading} value={(c?.rejected ?? 0).toLocaleString()} />
+				</StatStrip>
+			)}
 
-			<Section title="Claim funnel" meta="pending → verified">
-				<Funnel stages={[
-					{ label: 'Pending', value: c?.pending ?? 0 },
-					{ label: 'Picked up', value: c?.picked_up ?? 0 },
-					{ label: 'Verified', value: c?.verified ?? 0, color: 'var(--pos)' },
-					{ label: 'Rejected', value: c?.rejected ?? 0, color: 'var(--neg)' },
-				]} />
-			</Section>
+			{!embedded && (
+				<Section title="Claim funnel" meta="pending → verified">
+					<Funnel stages={[
+						{ label: 'Pending', value: c?.pending ?? 0 },
+						{ label: 'Picked up', value: c?.picked_up ?? 0 },
+						{ label: 'Verified', value: c?.verified ?? 0, color: 'var(--pos)' },
+						{ label: 'Rejected', value: c?.rejected ?? 0, color: 'var(--neg)' },
+					]} />
+				</Section>
+			)}
 
 			<div style={{ height: 'var(--space-4)' }} />
 
@@ -130,10 +134,14 @@ export default function ClaimsAdminPage() {
 						{t.label}
 					</button>
 				))}
-				<span style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 4px' }} />
-				<select className="search-input" style={{ height: 30, width: 150 }} value={claimType} onChange={(e) => { setClaimType(e.target.value); setPage(1); }}>
-					{TYPE_FILTERS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
-				</select>
+				{!lockType && (
+					<>
+						<span style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 4px' }} />
+						<select className="search-input" style={{ height: 30, width: 150 }} value={claimType} onChange={(e) => { setClaimType(e.target.value); setPage(1); }}>
+							{TYPE_FILTERS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+						</select>
+					</>
+				)}
 				<div style={{ flex: 1 }} />
 				<label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--fg-2)' }}>
 					<input type="checkbox" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} /> Send email on verify
@@ -467,3 +475,5 @@ function CreateEntityPanel({ claim, onDone }: { claim: Claim; onDone: () => void
 		</div>
 	);
 }
+
+export default function ClaimsAdminPage() { return <ClaimsView />; }

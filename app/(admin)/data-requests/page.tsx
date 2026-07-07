@@ -37,7 +37,7 @@ const TABS: Array<{ label: string; key: DcrStatus }> = [
 	{ label: 'Rejected', key: 'rejected' },
 ];
 
-export default function DataRequestsPage() {
+export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: boolean; lockEntity?: string }) {
 	const { mutate } = useSWRConfig();
 	const [status, setStatus] = useState<DcrStatus>('open');
 	const [page, setPage] = useState(1);
@@ -45,7 +45,7 @@ export default function DataRequestsPage() {
 	const [selected, setSelected] = useState<Set<string>>(new Set());
 
 	const { data, error, isLoading } = useSWR<DcrResponse>(
-		['/api/admin/data-change-requests', { status, page, limit: 30 }],
+		['/api/admin/data-change-requests', { status, entity_type: lockEntity || undefined, page, limit: 30 }],
 		{ dedupingInterval: 15_000 },
 	);
 	const stats = useSWR<QueueStats>(['/api/admin/stats/queues'], { dedupingInterval: 60_000 });
@@ -108,23 +108,27 @@ export default function DataRequestsPage() {
 	const toggleAll = () => setSelected(allSelected ? new Set() : new Set(items.map((r) => r.id)));
 	return (
 		<div>
-			<PageHeader kicker={`Queues · ${(data?.total ?? 0).toLocaleString()} in ${status}`} title="Data change requests" />
+			{!embedded && <PageHeader kicker={`Queues · ${(data?.total ?? 0).toLocaleString()} in ${status}`} title="Data change requests" />}
 
-			<StatStrip cols={4}>
-				<StatCard label="Open" loading={stats.isLoading} value={(dq.open ?? 0).toLocaleString()} urgent={(dq.open ?? 0) > 0} />
-				<StatCard label="Picked up" loading={stats.isLoading} value={(dq.picked_up ?? 0).toLocaleString()} />
-				<StatCard label="Resolved" loading={stats.isLoading} value={(dq.resolved ?? 0).toLocaleString()} />
-				<StatCard label="Rejected" loading={stats.isLoading} value={(dq.rejected ?? 0).toLocaleString()} />
-			</StatStrip>
+			{!embedded && (
+				<StatStrip cols={4}>
+					<StatCard label="Open" loading={stats.isLoading} value={(dq.open ?? 0).toLocaleString()} urgent={(dq.open ?? 0) > 0} />
+					<StatCard label="Picked up" loading={stats.isLoading} value={(dq.picked_up ?? 0).toLocaleString()} />
+					<StatCard label="Resolved" loading={stats.isLoading} value={(dq.resolved ?? 0).toLocaleString()} />
+					<StatCard label="Rejected" loading={stats.isLoading} value={(dq.rejected ?? 0).toLocaleString()} />
+				</StatStrip>
+			)}
 
-			<Section title="Request funnel" meta="open → resolved">
-				<Funnel stages={[
-					{ label: 'Open', value: dq.open ?? 0 },
-					{ label: 'Picked up', value: dq.picked_up ?? 0 },
-					{ label: 'Resolved', value: dq.resolved ?? 0, color: 'var(--pos)' },
-					{ label: 'Rejected', value: dq.rejected ?? 0, color: 'var(--neg)' },
-				]} />
-			</Section>
+			{!embedded && (
+				<Section title="Request funnel" meta="open → resolved">
+					<Funnel stages={[
+						{ label: 'Open', value: dq.open ?? 0 },
+						{ label: 'Picked up', value: dq.picked_up ?? 0 },
+						{ label: 'Resolved', value: dq.resolved ?? 0, color: 'var(--pos)' },
+						{ label: 'Rejected', value: dq.rejected ?? 0, color: 'var(--neg)' },
+					]} />
+				</Section>
+			)}
 
 			<div style={{ height: 'var(--space-4)' }} />
 
@@ -256,3 +260,5 @@ export default function DataRequestsPage() {
 		</div>
 	);
 }
+
+export default function DataRequestsPage() { return <DataRequestsView />; }

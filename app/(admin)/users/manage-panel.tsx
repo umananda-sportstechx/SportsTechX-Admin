@@ -6,7 +6,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import useSWRInfinite from 'swr/infinite';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
-import { Section } from '@/components/atoms';
+import { Section, PillTabs } from '@/components/atoms';
 
 /** Minimal user shape the manage panel needs. */
 export interface ManageUser { id: string; user_type: string | null }
@@ -32,21 +32,7 @@ export function ManagePanel({ user }: { user: ManageUser }) {
 	const [tab, setTab] = useState<ManageTab>('Access');
 	return (
 		<div style={{ display: 'grid', gap: 'var(--space-4)' }}>
-			<div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border)' }}>
-				{MANAGE_TABS.map((t) => (
-					<button
-						key={t}
-						onClick={() => setTab(t)}
-						className="btn ghost"
-						style={{
-							borderRadius: 0, borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent',
-							color: tab === t ? 'var(--fg)' : 'var(--fg-muted)', fontWeight: tab === t ? 700 : 400,
-						}}
-					>
-						{t}
-					</button>
-				))}
-			</div>
+			<PillTabs tabs={MANAGE_TABS} value={tab} onChange={setTab} />
 
 			{tab === 'Access' && (
 				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)' }}>

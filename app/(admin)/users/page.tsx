@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, StatCard, Section } from '@/components/atoms';
+import { PageHeader, AsyncState, StatCard, Section, PillTabs } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, Funnel, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 
@@ -140,18 +140,7 @@ export default function UsersAdminPage() {
 		<div>
 			<PageHeader kicker={`Identity · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} total`} title="Users" />
 
-			<div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border)', marginBottom: 'var(--space-4)' }}>
-				{PAGE_TABS.map((t) => (
-					<button
-						key={t}
-						onClick={() => setTab(t)}
-						className="btn ghost"
-						style={{ borderRadius: 0, borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent', color: tab === t ? 'var(--fg)' : 'var(--fg-muted)', fontWeight: tab === t ? 700 : 400 }}
-					>
-						{t}
-					</button>
-				))}
-			</div>
+			<PillTabs tabs={PAGE_TABS} value={tab} onChange={setTab} />
 
 			{tab === 'Stats' && (<>
 			<StatStrip cols={4}>

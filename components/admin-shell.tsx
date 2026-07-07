@@ -46,13 +46,21 @@ const ADMIN_NAV: NavItem[] = [
 	},
 	{ label: 'Startups to add', href: '/startups-pipeline', Icon: FilePlus },
 	{ label: 'Investors to add', href: '/investor-review', Icon: Banknote },
-	// Sales, Weekly touchpoints and User analytics gain their STX sub-tab children
-	// in later phases (Sales ▸ Records + Stripe, Touchpoints ▸ Team view,
-	// User analytics ▸ Signups/Login/Reports/Mixpanel).
-	{ label: 'Sales', href: '/sales', Icon: ShoppingCart },
-	{ label: 'Weekly touchpoints', href: '/touchpoints', Icon: Target },
+	{
+		label: 'Sales', Icon: ShoppingCart, children: [
+			{ href: '/sales', label: 'Analytics' },
+			{ href: '/sales/records', label: 'Records' },
+		],
+	},
+	{
+		label: 'Weekly touchpoints', Icon: Target, children: [
+			{ href: '/touchpoints', label: 'Weekly log' },
+			{ href: '/touchpoints/team', label: 'Team view' },
+		],
+	},
 	{ label: 'Reports', href: '/reports', Icon: FileText },
 	{ label: 'Featured lists', href: '/featured-lists', Icon: Sparkles },
+	// User analytics gains its STX sub-tabs (Signups/Login/Reports/Mixpanel) next phase.
 	{ label: 'User analytics', href: '/users', Icon: BarChart3 },
 	{ label: 'Performance', href: '/performance', Icon: Gauge },
 	{ label: 'Billing', href: '/billing', Icon: CreditCard },

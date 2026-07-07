@@ -4,16 +4,12 @@
 /* ============================================================================
  * SportsTechX admin design tokens.
  *
- * IMPORTANT — `app/design-system.css` is a manually-synced copy of
- * `client/app/design-system.css`. Turbopack refuses cross-project imports (it
- * sandboxes the dev graph to the project root), so both Next apps keep their
- * own copies. When you change one, copy the other:
- *
- *     copy ..\client\app\design-system.css .\app\design-system.css   (PowerShell)
- *     cp   ../client/app/design-system.css ./app/design-system.css   (bash)
- *
- * Admin matches the client app's warm accent (--accent-hue: 14) so the two
- * surfaces share one visual identity.
+ * NOTE — `app/design-system.css` was originally a synced copy of
+ * `client/app/design-system.css`, but the admin has been intentionally FORKED
+ * to match the STX-WebApp admin's look (light-first, magenta #ed1a52, IBM Plex
+ * Sans, rounded 0.5rem, dark-slate sidebar). Do NOT re-sync it from the client;
+ * the two surfaces now have deliberately different identities (the client keeps
+ * the terminal/dark/orange look, the admin matches the old familiar admin).
  * ============================================================================ */
 
 :root {
@@ -277,6 +273,48 @@ textarea.search-input { border-radius: var(--radius-md); }
 .chip { border-radius: 9999px; }
 .admin-avatar { border-radius: var(--radius-md); }
 .modal-card { border-radius: var(--radius-lg); }
+
+/* --- Pill tabs: centered rounded segmented control (STX-WebApp idiom) ----- */
+.pill-tabs-wrap { display: flex; margin-bottom: var(--space-4); }
+.pill-tabs-wrap.center { justify-content: center; }
+.pill-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg-2);
+  border-radius: 9999px;
+}
+.pill-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.pill-tab:hover:not(.on) { color: var(--fg); }
+.pill-tab.on {
+  background: var(--surface);
+  color: var(--fg);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+.pill-tab-ct {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  background: color-mix(in oklab, currentColor 14%, transparent);
+}
 
 /* --- Page content readability cap (very wide monitors) ------------------- */
 .admin-content { max-width: 1440px; margin: 0 auto; width: 100%; }

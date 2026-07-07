@@ -5,7 +5,7 @@ import useSWR from 'swr';
 import { toast } from 'sonner';
 import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { PageHeader, Section, PillTabs, AsyncState } from '@/components/atoms';
+import { PageHeader, Section, AsyncState } from '@/components/atoms';
 import { useConfirm } from '@/components/confirm';
 
 /**
@@ -37,8 +37,7 @@ function addDays(d: Date, n: number): Date { const x = new Date(d); x.setDate(d.
 function pct(actual: number, target: number): number { return target > 0 ? Math.round((actual / target) * 100) : 0; }
 function pctColor(p: number): string { return p >= 100 ? 'var(--pos)' : p >= 60 ? 'var(--warn)' : 'var(--neg)'; }
 
-export default function TouchpointsPage() {
-	const [tab, setTab] = useState<'Weekly log' | 'Team view'>('Weekly log');
+export function TouchpointsBoard({ view }: { view: 'weekly' | 'team' }) {
 	const [anchor, setAnchor] = useState(() => mondayOf(new Date()));
 	const monday = toIso(anchor);
 	const weekDates = useMemo(() => DAYS.map((_, i) => toIso(addDays(anchor, i))), [anchor]);
@@ -77,13 +76,12 @@ export default function TouchpointsPage() {
 	return (
 		<div>
 			<PageHeader
-				kicker="Sales"
-				title="Weekly touchpoints"
+				kicker="Weekly touchpoints"
+				title={view === 'weekly' ? 'Weekly log' : 'Team view'}
 				subtitle="Shared outreach board — log daily touchpoints per person and track weekly progress against per-channel targets."
 			/>
 
 			<div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 'var(--space-4)', flexWrap: 'wrap' }}>
-				<PillTabs tabs={['Weekly log', 'Team view'] as const} value={tab} onChange={setTab} />
 				<div style={{ flex: 1 }} />
 				<button className="btn ghost" onClick={() => setAnchor(addDays(anchor, -7))}>← Prev</button>
 				<span style={{ fontWeight: 600, fontSize: 13, minWidth: 170, textAlign: 'center' }}>{weekLabel}</span>
@@ -92,7 +90,7 @@ export default function TouchpointsPage() {
 			</div>
 
 			<AsyncState loading={isLoading} error={error} empty={!isLoading && products.length === 0} emptyMsg="No products yet — add one to start logging.">
-				{tab === 'Weekly log' ? (
+				{view === 'weekly' ? (
 					<Section
 						title="Log"
 						meta={`week of ${monday}`}
@@ -421,3 +419,5 @@ function AddButton({ label, placeholder, extra, onAdd, small }: { label: string;
 		</span>
 	);
 }
+
+export default function TouchpointsPage() { return <TouchpointsBoard view="weekly" />; }

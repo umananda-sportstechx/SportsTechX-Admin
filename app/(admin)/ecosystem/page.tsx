@@ -7,10 +7,7 @@ import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, PillTabs } from '@/components/atoms';
-import { InvestorsView } from '../investors/page';
-import { ClaimsView } from '../claims/page';
-import { DataRequestsView } from '../data-requests/page';
+import { PageHeader, AsyncState, Loading, StatCard, Section, Pager } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip, FilterRange, RefSlugFilter } from '@/components/filters';
 import { CsvImportButton } from '@/components/csv-import';
@@ -585,56 +582,4 @@ function LinksCohortPanel({ entityId }: { entityId: string }) {
 	);
 }
 
-// ── Ecosystem section (STX-style container) ──────────────────────────────────
-// STX kept programs, events AND investors inside one "Ecosystem" tab, with the
-// claim-review panels embedded alongside. This parent reproduces that: the
-// Programs & events management view, the Investors view, and a Claims tab that
-// scopes claim/data-change review to the ecosystem + investor families.
-
-type EcoTab = 'programs' | 'investors' | 'claims';
-type EcoClaimTab = 'investors' | 'ecosystem' | 'changes';
-
-function EcosystemClaims() {
-	const [tab, setTab] = useState<EcoClaimTab>('investors');
-	return (
-		<div>
-			<div style={{ marginBottom: 'var(--space-4)' }}>
-				<PillTabs
-					tabs={[
-						{ key: 'investors', label: 'Investor claims' },
-						{ key: 'ecosystem', label: 'Program / event claims' },
-						{ key: 'changes', label: 'Data changes' },
-					] as ReadonlyArray<{ key: EcoClaimTab; label: string }>}
-					value={tab}
-					onChange={setTab}
-				/>
-			</div>
-			{tab === 'investors' && <ClaimsView embedded lockType="investor" />}
-			{tab === 'ecosystem' && <ClaimsView embedded lockType="ecosystem_entity" />}
-			{tab === 'changes' && <DataRequestsView embedded lockEntity="investor,ecosystem,investor_fund,investor_portfolio" />}
-		</div>
-	);
-}
-
-export default function EcosystemAdminPage() {
-	const [tab, setTab] = useState<EcoTab>('programs');
-	return (
-		<div>
-			<PageHeader kicker="Catalog" title="Ecosystem" />
-			<div style={{ marginBottom: 'var(--space-4)' }}>
-				<PillTabs
-					tabs={[
-						{ key: 'programs', label: 'Programs & events' },
-						{ key: 'investors', label: 'Investors' },
-						{ key: 'claims', label: 'Claims' },
-					] as ReadonlyArray<{ key: EcoTab; label: string }>}
-					value={tab}
-					onChange={setTab}
-				/>
-			</div>
-			{tab === 'programs' && <EcosystemView embedded />}
-			{tab === 'investors' && <InvestorsView embedded />}
-			{tab === 'claims' && <EcosystemClaims />}
-		</div>
-	);
-}
+export default function EcosystemAdminPage() { return <EcosystemView />; }

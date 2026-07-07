@@ -611,7 +611,7 @@ function EcosystemClaims() {
 			</div>
 			{tab === 'investors' && <ClaimsView embedded lockType="investor" />}
 			{tab === 'ecosystem' && <ClaimsView embedded lockType="ecosystem_entity" />}
-			{tab === 'changes' && <DataRequestsView embedded lockEntity="investor,ecosystem,funds,portfolio" />}
+			{tab === 'changes' && <DataRequestsView embedded lockEntity="investor,ecosystem,investor_fund,investor_portfolio" />}
 		</div>
 	);
 }

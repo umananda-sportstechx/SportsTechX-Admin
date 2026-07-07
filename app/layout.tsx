@@ -1,21 +1,14 @@
 import type { Metadata } from 'next';
-import { Inter, JetBrains_Mono, Space_Grotesk } from 'next/font/google';
+import { IBM_Plex_Sans, JetBrains_Mono } from 'next/font/google';
 import { Providers } from './providers';
 import './globals.css';
 
-// SportsTechX font stack — matches the client app exactly so the admin shell
-// inherits the same display / body / mono families via CSS variables defined
-// in design-system.css.
-const display = Space_Grotesk({
-	variable: '--font-space-grotesk',
+// Admin font stack — IBM Plex Sans (display + body) to match the STX-WebApp
+// admin's clean SaaS look; JetBrains Mono kept for numeric/tabular cells.
+const sans = IBM_Plex_Sans({
+	variable: '--font-ibm-plex-sans',
 	subsets: ['latin'],
-	weight: ['400', '500', '600', '700'],
-});
-
-const body = Inter({
-	variable: '--font-inter',
-	subsets: ['latin'],
-	weight: ['400', '500', '600', '700'],
+	weight: ['300', '400', '500', '600', '700'],
 });
 
 const mono = JetBrains_Mono({
@@ -35,7 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 			lang="en"
 			data-density="comfortable"
 			suppressHydrationWarning
-			className={`${display.variable} ${body.variable} ${mono.variable} h-full antialiased`}
+			className={`${sans.variable} ${mono.variable} h-full antialiased`}
 		>
 			<body className="min-h-full flex flex-col">
 				<Providers>{children}</Providers>

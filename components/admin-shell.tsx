@@ -132,7 +132,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 			<aside className={`admin-rail ${navOpen ? 'open' : ''}`}>
 				<div className="admin-rail-brandrow">
 					<div>
-						<div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 4 }}>
+						<div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--sidebar-muted)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 4 }}>
 							SportsTechX
 						</div>
 						<div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em' }}>

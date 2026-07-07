@@ -41,7 +41,7 @@ function fmtAmount(v?: string | null): string {
 }
 const fmtMoney = (n: number): string => n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : `$${(n / 1e6).toFixed(1)}M`;
 
-export default function AcquisitionsAdminPage() {
+export function AcquisitionsView({ embedded = false }: { embedded?: boolean }) {
 	const { mutate } = useSWRConfig();
 	const ask = useConfirm();
 	const [search, setSearch] = useState('');
@@ -89,7 +89,7 @@ export default function AcquisitionsAdminPage() {
 	const rows = data?.data ?? [];
 	return (
 		<div>
-			<PageHeader kicker={`M&A · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} deals`} title="Acquisitions" />
+			{!embedded && <PageHeader kicker={`M&A · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} deals`} title="Acquisitions" />}
 
 			<StatStrip cols={3}>
 				<StatCard label="Total acquisitions" loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()} />
@@ -351,3 +351,5 @@ function AcquisitionForm({ id, initial, onClose, onSaved, onStage }: { id: strin
 		</Modal>
 	);
 }
+
+export default function AcquisitionsAdminPage() { return <AcquisitionsView />; }

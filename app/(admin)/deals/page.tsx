@@ -48,7 +48,7 @@ function fmtAmount(v?: string | null): string {
 }
 const fmtMoney = (n: number): string => n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : `$${(n / 1e6).toFixed(1)}M`;
 
-export default function DealsAdminPage() {
+export function DealsView({ embedded = false }: { embedded?: boolean }) {
 	const { mutate } = useSWRConfig();
 	const ask = useConfirm();
 	const [search, setSearch] = useState('');
@@ -98,7 +98,7 @@ export default function DealsAdminPage() {
 	const deals = data?.data ?? [];
 	return (
 		<div>
-			<PageHeader kicker={`Funding · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} deals`} title="Deals" />
+			{!embedded && <PageHeader kicker={`Funding · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} deals`} title="Deals" />}
 
 			<StatStrip cols={3}>
 				<StatCard label="Total deals" loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()} />
@@ -334,3 +334,5 @@ function DealForm({ id, initial, onClose, onSaved, onStage }: { id: string | nul
 		</Modal>
 	);
 }
+
+export default function DealsAdminPage() { return <DealsView />; }

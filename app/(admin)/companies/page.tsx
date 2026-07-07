@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh } from '@/components/atoms';
+import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh, PillTabs } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip, BoolFilter, FilterRange, RefSlugFilter, SectorTierFilter } from '@/components/filters';
 import { CsvImportButton } from '@/components/csv-import';
@@ -20,8 +20,10 @@ import {
 	RoundTypeSelect, CurrencySelect, InvestorPicker, CompanySelectOne,
 	EMPTY_SOCIAL, EMPTY_LOCATION, type SocialValue, type LocationValue, type DealInvestor,
 } from '@/components/entity-pickers';
-import { DealModal, type StagedDeal } from '../deals/page';
-import { AcquisitionModal, type StagedAcq } from '../acquisitions/page';
+import { DealModal, DealsView, type StagedDeal } from '../deals/page';
+import { AcquisitionModal, AcquisitionsView, type StagedAcq } from '../acquisitions/page';
+import { ClaimsView } from '../claims/page';
+import { DataRequestsView } from '../data-requests/page';
 
 interface Company {
 	id: string;
@@ -43,7 +45,7 @@ const STATUSES = ['active', 'inactive', 'needs_review', 'dead', 'acquired', 'ipo
 // d2c/b2g/other dropped - unused across all records (verified) and not wanted.
 const BUSINESS_MODELS = ['b2b', 'b2c', 'b2b2c'] as const;
 
-export default function CompaniesAdminPage() {
+export function CompaniesView({ embedded = false }: { embedded?: boolean }) {
 	const { mutate } = useSWRConfig();
 	const ask = useConfirm();
 	const [search, setSearch] = useState('');
@@ -101,7 +103,7 @@ export default function CompaniesAdminPage() {
 	const companies = data?.data ?? [];
 	return (
 		<div>
-			<PageHeader kicker={`Database · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} companies`} title="Companies" />
+			{!embedded && <PageHeader kicker={`Database · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} companies`} title="Companies" />}
 
 			<StatStrip cols={5}>
 				<StatCard label="Total" loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()} />
@@ -871,5 +873,59 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 				/>
 			)}
 		</Modal>
+	);
+}
+
+// ── Companies & Deals section (STX-style container) ──────────────────────────
+// STX bundled companies, funding deals and M&A under one "Companies & Deals"
+// tab, with the claim-review panel embedded. This parent reproduces that: the
+// Companies view, Deals view, Acquisitions view, and a Claims tab scoped to the
+// company/deal families.
+
+type CdTab = 'companies' | 'deals' | 'acquisitions' | 'claims';
+type CdClaimTab = 'claims' | 'changes';
+
+function CompanyDealClaims() {
+	const [tab, setTab] = useState<CdClaimTab>('claims');
+	return (
+		<div>
+			<div style={{ marginBottom: 'var(--space-4)' }}>
+				<PillTabs
+					tabs={[
+						{ key: 'claims', label: 'Ownership claims' },
+						{ key: 'changes', label: 'Data changes' },
+					] as ReadonlyArray<{ key: CdClaimTab; label: string }>}
+					value={tab}
+					onChange={setTab}
+				/>
+			</div>
+			{tab === 'claims' && <ClaimsView embedded lockType="company" />}
+			{tab === 'changes' && <DataRequestsView embedded lockEntity="company,deal" />}
+		</div>
+	);
+}
+
+export default function CompaniesAdminPage() {
+	const [tab, setTab] = useState<CdTab>('companies');
+	return (
+		<div>
+			<PageHeader kicker="Catalog" title="Companies & Deals" />
+			<div style={{ marginBottom: 'var(--space-4)' }}>
+				<PillTabs
+					tabs={[
+						{ key: 'companies', label: 'Companies' },
+						{ key: 'deals', label: 'Deals' },
+						{ key: 'acquisitions', label: 'Acquisitions' },
+						{ key: 'claims', label: 'Claims' },
+					] as ReadonlyArray<{ key: CdTab; label: string }>}
+					value={tab}
+					onChange={setTab}
+				/>
+			</div>
+			{tab === 'companies' && <CompaniesView embedded />}
+			{tab === 'deals' && <DealsView embedded />}
+			{tab === 'acquisitions' && <AcquisitionsView embedded />}
+			{tab === 'claims' && <CompanyDealClaims />}
+		</div>
 	);
 }

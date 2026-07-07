@@ -39,7 +39,7 @@ const CATEGORIES = [
 ] as const;
 const STATUSES = ['active', 'inactive', 'paused'] as const;
 
-export default function InvestorsAdminPage() {
+export function InvestorsView({ embedded = false }: { embedded?: boolean }) {
 	const { mutate } = useSWRConfig();
 	const ask = useConfirm();
 	const [search, setSearch] = useState('');
@@ -106,7 +106,7 @@ export default function InvestorsAdminPage() {
 	const rows = data?.data ?? [];
 	return (
 		<div>
-			<PageHeader kicker={`Capital · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} investors`} title="Investors" />
+			{!embedded && <PageHeader kicker={`Capital · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} investors`} title="Investors" />}
 
 			<StatStrip cols={4}>
 				<StatCard label="Total" loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()} />
@@ -534,3 +534,5 @@ function SectorCascadeMulti({ value, onChange }: { value: string[]; onChange: (i
 		</div>
 	);
 }
+
+export default function InvestorsAdminPage() { return <InvestorsView />; }

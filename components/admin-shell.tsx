@@ -4,10 +4,10 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
-	LayoutDashboard, Briefcase, Users, FilePlus, FileText, Database, Layers,
-	Activity, ShoppingCart, LogOut, ShieldAlert, CreditCard, ToggleLeft,
+	LayoutDashboard, Briefcase, Users, FilePlus, FileText, Layers,
+	Activity, ShoppingCart, LogOut, CreditCard, ToggleLeft,
 	Banknote, Sparkles, Tag, BookOpen, Menu, BarChart3, Gauge,
-	CircleDollarSign, GitMerge, Lightbulb, Receipt, Package, Handshake, Download, Coins, Target,
+	Lightbulb, Receipt, Package, Handshake, Download, Coins, Target,
 } from 'lucide-react';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useIsAdmin, useUserProfile } from '@/hooks/use-user-profile';
@@ -15,7 +15,10 @@ import { useIsAdmin, useUserProfile } from '@/hooks/use-user-profile';
 interface NavItem { href: string; label: string; Icon: typeof LayoutDashboard }
 interface NavGroup { label: string; items: NavItem[] }
 
-// Grouped so 18 destinations stay scannable instead of one flat list.
+// Mirrors the STX-WebApp admin structure: Companies & Deals and Ecosystem are
+// single containers (child entities + claim review live inside them as tabs).
+// The extra new-build features (queues, content, credit economy, ops) keep
+// their own groups. Grouped so the destinations stay scannable.
 const NAV_GROUPS: NavGroup[] = [
 	{
 		label: 'Overview',
@@ -25,50 +28,50 @@ const NAV_GROUPS: NavGroup[] = [
 		],
 	},
 	{
-		label: 'Review queues',
-		items: [
-			{ href: '/claims', label: 'Claims', Icon: ShieldAlert },
-			{ href: '/data-requests', label: 'Data requests', Icon: Database },
-			{ href: '/startups-pipeline', label: 'Startups pipeline', Icon: FilePlus },
-			{ href: '/investor-review', label: 'Investor review', Icon: Banknote },
-			{ href: '/intro-requests', label: 'Intro requests', Icon: Handshake },
-		],
-	},
-	{
 		label: 'Catalog',
 		items: [
-			{ href: '/companies', label: 'Companies', Icon: Briefcase },
-			{ href: '/deals', label: 'Deals', Icon: CircleDollarSign },
-			{ href: '/acquisitions', label: 'Acquisitions', Icon: GitMerge },
-			{ href: '/investors', label: 'Investors', Icon: Banknote },
+			{ href: '/companies', label: 'Companies & Deals', Icon: Briefcase },
 			{ href: '/ecosystem', label: 'Ecosystem', Icon: Layers },
 			{ href: '/featured-lists', label: 'Featured lists', Icon: Sparkles },
 			{ href: '/reference', label: 'Reference data', Icon: BookOpen },
 		],
 	},
 	{
-		label: 'Content',
+		label: 'Pipelines',
 		items: [
-			{ href: '/reports', label: 'Reports', Icon: FileText },
-			{ href: '/polls', label: 'Polls', Icon: Sparkles },
-			{ href: '/insights', label: 'Insights', Icon: Lightbulb },
+			{ href: '/startups-pipeline', label: 'Startups to add', Icon: FilePlus },
+			{ href: '/investor-review', label: 'Investors to add', Icon: Banknote },
+			{ href: '/intro-requests', label: 'Intro requests', Icon: Handshake },
 		],
 	},
 	{
-		label: 'Growth & access',
+		label: 'Content',
 		items: [
-			{ href: '/users', label: 'Users', Icon: Users },
+			{ href: '/reports', label: 'Reports', Icon: FileText },
+			{ href: '/insights', label: 'Insights', Icon: Lightbulb },
+			{ href: '/polls', label: 'Polls', Icon: Sparkles },
+		],
+	},
+	{
+		label: 'Revenue',
+		items: [
+			{ href: '/sales', label: 'Sales', Icon: ShoppingCart },
 			{ href: '/billing', label: 'Billing tools', Icon: CreditCard },
 			{ href: '/subscription-plans', label: 'Plans', Icon: Tag },
 			{ href: '/credit-packs', label: 'Credit packs', Icon: Package },
+		],
+	},
+	{
+		label: 'Users & access',
+		items: [
+			{ href: '/users', label: 'Users', Icon: Users },
 			{ href: '/features', label: 'Feature flags', Icon: ToggleLeft },
 		],
 	},
 	{
 		label: 'Operations',
 		items: [
-			{ href: '/sales', label: 'Sales', Icon: ShoppingCart },
-			{ href: '/touchpoints', label: 'Touchpoints', Icon: Target },
+			{ href: '/touchpoints', label: 'Weekly touchpoints', Icon: Target },
 			{ href: '/jobs', label: 'Jobs & integrations', Icon: Activity },
 			{ href: '/ai-usage', label: 'AI usage & cost', Icon: Receipt },
 			{ href: '/credit-usage', label: 'Credit usage', Icon: Coins },

@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh, PillTabs } from '@/components/atoms';
+import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip, BoolFilter, FilterRange, RefSlugFilter, SectorTierFilter } from '@/components/filters';
 import { CsvImportButton } from '@/components/csv-import';
@@ -20,10 +20,8 @@ import {
 	RoundTypeSelect, CurrencySelect, InvestorPicker, CompanySelectOne,
 	EMPTY_SOCIAL, EMPTY_LOCATION, type SocialValue, type LocationValue, type DealInvestor,
 } from '@/components/entity-pickers';
-import { DealModal, DealsView, type StagedDeal } from '../deals/page';
-import { AcquisitionModal, AcquisitionsView, type StagedAcq } from '../acquisitions/page';
-import { ClaimsView } from '../claims/page';
-import { DataRequestsView } from '../data-requests/page';
+import { DealModal, type StagedDeal } from '../deals/page';
+import { AcquisitionModal, type StagedAcq } from '../acquisitions/page';
 
 interface Company {
 	id: string;
@@ -876,56 +874,4 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 	);
 }
 
-// ── Companies & Deals section (STX-style container) ──────────────────────────
-// STX bundled companies, funding deals and M&A under one "Companies & Deals"
-// tab, with the claim-review panel embedded. This parent reproduces that: the
-// Companies view, Deals view, Acquisitions view, and a Claims tab scoped to the
-// company/deal families.
-
-type CdTab = 'companies' | 'deals' | 'acquisitions' | 'claims';
-type CdClaimTab = 'claims' | 'changes';
-
-function CompanyDealClaims() {
-	const [tab, setTab] = useState<CdClaimTab>('claims');
-	return (
-		<div>
-			<div style={{ marginBottom: 'var(--space-4)' }}>
-				<PillTabs
-					tabs={[
-						{ key: 'claims', label: 'Ownership claims' },
-						{ key: 'changes', label: 'Data changes' },
-					] as ReadonlyArray<{ key: CdClaimTab; label: string }>}
-					value={tab}
-					onChange={setTab}
-				/>
-			</div>
-			{tab === 'claims' && <ClaimsView embedded lockType="company" />}
-			{tab === 'changes' && <DataRequestsView embedded lockEntity="company,deal" />}
-		</div>
-	);
-}
-
-export default function CompaniesAdminPage() {
-	const [tab, setTab] = useState<CdTab>('companies');
-	return (
-		<div>
-			<PageHeader kicker="Catalog" title="Companies & Deals" />
-			<div style={{ marginBottom: 'var(--space-4)' }}>
-				<PillTabs
-					tabs={[
-						{ key: 'companies', label: 'Companies' },
-						{ key: 'deals', label: 'Deals' },
-						{ key: 'acquisitions', label: 'Acquisitions' },
-						{ key: 'claims', label: 'Claims' },
-					] as ReadonlyArray<{ key: CdTab; label: string }>}
-					value={tab}
-					onChange={setTab}
-				/>
-			</div>
-			{tab === 'companies' && <CompaniesView embedded />}
-			{tab === 'deals' && <DealsView embedded />}
-			{tab === 'acquisitions' && <AcquisitionsView embedded />}
-			{tab === 'claims' && <CompanyDealClaims />}
-		</div>
-	);
-}
+export default function CompaniesAdminPage() { return <CompaniesView />; }

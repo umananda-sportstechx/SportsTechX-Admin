@@ -302,3 +302,39 @@ export function Section({ title, meta, action, children, padded = true, center =
 		</div>
 	);
 }
+
+/**
+ * Centered pill-tab segmented control — the STX-WebApp admin tab idiom.
+ * Accepts plain string tabs or `{ key, label, count }` objects.
+ */
+export function PillTabs<T extends string>({
+	tabs, value, onChange, center = false,
+}: {
+	tabs: ReadonlyArray<T | { key: T; label: string; count?: number }>;
+	value: T;
+	onChange: (t: T) => void;
+	center?: boolean;
+}) {
+	const items = tabs.map((t) =>
+		typeof t === 'string' ? { key: t as T, label: t as string } : t,
+	) as Array<{ key: T; label: string; count?: number }>;
+	return (
+		<div className={`pill-tabs-wrap${center ? ' center' : ''}`}>
+			<div className="pill-tabs" role="tablist">
+				{items.map((it) => (
+					<button
+						key={it.key}
+						type="button"
+						role="tab"
+						aria-selected={value === it.key}
+						className={`pill-tab${value === it.key ? ' on' : ''}`}
+						onClick={() => onChange(it.key)}
+					>
+						{it.label}
+						{it.count != null && <span className="pill-tab-ct">{it.count}</span>}
+					</button>
+				))}
+			</div>
+		</div>
+	);
+}

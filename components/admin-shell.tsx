@@ -60,8 +60,14 @@ const ADMIN_NAV: NavItem[] = [
 	},
 	{ label: 'Reports', href: '/reports', Icon: FileText },
 	{ label: 'Featured lists', href: '/featured-lists', Icon: Sparkles },
-	// User analytics gains its STX sub-tabs (Signups/Login/Reports/Mixpanel) next phase.
-	{ label: 'User analytics', href: '/users', Icon: BarChart3 },
+	{
+		label: 'User analytics', Icon: BarChart3, children: [
+			{ href: '/users', label: 'Directory' },
+			{ href: '/users/subscription', label: 'Signups & subscription' },
+			{ href: '/users/engagement', label: 'Engagement' },
+			{ href: '/users/mixpanel', label: 'Mixpanel' },
+		],
+	},
 	{ label: 'Performance', href: '/performance', Icon: Gauge },
 	{ label: 'Billing', href: '/billing', Icon: CreditCard },
 ];

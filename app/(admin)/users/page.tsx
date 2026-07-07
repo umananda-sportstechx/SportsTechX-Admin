@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, StatCard, Section, PillTabs } from '@/components/atoms';
+import { PageHeader, AsyncState, StatCard, Section } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, Funnel, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 
@@ -45,16 +45,12 @@ interface User {
 }
 interface UsersResponse { data: User[]; total: number; totalPages: number }
 
-const PAGE_TABS = ['Directory', 'Stats', 'Charts'] as const;
-type PageTab = (typeof PAGE_TABS)[number];
-
-export default function UsersAdminPage() {
+export function UsersView({ view }: { view: 'directory' | 'stats' | 'charts' }) {
 	const { mutate } = useSWRConfig();
 	const [search, setSearch] = useState('');
 	const [role, setRole] = useState('');
 	const [tier, setTier] = useState('');
 	const [page, setPage] = useState(1);
-	const [tab, setTab] = useState<PageTab>('Directory');
 	const router = useRouter();
 	const [rolePending, setRolePending] = useState<string | null>(null);
 	const [from, setFrom] = useState('');
@@ -140,9 +136,7 @@ export default function UsersAdminPage() {
 		<div>
 			<PageHeader kicker={`Identity · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} total`} title="Users" />
 
-			<PillTabs tabs={PAGE_TABS} value={tab} onChange={setTab} />
-
-			{tab === 'Stats' && (<>
+			{view === 'stats' && (<>
 			<StatStrip cols={4}>
 				<StatCard label="Total users" loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()} />
 				<StatCard label="Admins" loading={stats.isLoading} value={(stats.data?.admins ?? 0).toLocaleString()} />
@@ -179,7 +173,7 @@ export default function UsersAdminPage() {
 
 			</>)}
 
-			{tab === 'Charts' && (<>
+			{view === 'charts' && (<>
 			{/* Sign-in / sign-up activity — straight from Supabase auth */}
 			<div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 10px' }}>
 				Sign-in / sign-up activity · Supabase auth
@@ -298,7 +292,7 @@ export default function UsersAdminPage() {
 
 			</>)}
 
-			{tab === 'Directory' && (<>
+			{view === 'directory' && (<>
 			<FilterBar>
 				<input
 					className="search-input"
@@ -517,3 +511,5 @@ function ReportUsersModal({ onClose }: { onClose: () => void }) {
 	);
 }
 
+
+export default function UsersAdminPage() { return <UsersView view="directory" />; }

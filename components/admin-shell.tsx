@@ -7,10 +7,24 @@ import {
 	LayoutDashboard, Briefcase, Users, FilePlus, FileText, Layers,
 	Activity, ShoppingCart, LogOut, CreditCard, ToggleLeft,
 	Banknote, Sparkles, Tag, BookOpen, Menu, BarChart3, Gauge,
-	Lightbulb, Receipt, Package, Handshake, Download, Coins, Target, ChevronDown,
+	Lightbulb, Receipt, Package, Handshake, Download, Coins, Target, ChevronDown, Sun, Moon,
 } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useIsAdmin, useUserProfile } from '@/hooks/use-user-profile';
+
+/** Light/dark toggle — the old admin ships both themes; default is dark. */
+function ThemeToggle() {
+	const { theme, setTheme } = useTheme();
+	const [mounted, setMounted] = useState(false);
+	useEffect(() => setMounted(true), []);
+	const dark = theme === 'dark';
+	return (
+		<button className="btn ghost" onClick={() => setTheme(dark ? 'light' : 'dark')} title={dark ? 'Switch to light mode' : 'Switch to dark mode'} aria-label="Toggle theme">
+			{mounted && !dark ? <Moon size={14} /> : <Sun size={14} />}
+		</button>
+	);
+}
 
 type IconType = typeof LayoutDashboard;
 interface NavLeaf { href: string; label: string }
@@ -236,6 +250,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 					</button>
 					<div className="admin-topbar-title">{current?.label ?? 'Admin'}</div>
 					<div style={{ flex: 1 }} />
+					<ThemeToggle />
 					<div className="admin-avatar" title={profile?.email ?? undefined}>{initials}</div>
 					<button onClick={() => signOut().then(() => router.replace('/login'))} className="btn ghost" title="Sign out">
 						<LogOut size={12} /> Sign out

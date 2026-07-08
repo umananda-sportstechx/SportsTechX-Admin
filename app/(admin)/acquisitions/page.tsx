@@ -91,30 +91,34 @@ export function AcquisitionsView({ embedded = false }: { embedded?: boolean }) {
 		<div>
 			{!embedded && <PageHeader kicker={`M&A · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} deals`} title="Acquisitions" />}
 
-			<StatsPanel>
-				<StatStrip cols={3}>
-					<RichStatCard label="Total M&A Transactions" Icon={GitMerge} loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()}
-						totalRows={stats.data?.total_rows} thisYear={stats.data?.this_year} lastYear={stats.data?.last_year} yoy={stats.data?.yoy_change} />
-					<RichStatCard label="Total value (disclosed)" Icon={Banknote} loading={stats.isLoading} value={fmtMoney(stats.data?.total_amount ?? 0)} />
-					<RichStatCard label="SportsTech acquirees" Icon={Trophy} loading={stats.isLoading} value={(stats.data?.sportstech ?? 0).toLocaleString()} />
-				</StatStrip>
-			</StatsPanel>
+			{!embedded && (
+				<StatsPanel>
+					<StatStrip cols={3}>
+						<RichStatCard label="Total M&A Transactions" Icon={GitMerge} loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()}
+							totalRows={stats.data?.total_rows} thisYear={stats.data?.this_year} lastYear={stats.data?.last_year} yoy={stats.data?.yoy_change} />
+						<RichStatCard label="Total value (disclosed)" Icon={Banknote} loading={stats.isLoading} value={fmtMoney(stats.data?.total_amount ?? 0)} />
+						<RichStatCard label="SportsTech acquirees" Icon={Trophy} loading={stats.isLoading} value={(stats.data?.sportstech ?? 0).toLocaleString()} />
+					</StatStrip>
+				</StatsPanel>
+			)}
 
-			<div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-				<Section title="Acquisitions by year" meta="value · count" center>
-					<AsyncState loading={stats.isLoading} error={stats.error} empty={yearChart.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
-						<ComboBarLine data={yearChart} height={240} valueFormatter={fmtMoney} barLabel="Value" lineLabel="deals" />
-					</AsyncState>
-				</Section>
-				<Section title="By type" meta="deals" center>
-					<AsyncState loading={stats.isLoading} error={stats.error} empty={typeSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
-						<div style={{ display: 'grid', placeItems: 'center', gap: 12 }}>
-							<PieDonut segments={typeSegments} size={170} mode="donut" />
-							<PieLegend segments={typeSegments} />
-						</div>
-					</AsyncState>
-				</Section>
-			</div>
+			{!embedded && (
+				<div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+					<Section title="Acquisitions by year" meta="value · count" center>
+						<AsyncState loading={stats.isLoading} error={stats.error} empty={yearChart.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
+							<ComboBarLine data={yearChart} height={240} valueFormatter={fmtMoney} barLabel="Value" lineLabel="deals" />
+						</AsyncState>
+					</Section>
+					<Section title="By type" meta="deals" center>
+						<AsyncState loading={stats.isLoading} error={stats.error} empty={typeSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
+							<div style={{ display: 'grid', placeItems: 'center', gap: 12 }}>
+								<PieDonut segments={typeSegments} size={170} mode="donut" />
+								<PieLegend segments={typeSegments} />
+							</div>
+						</AsyncState>
+					</Section>
+				</div>
+			)}
 
 			<FilterBar>
 				<input className="search-input" style={{ flex: '0 0 280px', height: 32 }} placeholder="Search acquiree / acquirer…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />

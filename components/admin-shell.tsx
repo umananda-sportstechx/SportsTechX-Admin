@@ -40,15 +40,7 @@ interface NavGroup { label: string; items: NavItem[] }
 // pages, and the new-build features slot into the closest group.
 const DATA_NAV: NavItem[] = [
 	{ label: 'Dashboard', href: '/dashboard', Icon: LayoutDashboard },
-	{
-		label: 'Companies & Deals', Icon: Briefcase, children: [
-			{ href: '/companies', label: 'Companies' },
-			{ href: '/deals', label: 'Deals' },
-			{ href: '/acquisitions', label: 'Acquisitions' },
-			{ href: '/companies/claims', label: 'Claims' },
-			{ href: '/companies/data-changes', label: 'Data changes' },
-		],
-	},
+	{ label: 'Companies & Deals', href: '/companies', Icon: Briefcase },
 	{
 		label: 'Ecosystem', Icon: Layers, children: [
 			{ href: '/ecosystem', label: 'Programs & events' },

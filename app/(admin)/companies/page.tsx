@@ -3,12 +3,12 @@
 import { useState, type CSSProperties } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { Plus, Save, Trash2, Building2, BadgeCheck, Rocket, Coins, Layers } from 'lucide-react';
+import { Plus, Save, Trash2, Building2, BadgeCheck, Rocket, Coins, Layers, CircleDollarSign, GitMerge } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading, StatCard, RichStatCard, StatsPanel, Section, Pager, SortableTh } from '@/components/atoms';
+import { PageHeader, AsyncState, Loading, StatCard, RichStatCard, StatsPanel, PillTabs, Section, Pager, SortableTh } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip, BoolFilter, FilterRange, RefSlugFilter, SectorTierFilter } from '@/components/filters';
 import { CsvImportButton, CsvTemplateButton, CsvCheckButton } from '@/components/csv-import';
@@ -20,8 +20,10 @@ import {
 	RoundTypeSelect, CurrencySelect, InvestorPicker, CompanySelectOne,
 	EMPTY_SOCIAL, EMPTY_LOCATION, type SocialValue, type LocationValue, type DealInvestor,
 } from '@/components/entity-pickers';
-import { DealModal, type StagedDeal } from '../deals/page';
-import { AcquisitionModal, type StagedAcq } from '../acquisitions/page';
+import { DealModal, DealsView, type StagedDeal } from '../deals/page';
+import { AcquisitionModal, AcquisitionsView, type StagedAcq } from '../acquisitions/page';
+import { ClaimsView } from '../claims/page';
+import { DataRequestsView } from '../data-requests/page';
 
 interface Company {
 	id: string;
@@ -103,32 +105,36 @@ export function CompaniesView({ embedded = false }: { embedded?: boolean }) {
 		<div>
 			{!embedded && <PageHeader kicker={`Database · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} companies`} title="Companies" />}
 
-			<StatsPanel>
-				<StatStrip cols={5}>
-					<RichStatCard label="Total Companies" Icon={Building2} loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()}
-						totalRows={stats.data?.total_rows} thisYear={stats.data?.this_year} lastYear={stats.data?.last_year} yoy={stats.data?.yoy_change} />
-					<RichStatCard label="Verified" Icon={BadgeCheck} loading={stats.isLoading} value={(stats.data?.verified ?? 0).toLocaleString()} />
-					<RichStatCard label="Unicorns" Icon={Rocket} loading={stats.isLoading} value={(stats.data?.unicorn ?? 0).toLocaleString()} />
-					<RichStatCard label="Actively raising" Icon={Coins} loading={stats.isLoading} value={(stats.data?.raising ?? 0).toLocaleString()} />
-					<RichStatCard label="Sectors covered" Icon={Layers} loading={stats.isLoading} value={(stats.data?.by_sector?.length ?? 0).toLocaleString()} />
-				</StatStrip>
-			</StatsPanel>
+			{!embedded && (
+				<StatsPanel>
+					<StatStrip cols={5}>
+						<RichStatCard label="Total Companies" Icon={Building2} loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()}
+							totalRows={stats.data?.total_rows} thisYear={stats.data?.this_year} lastYear={stats.data?.last_year} yoy={stats.data?.yoy_change} />
+						<RichStatCard label="Verified" Icon={BadgeCheck} loading={stats.isLoading} value={(stats.data?.verified ?? 0).toLocaleString()} />
+						<RichStatCard label="Unicorns" Icon={Rocket} loading={stats.isLoading} value={(stats.data?.unicorn ?? 0).toLocaleString()} />
+						<RichStatCard label="Actively raising" Icon={Coins} loading={stats.isLoading} value={(stats.data?.raising ?? 0).toLocaleString()} />
+						<RichStatCard label="Sectors covered" Icon={Layers} loading={stats.isLoading} value={(stats.data?.by_sector?.length ?? 0).toLocaleString()} />
+					</StatStrip>
+				</StatsPanel>
+			)}
 
-			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-				<Section title="By status" meta="companies" center>
-					<AsyncState loading={stats.isLoading} error={stats.error} empty={statusSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
-						<div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
-							<PieDonut segments={statusSegments} size={170} mode="donut" />
-							<div style={{ flex: 1, minWidth: 160 }}><PieLegend segments={statusSegments} /></div>
-						</div>
-					</AsyncState>
-				</Section>
-				<Section title="Top sectors" meta="companies" center>
-					<AsyncState loading={stats.isLoading} error={stats.error} empty={sectorSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
-						<PieDonut segments={sectorSegments} mode="bar" />
-					</AsyncState>
-				</Section>
-			</div>
+			{!embedded && (
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+					<Section title="By status" meta="companies" center>
+						<AsyncState loading={stats.isLoading} error={stats.error} empty={statusSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
+							<div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+								<PieDonut segments={statusSegments} size={170} mode="donut" />
+								<div style={{ flex: 1, minWidth: 160 }}><PieLegend segments={statusSegments} /></div>
+							</div>
+						</AsyncState>
+					</Section>
+					<Section title="Top sectors" meta="companies" center>
+						<AsyncState loading={stats.isLoading} error={stats.error} empty={sectorSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
+							<PieDonut segments={sectorSegments} mode="bar" />
+						</AsyncState>
+					</Section>
+				</div>
+			)}
 
 			<FilterBar>
 				<input
@@ -879,4 +885,69 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 	);
 }
 
-export default function CompaniesAdminPage() { return <CompaniesView />; }
+// ── Combined "Companies & Deals" page ────────────────────────────────────────
+// Like the old admin: one destination for companies, funding deals and M&A, with
+// a combined Statistics panel and in-page tabs for the differentiable entities.
+interface EntityYoyStats { total: number; this_year?: number; last_year?: number; yoy_change?: number | null }
+type CdTab = 'companies' | 'deals' | 'acquisitions' | 'claims';
+type CdClaimTab = 'claims' | 'changes';
+
+function CompanyDealClaims() {
+	const [tab, setTab] = useState<CdClaimTab>('claims');
+	return (
+		<div>
+			<div style={{ marginBottom: 'var(--space-4)' }}>
+				<PillTabs
+					tabs={[{ key: 'claims', label: 'Ownership claims' }, { key: 'changes', label: 'Data changes' }] as ReadonlyArray<{ key: CdClaimTab; label: string }>}
+					value={tab}
+					onChange={setTab}
+				/>
+			</div>
+			{tab === 'claims' && <ClaimsView embedded lockType="company" />}
+			{tab === 'changes' && <DataRequestsView embedded lockEntity="company,deal" />}
+		</div>
+	);
+}
+
+export default function CompaniesAdminPage() {
+	const [tab, setTab] = useState<CdTab>('companies');
+	const cStats = useSWR<CompanyStats>(['/api/admin/stats/companies'], { dedupingInterval: 60_000 });
+	const dStats = useSWR<EntityYoyStats>(['/api/admin/stats/deals'], { dedupingInterval: 60_000 });
+	const aStats = useSWR<EntityYoyStats>(['/api/admin/stats/acquisitions'], { dedupingInterval: 60_000 });
+	const c = cStats.data, d = dStats.data, a = aStats.data;
+	return (
+		<div>
+			<PageHeader kicker="Data" title="Companies & Deals" subtitle="Manage companies, funding deals and M&A transactions." />
+
+			<StatsPanel>
+				<StatStrip cols={4}>
+					<RichStatCard label="Total Companies" Icon={Building2} loading={cStats.isLoading} value={(c?.total ?? 0).toLocaleString()}
+						totalRows={c?.total_rows} thisYear={c?.this_year} lastYear={c?.last_year} yoy={c?.yoy_change} />
+					<RichStatCard label="Total Funding Deals" Icon={CircleDollarSign} loading={dStats.isLoading} value={(d?.total ?? 0).toLocaleString()}
+						thisYear={d?.this_year} lastYear={d?.last_year} yoy={d?.yoy_change} />
+					<RichStatCard label="Total M&A Transactions" Icon={GitMerge} loading={aStats.isLoading} value={(a?.total ?? 0).toLocaleString()}
+						thisYear={a?.this_year} lastYear={a?.last_year} yoy={a?.yoy_change} />
+					<RichStatCard label="Verified Companies" Icon={BadgeCheck} loading={cStats.isLoading} value={(c?.verified ?? 0).toLocaleString()} />
+				</StatStrip>
+			</StatsPanel>
+
+			<div style={{ marginBottom: 'var(--space-4)' }}>
+				<PillTabs
+					tabs={[
+						{ key: 'companies', label: 'Companies' },
+						{ key: 'deals', label: 'Deals' },
+						{ key: 'acquisitions', label: 'M&A' },
+						{ key: 'claims', label: 'Claims' },
+					] as ReadonlyArray<{ key: CdTab; label: string }>}
+					value={tab}
+					onChange={setTab}
+				/>
+			</div>
+
+			{tab === 'companies' && <CompaniesView embedded />}
+			{tab === 'deals' && <DealsView embedded />}
+			{tab === 'acquisitions' && <AcquisitionsView embedded />}
+			{tab === 'claims' && <CompanyDealClaims />}
+		</div>
+	);
+}

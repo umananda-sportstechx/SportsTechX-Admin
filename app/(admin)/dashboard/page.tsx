@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import useSWR from 'swr';
-import { PageHeader, Section, AsyncState, StatCard, Tag } from '@/components/atoms';
+import { PageHeader, Section, AsyncState, StatCard, StatsPanel, Tag } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, toSegments } from '@/components/charts';
 
 const fmtMoney = (n: number): string =>
@@ -92,11 +92,13 @@ export default function AdminDashboard() {
 			</div>
 
 			{/* Warehouse snapshot */}
-			<div className="grid-4" style={{ marginBottom: 'var(--space-5)', gridTemplateColumns: 'repeat(5, 1fr)' }}>
-				{stats.map((s) => (
-					<StatCard key={s.label} label={s.label} href={s.href} loading={s.q.isLoading} value={(s.q.data?.total ?? 0).toLocaleString()} />
-				))}
-			</div>
+			<StatsPanel title="Warehouse snapshot">
+				<div className="grid-4" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
+					{stats.map((s) => (
+						<StatCard key={s.label} label={s.label} href={s.href} loading={s.q.isLoading} value={(s.q.data?.total ?? 0).toLocaleString()} />
+					))}
+				</div>
+			</StatsPanel>
 
 			{/* Funding trend + ecosystem mix */}
 			<div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>

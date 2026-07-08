@@ -11,7 +11,7 @@ import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, RichStatCard, StatsPanel, Section, Pager, SortableTh } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip, FilterRange, RefSlugFilter, SectorTierFilter } from '@/components/filters';
-import { CsvImportButton } from '@/components/csv-import';
+import { CsvImportButton, CsvTemplateButton, CsvCheckButton } from '@/components/csv-import';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import { CompanySelectOne, SectorCascade, SportsPicker, CurrencySelect, LocationFields, EMPTY_LOCATION, type LocationValue } from '@/components/entity-pickers';
 
@@ -127,6 +127,8 @@ export function AcquisitionsView({ embedded = false }: { embedded?: boolean }) {
 				<FilterRange label="Value $" min={amountMin} max={amountMax} onMin={(v) => { setAmountMin(v); reset1(); }} onMax={(v) => { setAmountMax(v); reset1(); }} />
 				<div style={{ flex: 1 }} />
 				<CsvImportButton entity="acquisitions" onDone={() => void refresh()} />
+				<CsvTemplateButton entity="acquisitions" />
+				<CsvCheckButton entity="acquisitions" />
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add acquisition</button>
 			</FilterBar>
 

@@ -11,7 +11,7 @@ import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, RichStatCard, StatsPanel, Section, Pager, SortableTh } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip, FilterRange, RefSlugFilter, SectorTierFilter } from '@/components/filters';
-import { CsvImportButton } from '@/components/csv-import';
+import { CsvImportButton, CsvTemplateButton, CsvCheckButton } from '@/components/csv-import';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import {
 	CompanySelectOne, SectorCascade, SportsPicker, RoundTypeSelect, CurrencySelect, InvestorPicker, LocationFields,
@@ -138,6 +138,8 @@ export function DealsView({ embedded = false }: { embedded?: boolean }) {
 				<FilterSelect ariaLabel="Disclosed" value={disclosed} onChange={(v) => { setDisclosed(v); reset1(); }} options={[{ value: 'true', label: 'Disclosed only' }]} allLabel="Any amount" />
 				<div style={{ flex: 1 }} />
 				<CsvImportButton entity="deals" onDone={() => void refresh()} />
+				<CsvTemplateButton entity="deals" />
+				<CsvCheckButton entity="deals" />
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add deal</button>
 			</FilterBar>
 

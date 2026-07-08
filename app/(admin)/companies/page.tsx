@@ -3,12 +3,12 @@
 import { useState, type CSSProperties } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { Plus, Save, Trash2 } from 'lucide-react';
+import { Plus, Save, Trash2, Building2, BadgeCheck, Rocket, Coins, Layers } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh } from '@/components/atoms';
+import { PageHeader, AsyncState, Loading, StatCard, RichStatCard, StatsPanel, Section, Pager, SortableTh } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip, BoolFilter, FilterRange, RefSlugFilter, SectorTierFilter } from '@/components/filters';
 import { CsvImportButton } from '@/components/csv-import';
@@ -37,7 +37,7 @@ interface Company {
 	status?: string | null;
 }
 interface CompaniesResponse { data: Company[]; total: number; totalPages: number }
-interface CompanyStats { total: number; verified: number; unicorn: number; raising: number; by_status: Bucket[]; by_sector: Bucket[]; by_business_model: Bucket[] }
+interface CompanyStats { total: number; verified: number; unicorn: number; raising: number; total_rows?: number; this_year?: number; last_year?: number; yoy_change?: number | null; by_status: Bucket[]; by_sector: Bucket[]; by_business_model: Bucket[] }
 
 const STATUSES = ['active', 'inactive', 'needs_review', 'dead', 'acquired', 'ipo', 'not_sportstech'] as const;
 // d2c/b2g/other dropped - unused across all records (verified) and not wanted.
@@ -103,13 +103,16 @@ export function CompaniesView({ embedded = false }: { embedded?: boolean }) {
 		<div>
 			{!embedded && <PageHeader kicker={`Database · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} companies`} title="Companies" />}
 
-			<StatStrip cols={5}>
-				<StatCard label="Total" loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()} />
-				<StatCard label="Verified" loading={stats.isLoading} value={(stats.data?.verified ?? 0).toLocaleString()} />
-				<StatCard label="Unicorns" loading={stats.isLoading} value={(stats.data?.unicorn ?? 0).toLocaleString()} />
-				<StatCard label="Actively raising" loading={stats.isLoading} value={(stats.data?.raising ?? 0).toLocaleString()} urgent={(stats.data?.raising ?? 0) > 0} />
-				<StatCard label="Sectors covered" loading={stats.isLoading} value={(stats.data?.by_sector?.length ?? 0).toLocaleString()} />
-			</StatStrip>
+			<StatsPanel>
+				<StatStrip cols={5}>
+					<RichStatCard label="Total Companies" Icon={Building2} loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()}
+						totalRows={stats.data?.total_rows} thisYear={stats.data?.this_year} lastYear={stats.data?.last_year} yoy={stats.data?.yoy_change} />
+					<RichStatCard label="Verified" Icon={BadgeCheck} loading={stats.isLoading} value={(stats.data?.verified ?? 0).toLocaleString()} />
+					<RichStatCard label="Unicorns" Icon={Rocket} loading={stats.isLoading} value={(stats.data?.unicorn ?? 0).toLocaleString()} />
+					<RichStatCard label="Actively raising" Icon={Coins} loading={stats.isLoading} value={(stats.data?.raising ?? 0).toLocaleString()} />
+					<RichStatCard label="Sectors covered" Icon={Layers} loading={stats.isLoading} value={(stats.data?.by_sector?.length ?? 0).toLocaleString()} />
+				</StatStrip>
+			</StatsPanel>
 
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
 				<Section title="By status" meta="companies" center>

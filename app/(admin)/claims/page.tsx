@@ -3,7 +3,7 @@
 import { Fragment, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, ExternalLink, Mail, MailCheck } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader, AsyncState, StatCard, StatsPanel, Section } from '@/components/atoms';
 import { Funnel } from '@/components/charts';
@@ -33,6 +33,8 @@ interface Claim {
 	new_entry_request?: boolean;
 	target_website_snapshot?: string | null;
 	shareable_token?: string | null;
+	picked_up_by_email?: string | null;
+	is_actively_raising?: boolean | null;
 	created_at: string;
 }
 
@@ -45,24 +47,17 @@ const TYPE_FILTERS: Array<{ label: string; key: string }> = [
 
 interface ClaimsResponse { data: Claim[]; total: number; totalPages: number }
 
-const STATUS_TABS: Array<{ label: string; key: ClaimStatus }> = [
-	{ label: 'Pending', key: 'pending' },
-	{ label: 'Picked up', key: 'picked_up' },
-	{ label: 'Verified', key: 'verified' },
-	{ label: 'Rejected', key: 'rejected' },
-];
-
 export function ClaimsView({ embedded = false, lockType }: { embedded?: boolean; lockType?: 'company' | 'investor' | 'ecosystem_entity' }) {
 	const { mutate } = useSWRConfig();
-	const [status, setStatus] = useState<ClaimStatus>('pending');
 	const [claimType, setClaimType] = useState<string>(lockType ?? '');
 	const [page, setPage] = useState(1);
 	const [pendingId, setPendingId] = useState<string | null>(null);
 	const [sendEmail, setSendEmail] = useState(true);
 	const [expandedId, setExpandedId] = useState<string | null>(null);
+	const [showCompleted, setShowCompleted] = useState(false);
 
 	const { data, error, isLoading } = useSWR<ClaimsResponse>(
-		['/api/admin/claims', { status, claim_type: claimType || undefined, page, limit: 30 }],
+		['/api/admin/claims', { claim_type: claimType || undefined, page, limit: 50 }],
 		{ dedupingInterval: 30_000 },
 	);
 	const stats = useSWR<QueueStats>(['/api/admin/stats/queues'], { dedupingInterval: 60_000 });
@@ -102,9 +97,125 @@ export function ClaimsView({ embedded = false, lockType }: { embedded?: boolean;
 	const toggleActive = (id: string, active: boolean) => act(id, () => api('POST', `/api/admin/claims/${id}/toggle-active`, { active }), active ? 'Marked active' : 'Marked inactive');
 	const copyShare = (token: string) => { void navigator.clipboard.writeText(`${window.location.origin}/verified/${token}`); toast.success('Share link copied'); };
 
+	// Old-admin layout: split into Pending (unverified, not rejected) + Completed.
+	const pending = claims.filter((cl) => !cl.is_verified && cl.status !== 'rejected');
+	const completed = claims.filter((cl) => cl.is_verified || cl.status === 'rejected');
+	const typeLabel = (cl: Claim) => cl.claim_type === 'company' ? 'Companies' : cl.claim_type === 'investor' ? 'Investors' : cl.claim_type === 'ecosystem_entity' ? 'Ecosystem' : cl.claim_type;
+
+	const claimsHead = (
+		<thead>
+			<tr>
+				<th>Company</th>
+				<th>Contact</th>
+				<th>Type</th>
+				<th style={{ textAlign: 'center' }}>Verified</th>
+				<th style={{ textAlign: 'center' }}>Actively&nbsp;Raising</th>
+				<th>Picked Up By</th>
+				<th>Date</th>
+				<th style={{ textAlign: 'center' }}>Notify</th>
+			</tr>
+		</thead>
+	);
+
+	const renderRow = (cl: Claim) => (
+		<Fragment key={cl.id}>
+			<tr>
+				<td style={{ minWidth: 170 }}>
+					<div style={{ display: 'flex', alignItems: 'flex-start', gap: 4 }}>
+						<button className="btn ghost" style={{ padding: '2px 4px' }} onClick={() => setExpandedId(expandedId === cl.id ? null : cl.id)} aria-label="Toggle details">
+							{expandedId === cl.id ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+						</button>
+						<div style={{ minWidth: 0 }}>
+							<div style={{ fontWeight: 600, fontSize: 12 }}>{cl.entity_name ?? cl.entity_id ?? '—'}</div>
+							{cl.target_website_snapshot && (
+								<a href={cl.target_website_snapshot.startsWith('http') ? cl.target_website_snapshot : `https://${cl.target_website_snapshot}`} target="_blank" rel="noopener noreferrer"
+									style={{ fontSize: 11, color: 'var(--accent)', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+									{cl.target_website_snapshot}<ExternalLink size={10} />
+								</a>
+							)}
+						</div>
+					</div>
+				</td>
+				<td style={{ fontSize: 12 }}>
+					{cl.claimant_name && <div>{cl.claimant_name}</div>}
+					<div style={{ color: 'var(--fg-muted)' }}>{cl.claimant_email ?? cl.company_email ?? '—'}</div>
+					{cl.position_at_company && <div style={{ color: 'var(--fg-muted)' }}>{cl.position_at_company}</div>}
+				</td>
+				<td>
+					<div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+						<span className="tag">{typeLabel(cl)}</span>
+						{cl.new_entry_request && <span className="tag warn">New Entry</span>}
+					</div>
+				</td>
+				<td style={{ textAlign: 'center' }}>
+					<button className={`tg ${cl.is_verified ? 'on' : ''}`} disabled={pendingId === cl.id || (!!cl.new_entry_request && !cl.entity_id)}
+						title={cl.new_entry_request && !cl.entity_id ? 'Create the entity first before verifying' : (cl.is_verified ? 'Un-verify' : 'Verify')}
+						onClick={() => (cl.is_verified ? void unverify(cl.id) : void verify(cl.id))}>
+						<span className="tg-knob" />
+					</button>
+				</td>
+				<td style={{ textAlign: 'center' }}>
+					{cl.entity_id && (cl.claim_type === 'company' || cl.claim_type === 'investor') ? (
+						<button className={`tg ${cl.is_actively_raising ? 'on' : ''}`} disabled={pendingId === cl.id}
+							title={cl.claim_type === 'company' ? 'Actively raising' : 'Actively investing'}
+							onClick={() => void toggleActive(cl.id, !cl.is_actively_raising)}>
+							<span className="tg-knob" />
+						</button>
+					) : <span style={{ color: 'var(--fg-muted)' }}>—</span>}
+				</td>
+				<td style={{ fontSize: 12 }}>
+					{cl.picked_up_by_email ? <span style={{ color: 'var(--pos)' }}>{cl.picked_up_by_email}</span> : <span style={{ color: 'var(--fg-muted)' }}>—</span>}
+				</td>
+				<td className="num" style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{new Date(cl.created_at).toLocaleDateString()}</td>
+				<td style={{ textAlign: 'center' }}>
+					{cl.is_verified ? <MailCheck size={15} style={{ color: 'var(--pos)' }} /> : <Mail size={15} style={{ color: 'var(--fg-muted)' }} />}
+				</td>
+			</tr>
+			{expandedId === cl.id && (
+				<tr>
+					<td colSpan={8} style={{ background: 'var(--bg-2)' }}>
+						<div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, padding: '4px 4px 10px', fontSize: 12 }}>
+							<div><div className="co-stat-label">Claim type</div>{cl.claim_type}</div>
+							<div><div className="co-stat-label">Target</div>{cl.entity_name ?? cl.entity_id ?? '—'}</div>
+							<div><div className="co-stat-label">Position</div>{cl.position_at_company ?? '—'}</div>
+							<div><div className="co-stat-label">Claimant</div>{cl.claimant_name ?? '—'}</div>
+							<div><div className="co-stat-label">Claimant email</div>{cl.claimant_email ?? '—'}</div>
+							<div><div className="co-stat-label">Company email</div>{cl.company_email ?? '—'}</div>
+							<div><div className="co-stat-label">Submitted</div>{new Date(cl.created_at).toLocaleString()}</div>
+							<div><div className="co-stat-label">Picked up</div>{cl.picked_up_at ? new Date(cl.picked_up_at).toLocaleString() : '—'}</div>
+							<div><div className="co-stat-label">Verified</div>{cl.verified_at ? new Date(cl.verified_at).toLocaleString() : '—'}</div>
+							{cl.rejection_reason && <div style={{ gridColumn: '1 / -1' }}><div className="co-stat-label">Rejection reason</div>{cl.rejection_reason}</div>}
+						</div>
+						<div style={{ padding: '0 4px 10px', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+							{cl.status === 'pending' && <button className="btn ghost" disabled={pendingId === cl.id} onClick={() => void pickup(cl.id)}>Pick up</button>}
+							{(cl.status === 'pending' || cl.status === 'picked_up') && admins.length > 0 && (
+								<select className="search-input" style={{ height: 30, maxWidth: 160 }} value="" disabled={pendingId === cl.id}
+									onChange={(e) => { if (e.target.value) void assign(cl.id, e.target.value); }} aria-label="Assign claim to admin">
+									<option value="">Assign to…</option>
+									{admins.map((a) => <option key={a.id} value={a.id}>{a.full_name || a.display_name || a.email}</option>)}
+								</select>
+							)}
+							{cl.status !== 'rejected' && <button className="btn ghost" style={{ color: 'var(--accent)' }} disabled={pendingId === cl.id} onClick={() => reject(cl.id)}>Reject</button>}
+							{cl.status === 'rejected' && <button className="btn ghost" disabled={pendingId === cl.id} onClick={() => void reopen(cl.id)}>Re-open</button>}
+							{cl.status === 'verified' && (
+								<>
+									{cl.shareable_token && <button className="btn ghost" disabled={pendingId === cl.id} onClick={() => copyShare(cl.shareable_token!)} title="Copy verified share link">Copy link</button>}
+									<button className="btn ghost" disabled={pendingId === cl.id} onClick={() => void regenerate(cl.id)} title="Re-run the verified-company report">Regenerate report</button>
+								</>
+							)}
+							<span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Use the Verified toggle to verify / un-verify (emails the claimant if enabled).</span>
+						</div>
+						{cl.claim_type === 'company' && <DeckAnalysisPanel claimId={cl.id} />}
+						{cl.new_entry_request && !cl.entity_id && <CreateEntityPanel claim={cl} onDone={() => void refresh()} />}
+					</td>
+				</tr>
+			)}
+		</Fragment>
+	);
+
 	return (
 		<div>
-			{!embedded && <PageHeader kicker={`Queues · ${(data?.total ?? 0).toLocaleString()} in ${status}`} title="Claims" />}
+			{!embedded && <PageHeader kicker={`Queues · ${(data?.total ?? 0).toLocaleString()} claims`} title="Claims" />}
 
 			{!embedded && (
 				<StatsPanel>
@@ -131,11 +242,6 @@ export function ClaimsView({ embedded = false, lockType }: { embedded?: boolean;
 			<div style={{ height: 'var(--space-4)' }} />
 
 			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)', alignItems: 'center' }}>
-				{STATUS_TABS.map((t) => (
-					<button key={t.key} className={`chip ${status === t.key ? 'on' : ''}`} onClick={() => { setStatus(t.key); setPage(1); }}>
-						{t.label}
-					</button>
-				))}
 				{!lockType && (
 					<>
 						<span style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 4px' }} />
@@ -150,120 +256,36 @@ export function ClaimsView({ embedded = false, lockType }: { embedded?: boolean;
 				</label>
 			</div>
 
-			<div className="card">
-				<AsyncState loading={isLoading} error={error} empty={claims.length === 0} emptyMsg={`No ${status} claims`} onRetry={() => void refresh()}>
-					<table className="data-table">
-						<thead>
-							<tr>
-								<th>Created</th>
-								<th>Type</th>
-								<th>Target</th>
-								<th>Claimant</th>
-								<th>Status</th>
-								<th style={{ textAlign: 'right' }}>Actions</th>
-							</tr>
-						</thead>
-						<tbody>
-							{claims.map((c) => (
-								<Fragment key={c.id}>
-								<tr>
-									<td className="num">
-										<button className="btn ghost" style={{ padding: '2px 4px', marginRight: 4 }} onClick={() => setExpandedId(expandedId === c.id ? null : c.id)} aria-label="Toggle details">
-											{expandedId === c.id ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-										</button>
-										{new Date(c.created_at).toLocaleDateString()}
-									</td>
-									<td>{c.entity_type ?? c.claim_type}</td>
-									<td>
-										<div style={{ fontWeight: 600 }}>{c.entity_name ?? c.entity_id ?? '—'}</div>
-										{c.position_at_company && <div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{c.position_at_company}</div>}
-									</td>
-									<td style={{ fontSize: 12 }}>
-										<div>{c.claimant_email ?? c.company_email ?? '—'}</div>
-										{c.claimant_name && <div style={{ color: 'var(--fg-muted)' }}>{c.claimant_name}</div>}
-									</td>
-									<td>
-										{c.status === 'rejected'
-											? <span className="tag neg" title={c.rejection_reason ?? undefined}>Rejected</span>
-											: c.status === 'verified'
-												? <span className="tag pos">Verified</span>
-												: c.status === 'picked_up'
-													? <span className="tag">Picked up</span>
-													: <span className="tag">Pending</span>}
-									</td>
-									<td style={{ textAlign: 'right' }}>
-										<div style={{ display: 'inline-flex', gap: 6 }}>
-											{c.status === 'pending' && (
-												<button className="btn ghost" disabled={pendingId === c.id} onClick={() => void pickup(c.id)}>Pick up</button>
-											)}
-											{(c.status === 'pending' || c.status === 'picked_up') && admins.length > 0 && (
-												<select className="search-input" style={{ height: 30, maxWidth: 150 }} value="" disabled={pendingId === c.id}
-													onChange={(e) => { if (e.target.value) void assign(c.id, e.target.value); }} aria-label="Assign claim to admin">
-													<option value="">Assign to…</option>
-													{admins.map((a) => <option key={a.id} value={a.id}>{a.full_name || a.display_name || a.email}</option>)}
-												</select>
-											)}
-											{c.status !== 'verified' && c.status !== 'rejected' && (
-												<button className="btn" disabled={pendingId === c.id} onClick={() => void verify(c.id)}>Verify</button>
-											)}
-											{c.status !== 'rejected' && (
-												<button className="btn ghost" style={{ color: 'var(--accent)' }} disabled={pendingId === c.id} onClick={() => reject(c.id)}>Reject</button>
-											)}
-											{c.status === 'verified' && (
-												<>
-													{c.shareable_token && <button className="btn ghost" disabled={pendingId === c.id} onClick={() => copyShare(c.shareable_token!)} title="Copy verified share link">Copy link</button>}
-													<button className="btn ghost" disabled={pendingId === c.id} onClick={() => void regenerate(c.id)} title="Re-run the verified-company report">Regenerate report</button>
-													<button className="btn ghost" disabled={pendingId === c.id} onClick={() => void unverify(c.id)}>Un-verify</button>
-												</>
-											)}
-											{c.status === 'rejected' && (
-												<button className="btn ghost" disabled={pendingId === c.id} onClick={() => void reopen(c.id)}>Re-open</button>
-											)}
-										</div>
-									</td>
-								</tr>
-								{expandedId === c.id && (
-									<tr>
-										<td colSpan={6} style={{ background: 'var(--bg-2)' }}>
-											<div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, padding: '4px 4px 10px', fontSize: 12 }}>
-												<div><div className="co-stat-label">Claim type</div>{c.claim_type}</div>
-												<div><div className="co-stat-label">Target</div>{c.entity_name ?? c.entity_id ?? '—'}</div>
-												<div><div className="co-stat-label">Position</div>{c.position_at_company ?? '—'}</div>
-												<div><div className="co-stat-label">Claimant</div>{c.claimant_name ?? '—'}</div>
-												<div><div className="co-stat-label">Claimant email</div>{c.claimant_email ?? '—'}</div>
-												<div><div className="co-stat-label">Company email</div>{c.company_email ?? '—'}</div>
-												<div><div className="co-stat-label">Submitted</div>{new Date(c.created_at).toLocaleString()}</div>
-												<div><div className="co-stat-label">Picked up</div>{c.picked_up_at ? new Date(c.picked_up_at).toLocaleString() : '—'}</div>
-												<div><div className="co-stat-label">Verified</div>{c.verified_at ? new Date(c.verified_at).toLocaleString() : '—'}</div>
-												{c.rejection_reason && <div style={{ gridColumn: '1 / -1' }}><div className="co-stat-label">Rejection reason</div>{c.rejection_reason}</div>}
-											</div>
-											{c.claim_type === 'company' && <DeckAnalysisPanel claimId={c.id} />}
-											{c.new_entry_request && !c.entity_id ? (
-												<CreateEntityPanel claim={c} onDone={() => void refresh()} />
-											) : (
-												<div style={{ padding: '0 4px 10px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-													<span style={{ fontSize: 11, color: 'var(--fg-muted)', flex: 1 }}>
-														Verifying applies the claim to the live {c.entity_type ?? 'record'} (and emails the claimant if enabled). Field-level edits appear under Data requests.
-													</span>
-													{c.entity_id && (c.claim_type === 'company' || c.claim_type === 'investor') && (
-														<>
-															<button className="btn ghost" disabled={pendingId === c.id} onClick={() => void toggleActive(c.id, true)}>
-																Mark {c.claim_type === 'company' ? 'actively raising' : 'actively investing'}
-															</button>
-															<button className="btn ghost" disabled={pendingId === c.id} onClick={() => void toggleActive(c.id, false)}>Mark inactive</button>
-														</>
-													)}
-												</div>
-											)}
-										</td>
-									</tr>
-								)}
-								</Fragment>
-							))}
-						</tbody>
-					</table>
-				</AsyncState>
+
+			<div style={{ marginBottom: 'var(--space-4)' }}>
+				<div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+					Pending <span className="tag">{pending.length}</span>
+				</div>
+				<div className="card" style={{ padding: 0, maxHeight: 420, overflow: 'auto' }}>
+					<AsyncState loading={isLoading} error={error} empty={pending.length === 0} emptyMsg="No pending claims" onRetry={() => void refresh()}>
+						<table className="data-table">
+							{claimsHead}
+							<tbody>{pending.map(renderRow)}</tbody>
+						</table>
+					</AsyncState>
+				</div>
 			</div>
+
+			{completed.length > 0 && (
+				<div style={{ marginBottom: 'var(--space-4)' }}>
+					<button className="btn ghost" style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, padding: '2px 4px', display: 'inline-flex', alignItems: 'center', gap: 8 }} onClick={() => setShowCompleted((v) => !v)}>
+						{showCompleted ? <ChevronDown size={14} /> : <ChevronRight size={14} />} Completed <span className="tag">{completed.length}</span>
+					</button>
+					{showCompleted && (
+						<div className="card" style={{ padding: 0, maxHeight: 360, overflow: 'auto' }}>
+							<table className="data-table">
+								{claimsHead}
+								<tbody>{completed.map(renderRow)}</tbody>
+							</table>
+						</div>
+					)}
+				</div>
+			)}
 
 			{data && data.totalPages > 1 && (
 				<div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>

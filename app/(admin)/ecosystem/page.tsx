@@ -10,7 +10,7 @@ import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, RichStatCard, StatsPanel, Section, Pager } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip, FilterRange, RefSlugFilter } from '@/components/filters';
-import { CsvImportButton } from '@/components/csv-import';
+import { CsvImportButton, CsvTemplateButton, CsvCheckButton } from '@/components/csv-import';
 import { YearSelect } from '@/components/year-select';
 import { ImageInput } from '@/components/image-input';
 import { useConfirm } from '@/components/confirm';
@@ -145,6 +145,8 @@ export function EcosystemView({ embedded = false }: { embedded?: boolean }) {
 				)}
 				<div style={{ flex: 1 }} />
 				<CsvImportButton entity="ecosystem" onDone={() => void refresh()} />
+				<CsvTemplateButton entity="ecosystem" />
+				<CsvCheckButton entity="ecosystem" />
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add {type}</button>
 			</FilterBar>
 

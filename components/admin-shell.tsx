@@ -34,11 +34,11 @@ interface NavLeaf { href: string; label: string }
 interface NavItem { href?: string; label: string; Icon: IconType; children?: NavLeaf[] }
 interface NavGroup { label: string; items: NavItem[] }
 
-// ── STX-mirrored structure ───────────────────────────────────────────────────
-// Top-level entries follow STX's 12 admin tabs, in order. Tabs that had sub-tabs
-// in STX (Companies & Deals, Ecosystem, Sales, Weekly Touchpoints, User Analytics)
-// expand into child pages so the tab→sub-tab hierarchy lives in the sidebar.
-const ADMIN_NAV: NavItem[] = [
+// ── Sidebar grouped like the old admin: Data / Sales / Performance ───────────
+// The old admin bucketed its 12 tabs into three top groups. We keep the sidebar
+// + routed pages but mirror that grouping; nested tabs stay as expandable child
+// pages, and the new-build features slot into the closest group.
+const DATA_NAV: NavItem[] = [
 	{ label: 'Dashboard', href: '/dashboard', Icon: LayoutDashboard },
 	{
 		label: 'Companies & Deals', Icon: Briefcase, children: [
@@ -60,6 +60,15 @@ const ADMIN_NAV: NavItem[] = [
 	},
 	{ label: 'Startups to add', href: '/startups-pipeline', Icon: FilePlus },
 	{ label: 'Investors to add', href: '/investor-review', Icon: Banknote },
+	{ label: 'Reports', href: '/reports', Icon: FileText },
+	{ label: 'Featured lists', href: '/featured-lists', Icon: Sparkles },
+	{ label: 'Reference data', href: '/reference', Icon: BookOpen },
+	{ label: 'Insights', href: '/insights', Icon: Lightbulb },
+	{ label: 'Polls', href: '/polls', Icon: Sparkles },
+	{ label: 'Intro requests', href: '/intro-requests', Icon: Handshake },
+];
+
+const SALES_NAV: NavItem[] = [
 	{
 		label: 'Sales', Icon: ShoppingCart, children: [
 			{ href: '/sales', label: 'Analytics' },
@@ -72,8 +81,12 @@ const ADMIN_NAV: NavItem[] = [
 			{ href: '/touchpoints/team', label: 'Team view' },
 		],
 	},
-	{ label: 'Reports', href: '/reports', Icon: FileText },
-	{ label: 'Featured lists', href: '/featured-lists', Icon: Sparkles },
+	{ label: 'Billing', href: '/billing', Icon: CreditCard },
+	{ label: 'Plans', href: '/subscription-plans', Icon: Tag },
+	{ label: 'Credit packs', href: '/credit-packs', Icon: Package },
+];
+
+const PERFORMANCE_NAV: NavItem[] = [
 	{
 		label: 'User analytics', Icon: BarChart3, children: [
 			{ href: '/users', label: 'Directory' },
@@ -83,28 +96,18 @@ const ADMIN_NAV: NavItem[] = [
 		],
 	},
 	{ label: 'Performance', href: '/performance', Icon: Gauge },
-	{ label: 'Billing', href: '/billing', Icon: CreditCard },
-];
-
-// New-build features with no STX equivalent — kept, grouped separately.
-const PLATFORM_NAV: NavItem[] = [
 	{ label: 'Activity analytics', href: '/analytics', Icon: Activity },
-	{ label: 'Reference data', href: '/reference', Icon: BookOpen },
-	{ label: 'Intro requests', href: '/intro-requests', Icon: Handshake },
-	{ label: 'Insights', href: '/insights', Icon: Lightbulb },
-	{ label: 'Polls', href: '/polls', Icon: Sparkles },
-	{ label: 'Plans', href: '/subscription-plans', Icon: Tag },
-	{ label: 'Credit packs', href: '/credit-packs', Icon: Package },
-	{ label: 'Feature flags', href: '/features', Icon: ToggleLeft },
-	{ label: 'Jobs & integrations', href: '/jobs', Icon: Activity },
 	{ label: 'AI usage & cost', href: '/ai-usage', Icon: Receipt },
 	{ label: 'Credit usage', href: '/credit-usage', Icon: Coins },
+	{ label: 'Feature flags', href: '/features', Icon: ToggleLeft },
+	{ label: 'Jobs & integrations', href: '/jobs', Icon: Activity },
 	{ label: 'Export columns', href: '/exports', Icon: Download },
 ];
 
 const NAV_GROUPS: NavGroup[] = [
-	{ label: 'Admin', items: ADMIN_NAV },
-	{ label: 'Platform tools', items: PLATFORM_NAV },
+	{ label: 'Data', items: DATA_NAV },
+	{ label: 'Sales', items: SALES_NAV },
+	{ label: 'Performance', items: PERFORMANCE_NAV },
 ];
 
 // Flat list of every reachable page (parents + children) for the topbar title.

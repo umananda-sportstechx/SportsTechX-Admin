@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Upload, AlertTriangle, FileDown } from 'lucide-react';
+import { Upload, AlertTriangle, FileDown, FileCheck2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Modal } from '@/components/modal';
 
@@ -250,6 +250,101 @@ export function CsvImportButton({ entity, onDone }: { entity: Entity; onDone: ()
 										{result.errors.map((er) => <div key={er.index}>row {er.index + 1} ({er.name}): {er.message}</div>)}
 									</div>
 								)}
+							</div>
+						)}
+					</div>
+				</Modal>
+			)}
+		</>
+	);
+}
+
+// ── Standalone action-row buttons (old-admin parity) ─────────────────────────
+/** One-click download of the entity's CSV template with sample rows. */
+export function CsvTemplateButton({ entity }: { entity: Entity }) {
+	return (
+		<button className="btn ghost" onClick={() => downloadCsv(`${entity}_template.csv`, COLUMNS[entity].keys, SAMPLES[entity])} title="Download a CSV template with sample rows">
+			<FileDown size={12} /> Download Template
+		</button>
+	);
+}
+
+function CheckLine({ ok, warn, label }: { ok?: boolean; warn?: boolean; label: string }) {
+	const color = warn ? 'var(--warn)' : ok ? 'var(--pos)' : 'var(--neg)';
+	return (
+		<div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+			<span style={{ fontWeight: 700, color }}>{warn ? '!' : ok ? '✓' : '✕'}</span>
+			<span>{label}</span>
+		</div>
+	);
+}
+
+/** Validate a CSV (headers, required field, duplicates) without importing. */
+export function CsvCheckButton({ entity }: { entity: Entity }) {
+	const [open, setOpen] = useState(false);
+	const [fileName, setFileName] = useState('');
+	const [rows, setRows] = useState<Record<string, string>[]>([]);
+	const [dupInfo, setDupInfo] = useState<Map<number, string>>(new Map());
+	const [checked, setChecked] = useState(false);
+	const [checking, setChecking] = useState(false);
+
+	const cols = COLUMNS[entity].keys;
+	const requiredKey = entity === 'deals' ? 'company' : entity === 'acquisitions' ? 'acquiree' : 'name';
+	const reset = () => { setFileName(''); setRows([]); setDupInfo(new Map()); setChecked(false); };
+
+	const onFile = async (file: File) => {
+		setChecked(false); setDupInfo(new Map());
+		try {
+			const parsed = parseCsv(await file.text());
+			setFileName(file.name); setRows(parsed);
+			if (parsed.length === 0) toast.error('No data rows found in that CSV.');
+		} catch (e) { toast.error((e as Error).message); }
+	};
+
+	const runCheck = async () => {
+		setChecking(true);
+		const info = new Map<number, string>();
+		const seen = new Map<string, number>();
+		rows.forEach((r, i) => {
+			const k = rowKey(entity, r);
+			if (!k) return;
+			if (seen.has(k)) info.set(i, 'Repeated in file'); else seen.set(k, i);
+		});
+		try {
+			const res = await api<{ existing: number[] }>('POST', `/api/admin/import/${entity}/check-duplicates`, { rows });
+			for (const idx of res.existing) info.set(idx, 'Already in catalog');
+		} catch (e) { toast.error((e as Error).message); }
+		setDupInfo(info); setChecked(true); setChecking(false);
+	};
+
+	const presentKeys = rows.length ? Object.keys(rows[0]!) : [];
+	const missingCols = cols.filter((k) => !presentKeys.includes(k));
+	const unknownCols = presentKeys.filter((k) => !cols.includes(k));
+	const missingRequired = rows.filter((r) => !(r[requiredKey] ?? '').trim()).length;
+
+	return (
+		<>
+			<button className="btn ghost" onClick={() => { reset(); setOpen(true); }}><FileCheck2 size={12} /> CSV Check</button>
+			{open && (
+				<Modal title={`Check ${entity} CSV`} width={560} onClose={() => setOpen(false)} footer={
+					<>
+						<button className="btn ghost" onClick={() => setOpen(false)}>Close</button>
+						<button className="btn" disabled={rows.length === 0 || checking} onClick={() => void runCheck()}>{checking ? 'Checking…' : 'Run check'}</button>
+					</>
+				}>
+					<div style={{ display: 'grid', gap: 12 }}>
+						<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
+							Validates headers, the required field and duplicates — without importing.<br />
+							Expected columns: <span style={{ fontFamily: 'var(--font-mono)' }}>{cols.join(', ')}</span>
+						</div>
+						<input type="file" accept=".csv,text/csv" className="search-input" onChange={(e) => { const f = e.target.files?.[0]; if (f) void onFile(f); }} />
+						{rows.length > 0 && <div style={{ fontSize: 13 }}><strong>{rows.length}</strong> rows parsed from {fileName}</div>}
+						{checked && (
+							<div style={{ display: 'grid', gap: 8, fontSize: 13, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+								<CheckLine ok={missingCols.length === 0} label={missingCols.length === 0 ? 'All expected columns present' : `Missing columns: ${missingCols.join(', ')}`} />
+								{unknownCols.length > 0 && <CheckLine warn label={`Unrecognized columns (ignored): ${unknownCols.join(', ')}`} />}
+								<CheckLine ok={missingRequired === 0} label={missingRequired === 0 ? `Required field "${requiredKey}" present on all rows` : `${missingRequired} row(s) missing required "${requiredKey}"`} />
+								<CheckLine ok={dupInfo.size === 0} label={dupInfo.size === 0 ? 'No duplicates found' : `${dupInfo.size} duplicate row(s) — in-file or already in catalog`} />
 							</div>
 						)}
 					</div>

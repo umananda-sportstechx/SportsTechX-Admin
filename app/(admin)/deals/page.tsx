@@ -100,30 +100,34 @@ export function DealsView({ embedded = false }: { embedded?: boolean }) {
 		<div>
 			{!embedded && <PageHeader kicker={`Funding · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} deals`} title="Deals" />}
 
-			<StatsPanel>
-				<StatStrip cols={3}>
-					<RichStatCard label="Total Funding Deals" Icon={CircleDollarSign} loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()}
-						totalRows={stats.data?.total_rows} thisYear={stats.data?.this_year} lastYear={stats.data?.last_year} yoy={stats.data?.yoy_change} />
-					<RichStatCard label="Total funding (disclosed)" Icon={Banknote} loading={stats.isLoading} value={fmtMoney(stats.data?.total_amount ?? 0)} />
-					<RichStatCard label="Latest year deals" Icon={TrendingUp} loading={stats.isLoading} value={(yearChart[yearChart.length - 1]?.deals ?? 0).toLocaleString()} />
-				</StatStrip>
-			</StatsPanel>
+			{!embedded && (
+				<StatsPanel>
+					<StatStrip cols={3}>
+						<RichStatCard label="Total Funding Deals" Icon={CircleDollarSign} loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()}
+							totalRows={stats.data?.total_rows} thisYear={stats.data?.this_year} lastYear={stats.data?.last_year} yoy={stats.data?.yoy_change} />
+						<RichStatCard label="Total funding (disclosed)" Icon={Banknote} loading={stats.isLoading} value={fmtMoney(stats.data?.total_amount ?? 0)} />
+						<RichStatCard label="Latest year deals" Icon={TrendingUp} loading={stats.isLoading} value={(yearChart[yearChart.length - 1]?.deals ?? 0).toLocaleString()} />
+					</StatStrip>
+				</StatsPanel>
+			)}
 
-			<div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-				<Section title="Funding by year" meta="amount · deals" center>
-					<AsyncState loading={stats.isLoading} error={stats.error} empty={yearChart.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
-						<ComboBarLine data={yearChart} height={240} valueFormatter={fmtMoney} barLabel="Funding" lineLabel="deals" />
-					</AsyncState>
-				</Section>
-				<Section title="By deal size" meta="deals" center>
-					<AsyncState loading={stats.isLoading} error={stats.error} empty={sizeSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
-						<div style={{ display: 'grid', placeItems: 'center', gap: 12 }}>
-							<PieDonut segments={sizeSegments} size={170} mode="donut" />
-							<PieLegend segments={sizeSegments} />
-						</div>
-					</AsyncState>
-				</Section>
-			</div>
+			{!embedded && (
+				<div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+					<Section title="Funding by year" meta="amount · deals" center>
+						<AsyncState loading={stats.isLoading} error={stats.error} empty={yearChart.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
+							<ComboBarLine data={yearChart} height={240} valueFormatter={fmtMoney} barLabel="Funding" lineLabel="deals" />
+						</AsyncState>
+					</Section>
+					<Section title="By deal size" meta="deals" center>
+						<AsyncState loading={stats.isLoading} error={stats.error} empty={sizeSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
+							<div style={{ display: 'grid', placeItems: 'center', gap: 12 }}>
+								<PieDonut segments={sizeSegments} size={170} mode="donut" />
+								<PieLegend segments={sizeSegments} />
+							</div>
+						</AsyncState>
+					</Section>
+				</div>
+			)}
 
 			<FilterBar>
 				<input className="search-input" style={{ flex: '0 0 260px', height: 32 }} placeholder="Search by company…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />

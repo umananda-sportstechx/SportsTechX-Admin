@@ -203,7 +203,7 @@ export function StatCard({
  * / YoY block with a colored up/down badge.
  */
 export function RichStatCard({
-	label, value, Icon, loading, totalRows, thisYear, lastYear, yoy,
+	label, value, Icon, loading, totalRows, thisYear, lastYear, yoy, period = 'year',
 }: {
 	label: string;
 	value: React.ReactNode;
@@ -213,8 +213,13 @@ export function RichStatCard({
 	thisYear?: number | null;
 	lastYear?: number | null;
 	yoy?: number | null;
+	/** 'year' → This Year / Last Year / YoY; 'month' → This Month / Last Month / MoM. */
+	period?: 'year' | 'month';
 }) {
 	const hasYear = thisYear != null || lastYear != null;
+	const thisLabel = period === 'month' ? 'This Month' : 'This Year';
+	const lastLabel = period === 'month' ? 'Last Month' : 'Last Year';
+	const deltaLabel = period === 'month' ? 'MoM Change' : 'YoY Change';
 	return (
 		<div className="card" style={{ padding: 'var(--space-4)' }}>
 			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
@@ -232,16 +237,16 @@ export function RichStatCard({
 			{hasYear && (
 				<div style={{ borderTop: '1px solid var(--border)', marginTop: 12, paddingTop: 12, display: 'grid', gap: 8 }}>
 					<div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-						<span style={{ color: 'var(--fg-muted)' }}>This Year</span>
+						<span style={{ color: 'var(--fg-muted)' }}>{thisLabel}</span>
 						<span style={{ fontWeight: 600 }}>{(thisYear ?? 0).toLocaleString()}</span>
 					</div>
 					<div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
-						<span style={{ color: 'var(--fg-muted)' }}>Last Year</span>
+						<span style={{ color: 'var(--fg-muted)' }}>{lastLabel}</span>
 						<span style={{ fontWeight: 600 }}>{(lastYear ?? 0).toLocaleString()}</span>
 					</div>
 					{yoy != null && (
 						<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-							<span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>YoY Change</span>
+							<span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{deltaLabel}</span>
 							<span className={`tag ${yoy >= 0 ? 'pos' : 'neg'}`}>{yoy >= 0 ? '▲' : '▼'} {yoy >= 0 ? '+' : ''}{yoy}%</span>
 						</div>
 					)}

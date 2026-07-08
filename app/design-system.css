@@ -1220,3 +1220,24 @@
   flex-shrink: 0;
   border: 1px solid var(--border);
 }
+
+/* === react-day-picker (DateRangePicker) — themed with admin tokens === */
+.drp-pop .rdp-root {
+  --rdp-accent-color: var(--accent);
+  --rdp-accent-background-color: color-mix(in srgb, var(--accent) 16%, transparent);
+  --rdp-day_button-border-radius: 6px;
+  --rdp-today-color: var(--accent);
+  color: var(--fg);
+  font-size: 13px;
+  margin: 0;
+}
+.drp-pop .rdp-day_button:hover { background: var(--bg-2); }
+.drp-pop .rdp-selected .rdp-day_button,
+.drp-pop .rdp-range_start .rdp-day_button,
+.drp-pop .rdp-range_end .rdp-day_button { background: var(--accent) !important; color: #fff !important; border: 0 !important; }
+.drp-pop .rdp-range_middle .rdp-day_button { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--fg); border-radius: 0; }
+.drp-pop .rdp-chevron { fill: var(--fg-muted); }
+.drp-pop .rdp-weekday { color: var(--fg-muted); font-weight: 500; }
+.drp-pop .rdp-caption_label { color: var(--fg); font-weight: 600; }
+.drp-pop .rdp-button_previous:hover, .drp-pop .rdp-button_next:hover { background: var(--bg-2); border-radius: 6px; }
+.drp-pop .rdp-today:not(.rdp-selected) .rdp-day_button { font-weight: 700; }

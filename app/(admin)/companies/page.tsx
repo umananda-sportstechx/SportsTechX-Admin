@@ -11,7 +11,7 @@ import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, RichStatCard, StatsPanel, Section, Pager, SortableTh } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip, BoolFilter, FilterRange, RefSlugFilter, SectorTierFilter } from '@/components/filters';
-import { CsvImportButton } from '@/components/csv-import';
+import { CsvImportButton, CsvTemplateButton, CsvCheckButton } from '@/components/csv-import';
 import { YearSelect } from '@/components/year-select';
 import { ImageInput } from '@/components/image-input';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
@@ -149,6 +149,8 @@ export function CompaniesView({ embedded = false }: { embedded?: boolean }) {
 				<FilterRange label="Funding $" min={fundingMin} max={fundingMax} onMin={(v) => { setFundingMin(v); reset1(); }} onMax={(v) => { setFundingMax(v); reset1(); }} />
 				<div style={{ flex: 1 }} />
 				<CsvImportButton entity="companies" onDone={() => void refresh()} />
+				<CsvTemplateButton entity="companies" />
+				<CsvCheckButton entity="companies" />
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add company</button>
 			</FilterBar>
 

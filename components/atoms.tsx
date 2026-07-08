@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
+import { ChevronUp, ChevronDown } from 'lucide-react';
 
 /**
  * Tiny shared atoms for admin pages. Mirrors the small subset of components
@@ -194,6 +195,93 @@ export function StatCard({
 	return href
 		? <Link href={href} className="card" style={style}>{inner}</Link>
 		: <div className="card" style={style}>{inner}</div>;
+}
+
+/**
+ * Rich stat card matching the old admin's anatomy: label + big value + optional
+ * icon, an optional "Total rows" sub-line, and an optional This Year / Last Year
+ * / YoY block with a colored up/down badge.
+ */
+export function RichStatCard({
+	label, value, Icon, loading, totalRows, thisYear, lastYear, yoy,
+}: {
+	label: string;
+	value: React.ReactNode;
+	Icon?: React.ComponentType<{ size?: number; style?: React.CSSProperties }>;
+	loading?: boolean;
+	totalRows?: number | null;
+	thisYear?: number | null;
+	lastYear?: number | null;
+	yoy?: number | null;
+}) {
+	const hasYear = thisYear != null || lastYear != null;
+	return (
+		<div className="card" style={{ padding: 'var(--space-4)' }}>
+			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+				<div style={{ minWidth: 0 }}>
+					<div className="co-stat-label">{label}</div>
+					{loading
+						? <div className="skeleton-bar" style={{ width: 72, height: 26, marginTop: 8 }} />
+						: <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em', marginTop: 4 }}>{value}</div>}
+				</div>
+				{Icon && <Icon size={28} style={{ opacity: 0.4, color: 'var(--accent)', flexShrink: 0 }} />}
+			</div>
+			{totalRows != null && (
+				<div style={{ fontSize: 11.5, color: 'var(--fg-muted)', marginTop: 8 }}>Total rows: {totalRows.toLocaleString()}</div>
+			)}
+			{hasYear && (
+				<div style={{ borderTop: '1px solid var(--border)', marginTop: 12, paddingTop: 12, display: 'grid', gap: 8 }}>
+					<div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+						<span style={{ color: 'var(--fg-muted)' }}>This Year</span>
+						<span style={{ fontWeight: 600 }}>{(thisYear ?? 0).toLocaleString()}</span>
+					</div>
+					<div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+						<span style={{ color: 'var(--fg-muted)' }}>Last Year</span>
+						<span style={{ fontWeight: 600 }}>{(lastYear ?? 0).toLocaleString()}</span>
+					</div>
+					{yoy != null && (
+						<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+							<span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>YoY Change</span>
+							<span className={`tag ${yoy >= 0 ? 'pos' : 'neg'}`}>{yoy >= 0 ? '▲' : '▼'} {yoy >= 0 ? '+' : ''}{yoy}%</span>
+						</div>
+					)}
+				</div>
+			)}
+		</div>
+	);
+}
+
+/**
+ * Collapsible "Statistics" panel — a card with a clickable header (title +
+ * optional action + chevron) that expands/collapses its body. Mirrors the old
+ * admin's Statistics section.
+ */
+export function StatsPanel({
+	title = 'Statistics', action, children, defaultOpen = true,
+}: {
+	title?: string;
+	action?: React.ReactNode;
+	children: React.ReactNode;
+	defaultOpen?: boolean;
+}) {
+	const [open, setOpen] = useState(defaultOpen);
+	return (
+		<div className="card" style={{ marginBottom: 'var(--space-5)' }}>
+			<div
+				style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px var(--space-4)', borderBottom: open ? '1px solid var(--border)' : 'none', cursor: 'pointer', gap: 12 }}
+				onClick={() => setOpen((o) => !o)}
+			>
+				<div style={{ fontWeight: 700, fontSize: 15 }}>{title}</div>
+				<div style={{ display: 'flex', alignItems: 'center', gap: 12 }} onClick={(e) => e.stopPropagation()}>
+					{action}
+					<button className="btn ghost" onClick={() => setOpen((o) => !o)} aria-label="Toggle statistics">
+						{open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+					</button>
+				</div>
+			</div>
+			{open && <div style={{ padding: 'var(--space-4)' }}>{children}</div>}
+		</div>
+	);
 }
 
 type TagVariant = '' | 'pos' | 'neg' | 'warn' | 'pill';

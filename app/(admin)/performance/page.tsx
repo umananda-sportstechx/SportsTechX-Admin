@@ -4,7 +4,7 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import { ExternalLink } from 'lucide-react';
 import { Modal } from '@/components/modal';
-import { PageHeader, StatCard, AsyncState, Section } from '@/components/atoms';
+import { PageHeader, StatCard, StatsPanel, AsyncState, Section } from '@/components/atoms';
 import { HBarDrilldown, ComboBarLine, type HBarRow } from '@/components/charts';
 
 const QUEUE_COLORS = ['#79CABD', '#6CA8FF', '#FFB36C', '#D99CFF', '#FF9CA8', '#9CE0C0', '#C0F4DE'];
@@ -71,13 +71,14 @@ export default function PerformancePage() {
 			</div>
 
 			{/* ── HTTP requests ── */}
-			<div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 10px' }}>HTTP requests</div>
-			<div className="grid-4" style={{ marginBottom: 'var(--space-4)' }}>
-				<StatCard label="Total requests" loading={http.isLoading} value={(h?.total ?? 0).toLocaleString()} />
-				<StatCard label="Error rate (5xx)" loading={http.isLoading} value={`${httpErrRate.toFixed(2)}%`} urgent={httpErrRate > 1} />
-				<StatCard label="Avg latency" loading={http.isLoading} value={ms(h?.avg_ms ?? 0)} />
-				<StatCard label="p95 latency" loading={http.isLoading} value={ms(h?.p95_ms ?? 0)} />
-			</div>
+			<StatsPanel title="HTTP requests">
+				<div className="grid-4">
+					<StatCard label="Total requests" loading={http.isLoading} value={(h?.total ?? 0).toLocaleString()} />
+					<StatCard label="Error rate (5xx)" loading={http.isLoading} value={`${httpErrRate.toFixed(2)}%`} urgent={httpErrRate > 1} />
+					<StatCard label="Avg latency" loading={http.isLoading} value={ms(h?.avg_ms ?? 0)} />
+					<StatCard label="p95 latency" loading={http.isLoading} value={ms(h?.p95_ms ?? 0)} />
+				</div>
+			</StatsPanel>
 
 			<Section title="Request volume & errors" meta={`bars = requests · line = 5xx · last ${range}`}>
 				<AsyncState loading={http.isLoading} error={http.error} empty={timelineChart.length === 0} emptyMsg="No requests recorded yet (instrumentation just deployed)." onRetry={() => void http.mutate()}>
@@ -113,13 +114,14 @@ export default function PerformancePage() {
 			{errRoute && <ErrorsModal range={range} route={errRoute === 'all' ? undefined : errRoute} onClose={() => setErrRoute(null)} />}
 
 			{/* ── Background jobs ── */}
-			<div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 10px' }}>Background jobs</div>
-			<div className="grid-4" style={{ marginBottom: 'var(--space-5)' }}>
-				<StatCard label="Total jobs" loading={isLoading} value={totalReq.toLocaleString()} />
-				<StatCard label="Success rate" loading={isLoading} value={`${successRate.toFixed(1)}%`} urgent={successRate < 95 && totalReq > 0} />
-				<StatCard label="Avg latency" loading={isLoading} value={ms(weightedAvg)} />
-				<StatCard label="Worst p95" loading={isLoading} value={ms(maxP95)} />
-			</div>
+			<StatsPanel title="Background jobs">
+				<div className="grid-4">
+					<StatCard label="Total jobs" loading={isLoading} value={totalReq.toLocaleString()} />
+					<StatCard label="Success rate" loading={isLoading} value={`${successRate.toFixed(1)}%`} urgent={successRate < 95 && totalReq > 0} />
+					<StatCard label="Avg latency" loading={isLoading} value={ms(weightedAvg)} />
+					<StatCard label="Worst p95" loading={isLoading} value={ms(maxP95)} />
+				</div>
+			</StatsPanel>
 
 			<div className="grid-2" style={{ marginBottom: 'var(--space-5)' }}>
 				<div className="card">

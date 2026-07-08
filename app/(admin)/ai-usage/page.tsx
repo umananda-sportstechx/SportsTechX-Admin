@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Receipt, RefreshCw, Save, Plus } from 'lucide-react';
 import { api } from '@/lib/api';
+import { StatsPanel } from '@/components/atoms';
 
 /**
  * AI usage & cost ledger.
@@ -96,13 +97,15 @@ export default function AiUsagePage() {
 			</div>
 
 			{/* Stat cards */}
-			<div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 'var(--space-3)', marginBottom: 'var(--space-5)' }}>
-				<StatCard label="Total spend" value={usd(t?.total_usd)} loading={isLoading} />
-				<StatCard label="Credited (user-paid)" value={usd(t?.credited_usd)} loading={isLoading} />
-				<StatCard label="Uncredited (company)" value={usd(t?.uncredited_usd)} accent loading={isLoading} />
-				<StatCard label="AI calls" value={num(t?.calls)} loading={isLoading} />
-				<StatCard label="Credits charged" value={num(t?.credits_charged)} loading={isLoading} />
-			</div>
+			<StatsPanel>
+				<div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 'var(--space-3)' }}>
+					<StatCard label="Total spend" value={usd(t?.total_usd)} loading={isLoading} />
+					<StatCard label="Credited (user-paid)" value={usd(t?.credited_usd)} loading={isLoading} />
+					<StatCard label="Uncredited (company)" value={usd(t?.uncredited_usd)} accent loading={isLoading} />
+					<StatCard label="AI calls" value={num(t?.calls)} loading={isLoading} />
+					<StatCard label="Credits charged" value={num(t?.credits_charged)} loading={isLoading} />
+				</div>
+			</StatsPanel>
 
 			{/* Cost configuration */}
 			<PricingConfig />

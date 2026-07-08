@@ -5,7 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
-import { PageHeader, AsyncState, StatCard, Section } from '@/components/atoms';
+import { PageHeader, AsyncState, StatCard, StatsPanel, Section } from '@/components/atoms';
 import { Funnel } from '@/components/charts';
 import { StatStrip } from '@/components/filters';
 
@@ -111,12 +111,14 @@ export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: 
 			{!embedded && <PageHeader kicker={`Queues · ${(data?.total ?? 0).toLocaleString()} in ${status}`} title="Data change requests" />}
 
 			{!embedded && (
-				<StatStrip cols={4}>
-					<StatCard label="Open" loading={stats.isLoading} value={(dq.open ?? 0).toLocaleString()} urgent={(dq.open ?? 0) > 0} />
-					<StatCard label="Picked up" loading={stats.isLoading} value={(dq.picked_up ?? 0).toLocaleString()} />
-					<StatCard label="Resolved" loading={stats.isLoading} value={(dq.resolved ?? 0).toLocaleString()} />
-					<StatCard label="Rejected" loading={stats.isLoading} value={(dq.rejected ?? 0).toLocaleString()} />
-				</StatStrip>
+				<StatsPanel>
+					<StatStrip cols={4}>
+						<StatCard label="Open" loading={stats.isLoading} value={(dq.open ?? 0).toLocaleString()} urgent={(dq.open ?? 0) > 0} />
+						<StatCard label="Picked up" loading={stats.isLoading} value={(dq.picked_up ?? 0).toLocaleString()} />
+						<StatCard label="Resolved" loading={stats.isLoading} value={(dq.resolved ?? 0).toLocaleString()} />
+						<StatCard label="Rejected" loading={stats.isLoading} value={(dq.rejected ?? 0).toLocaleString()} />
+					</StatStrip>
+				</StatsPanel>
 			)}
 
 			{!embedded && (

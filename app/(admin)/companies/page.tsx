@@ -919,19 +919,40 @@ export default function CompaniesAdminPage() {
 	const tab: CdTab = (CD_TABS.some((t) => t.key === raw) ? raw : 'companies') as CdTab;
 	const setTab = (t: CdTab) => router.replace(`${pathname}?tab=${t}`, { scroll: false });
 
-	const [rangeDays, setRangeDays] = useState(0); // 0 = all time
-	const from = rangeDays > 0 ? toIsoDaysAgo(rangeDays) : undefined;
-	const key = (path: string): [string] | [string, { from: string }] => (from ? [path, { from }] : [path]);
+	// 'all' | '30' | '90' | '365' (preset days) | 'custom' (from/to inputs).
+	const [rangeMode, setRangeMode] = useState('all');
+	const [customFrom, setCustomFrom] = useState('');
+	const [customTo, setCustomTo] = useState('');
+	let from: string | undefined;
+	let to: string | undefined;
+	if (rangeMode === 'custom') { from = customFrom || undefined; to = customTo || undefined; }
+	else if (rangeMode !== 'all') { from = toIsoDaysAgo(Number(rangeMode)); }
+	const key = (path: string): [string] | [string, Record<string, string>] => {
+		const params: Record<string, string> = {};
+		if (from) params.from = from;
+		if (to) params.to = to;
+		return Object.keys(params).length ? [path, params] : [path];
+	};
 	const cStats = useSWR<CompanyStats>(key('/api/admin/stats/companies'), { dedupingInterval: 60_000 });
 	const dStats = useSWR<EntityYoyStats>(key('/api/admin/stats/deals'), { dedupingInterval: 60_000 });
 	const aStats = useSWR<EntityYoyStats>(key('/api/admin/stats/acquisitions'), { dedupingInterval: 60_000 });
 	const c = cStats.data, d = dStats.data, a = aStats.data;
 
 	const rangeFilter = (
-		<select className="search-input" style={{ height: 30, width: 150 }} value={rangeDays} onChange={(e) => setRangeDays(Number(e.target.value))} aria-label="Date range">
-			<option value={0}>All time</option>
-			{RANGE_OPTS.map((o) => <option key={o.days} value={o.days}>{o.label}</option>)}
-		</select>
+		<div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+			<select className="search-input" style={{ height: 30, width: 140 }} value={rangeMode} onChange={(e) => setRangeMode(e.target.value)} aria-label="Date range">
+				<option value="all">All time</option>
+				{RANGE_OPTS.map((o) => <option key={o.days} value={String(o.days)}>{o.label}</option>)}
+				<option value="custom">Custom range…</option>
+			</select>
+			{rangeMode === 'custom' && (
+				<>
+					<input type="date" className="search-input" style={{ height: 30 }} value={customFrom} max={customTo || undefined} onChange={(e) => setCustomFrom(e.target.value)} aria-label="From date" />
+					<span style={{ color: 'var(--fg-muted)', fontSize: 12 }}>→</span>
+					<input type="date" className="search-input" style={{ height: 30 }} value={customTo} min={customFrom || undefined} onChange={(e) => setCustomTo(e.target.value)} aria-label="To date" />
+				</>
+			)}
+		</div>
 	);
 
 	return (

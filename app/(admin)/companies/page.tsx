@@ -25,6 +25,7 @@ import { DealModal, DealsView, type StagedDeal } from '../deals/page';
 import { AcquisitionModal, AcquisitionsView, type StagedAcq } from '../acquisitions/page';
 import { ClaimsView } from '../claims/page';
 import { DataRequestsView } from '../data-requests/page';
+import { DateRangePicker, type RangeValue } from '@/components/date-range-picker';
 
 interface Company {
 	id: string;
@@ -900,17 +901,6 @@ const CD_TABS: ReadonlyArray<{ key: CdTab; label: string }> = [
 	{ key: 'claims', label: 'Ownership claims' },
 	{ key: 'changes', label: 'Data changes' },
 ];
-const RANGE_OPTS: Array<{ label: string; days: number }> = [
-	{ label: 'Last 30 days', days: 30 },
-	{ label: 'Last 90 days', days: 90 },
-	{ label: 'Last 12 months', days: 365 },
-];
-function toIsoDaysAgo(days: number): string {
-	const dt = new Date();
-	dt.setDate(dt.getDate() - days);
-	return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
-}
-
 export default function CompaniesAdminPage() {
 	const searchParams = useSearchParams();
 	const router = useRouter();
@@ -919,14 +909,8 @@ export default function CompaniesAdminPage() {
 	const tab: CdTab = (CD_TABS.some((t) => t.key === raw) ? raw : 'companies') as CdTab;
 	const setTab = (t: CdTab) => router.replace(`${pathname}?tab=${t}`, { scroll: false });
 
-	// 'all' | '30' | '90' | '365' (preset days) | 'custom' (from/to inputs).
-	const [rangeMode, setRangeMode] = useState('all');
-	const [customFrom, setCustomFrom] = useState('');
-	const [customTo, setCustomTo] = useState('');
-	let from: string | undefined;
-	let to: string | undefined;
-	if (rangeMode === 'custom') { from = customFrom || undefined; to = customTo || undefined; }
-	else if (rangeMode !== 'all') { from = toIsoDaysAgo(Number(rangeMode)); }
+	const [dateRange, setDateRange] = useState<RangeValue>({});
+	const from = dateRange.from, to = dateRange.to;
 	const key = (path: string): [string] | [string, Record<string, string>] => {
 		const params: Record<string, string> = {};
 		if (from) params.from = from;
@@ -938,22 +922,7 @@ export default function CompaniesAdminPage() {
 	const aStats = useSWR<EntityYoyStats>(key('/api/admin/stats/acquisitions'), { dedupingInterval: 60_000 });
 	const c = cStats.data, d = dStats.data, a = aStats.data;
 
-	const rangeFilter = (
-		<div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-			<select className="search-input" style={{ height: 30, width: 140 }} value={rangeMode} onChange={(e) => setRangeMode(e.target.value)} aria-label="Date range">
-				<option value="all">All time</option>
-				{RANGE_OPTS.map((o) => <option key={o.days} value={String(o.days)}>{o.label}</option>)}
-				<option value="custom">Custom range…</option>
-			</select>
-			{rangeMode === 'custom' && (
-				<>
-					<input type="date" className="search-input" style={{ height: 30 }} value={customFrom} max={customTo || undefined} onChange={(e) => setCustomFrom(e.target.value)} aria-label="From date" />
-					<span style={{ color: 'var(--fg-muted)', fontSize: 12 }}>→</span>
-					<input type="date" className="search-input" style={{ height: 30 }} value={customTo} min={customFrom || undefined} onChange={(e) => setCustomTo(e.target.value)} aria-label="To date" />
-				</>
-			)}
-		</div>
-	);
+	const rangeFilter = <DateRangePicker value={dateRange} onChange={setDateRange} />;
 
 	return (
 		<div>

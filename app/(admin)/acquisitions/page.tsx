@@ -3,12 +3,12 @@
 import { useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { Plus, Save, Trash2 } from 'lucide-react';
+import { Plus, Save, Trash2, GitMerge, Banknote, Trophy } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading, StatCard, Section, Pager, SortableTh } from '@/components/atoms';
+import { PageHeader, AsyncState, Loading, StatCard, RichStatCard, StatsPanel, Section, Pager, SortableTh } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip, FilterRange, RefSlugFilter, SectorTierFilter } from '@/components/filters';
 import { CsvImportButton } from '@/components/csv-import';
@@ -25,7 +25,7 @@ interface Acquisition {
 	primary_sector?: string | null;
 }
 interface AcqResponse { data: Acquisition[]; total: number; totalPages: number }
-interface AcqStats { total: number; total_amount: number; sportstech: number; by_year: Array<{ year: number; deals: number; amt: number }>; by_type: Bucket[] }
+interface AcqStats { total: number; total_amount: number; sportstech: number; total_rows?: number; this_year?: number; last_year?: number; yoy_change?: number | null; by_year: Array<{ year: number; deals: number; amt: number }>; by_type: Bucket[] }
 
 const TYPES = ['acquisition', 'merger', 'asset_purchase'] as const;
 // d2c/b2g/other dropped - unused across all records (verified) and not wanted.
@@ -91,11 +91,14 @@ export function AcquisitionsView({ embedded = false }: { embedded?: boolean }) {
 		<div>
 			{!embedded && <PageHeader kicker={`M&A · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} deals`} title="Acquisitions" />}
 
-			<StatStrip cols={3}>
-				<StatCard label="Total acquisitions" loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()} />
-				<StatCard label="Total value (disclosed)" loading={stats.isLoading} value={fmtMoney(stats.data?.total_amount ?? 0)} />
-				<StatCard label="SportsTech acquirees" loading={stats.isLoading} value={(stats.data?.sportstech ?? 0).toLocaleString()} />
-			</StatStrip>
+			<StatsPanel>
+				<StatStrip cols={3}>
+					<RichStatCard label="Total M&A Transactions" Icon={GitMerge} loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()}
+						totalRows={stats.data?.total_rows} thisYear={stats.data?.this_year} lastYear={stats.data?.last_year} yoy={stats.data?.yoy_change} />
+					<RichStatCard label="Total value (disclosed)" Icon={Banknote} loading={stats.isLoading} value={fmtMoney(stats.data?.total_amount ?? 0)} />
+					<RichStatCard label="SportsTech acquirees" Icon={Trophy} loading={stats.isLoading} value={(stats.data?.sportstech ?? 0).toLocaleString()} />
+				</StatStrip>
+			</StatsPanel>
 
 			<div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
 				<Section title="Acquisitions by year" meta="value · count" center>

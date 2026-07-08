@@ -12,6 +12,7 @@ import {
 import { useTheme } from 'next-themes';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useIsAdmin, useUserProfile } from '@/hooks/use-user-profile';
+import { Tooltip } from '@/components/tooltip';
 
 /** Light/dark toggle — the old admin ships both themes; default is dark. */
 function ThemeToggle() {
@@ -20,9 +21,11 @@ function ThemeToggle() {
 	useEffect(() => setMounted(true), []);
 	const dark = theme === 'dark';
 	return (
-		<button className="btn ghost" onClick={() => setTheme(dark ? 'light' : 'dark')} title={dark ? 'Switch to light mode' : 'Switch to dark mode'} aria-label="Toggle theme">
-			{mounted && !dark ? <Moon size={14} /> : <Sun size={14} />}
-		</button>
+		<Tooltip label={dark ? 'Switch to light mode' : 'Switch to dark mode'} side="bottom">
+			<button className="btn ghost" onClick={() => setTheme(dark ? 'light' : 'dark')} aria-label="Toggle theme">
+				{mounted && !dark ? <Moon size={14} /> : <Sun size={14} />}
+			</button>
+		</Tooltip>
 	);
 }
 

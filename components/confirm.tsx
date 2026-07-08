@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { Modal } from './modal';
 
 interface ConfirmOpts { title?: string; message: string; confirmLabel?: string; danger?: boolean }
@@ -33,15 +34,27 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
 		<ConfirmCtx.Provider value={confirm}>
 			{children}
 			{state && (
-				<Modal title={state.opts.title ?? 'Please confirm'} onClose={() => close(false)} width={420} footer={
+				<Modal title={state.opts.title ?? 'Please confirm'} onClose={() => close(false)} width={430} footer={
 					<>
 						<button className="btn ghost" onClick={() => close(false)}>Cancel</button>
-						<button className="btn" style={state.opts.danger ? { color: 'var(--accent)' } : undefined} onClick={() => close(true)}>
+						<button
+							className="btn"
+							autoFocus
+							style={state.opts.danger ? { background: 'var(--neg)', borderColor: 'var(--neg)', color: '#fff' } : undefined}
+							onClick={() => close(true)}
+						>
 							{state.opts.confirmLabel ?? 'Confirm'}
 						</button>
 					</>
 				}>
-					<div style={{ fontSize: 13, lineHeight: 1.5 }}>{state.opts.message}</div>
+					<div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+						{state.opts.danger && (
+							<div style={{ flexShrink: 0, width: 32, height: 32, borderRadius: 8, display: 'grid', placeItems: 'center', background: 'color-mix(in srgb, var(--neg) 14%, transparent)', color: 'var(--neg)' }}>
+								<AlertTriangle size={17} />
+							</div>
+						)}
+						<div style={{ fontSize: 13, lineHeight: 1.55, color: 'var(--fg-2)', paddingTop: state.opts.danger ? 4 : 0 }}>{state.opts.message}</div>
+					</div>
 				</Modal>
 			)}
 		</ConfirmCtx.Provider>

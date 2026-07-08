@@ -1,13 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { Plus, Save, Trash2, Layers, CalendarClock, Package } from 'lucide-react';
+import { Plus, Save, Trash2, Layers, CalendarClock, Package, GraduationCap, Lightbulb, Banknote } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading, StatCard, RichStatCard, StatsPanel, Section, Pager } from '@/components/atoms';
+import { PageHeader, AsyncState, Loading, StatCard, RichStatCard, StatsPanel, PillTabs, Section, Pager } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip, FilterRange, RefSlugFilter } from '@/components/filters';
 import { CsvImportButton, CsvTemplateButton, CsvCheckButton } from '@/components/csv-import';
@@ -16,6 +17,10 @@ import { ImageInput } from '@/components/image-input';
 import { useConfirm } from '@/components/confirm';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import { SportsPicker, LocationFields, SocialLinks, CompanySelectOne, EMPTY_SOCIAL, EMPTY_LOCATION, type SocialValue, type LocationValue } from '@/components/entity-pickers';
+import { InvestorsView } from '../investors/page';
+import { ClaimsView } from '../claims/page';
+import { DataRequestsView } from '../data-requests/page';
+import { DateRangePicker, type RangeValue } from '@/components/date-range-picker';
 
 interface Entity {
 	id: string;
@@ -27,16 +32,26 @@ interface Entity {
 	hq_country?: string | null;
 }
 interface Response { data: Entity[]; total: number; totalPages: number }
-interface EcoStats { total: number; upcoming_events?: number; added_this_month?: number; added_last_month?: number; total_rows?: number; this_year?: number; last_year?: number; yoy_change?: number | null; by_type: Bucket[]; by_status: Bucket[] }
+interface EcoStats {
+	total: number; upcoming_events?: number; added_this_month?: number; added_last_month?: number;
+	total_rows?: number; this_year?: number; last_year?: number; yoy_change?: number | null;
+	programs?: number; programs_this_year?: number; programs_last_year?: number; programs_yoy?: number | null;
+	events?: number; events_this_year?: number; events_last_year?: number; events_yoy?: number | null;
+	initiatives?: number; initiatives_this_year?: number; initiatives_last_year?: number; initiatives_yoy?: number | null;
+	by_type: Bucket[]; by_status: Bucket[];
+}
+interface InvestorYoyStats { total: number; this_year?: number; last_year?: number; yoy_change?: number | null }
 
 const STATUSES = ['active', 'inactive', 'paused'] as const;
 const ENTITY_TYPES = ['program', 'event', 'organization', 'initiative'] as const;
 const EVENT_MODES = ['in_person', 'virtual', 'hybrid'] as const;
 
-export function EcosystemView({ embedded = false }: { embedded?: boolean }) {
+type EcoType = 'program' | 'event' | 'initiative' | 'organization';
+export function EcosystemView({ embedded = false, entityType }: { embedded?: boolean; entityType?: EcoType }) {
 	const { mutate } = useSWRConfig();
 	const ask = useConfirm();
-	const [type, setType] = useState<'program' | 'event'>('program');
+	const [typeState, setType] = useState<EcoType>('program');
+	const type = entityType ?? typeState;
 	const [search, setSearch] = useState('');
 	const debouncedSearch = useDebouncedValue(search);
 	const [status, setStatus] = useState('');
@@ -62,7 +77,9 @@ export function EcosystemView({ embedded = false }: { embedded?: boolean }) {
 			founded_year_min: foundedMin || undefined, founded_year_max: foundedMax || undefined,
 			...(type === 'event'
 				? { mode: mode || undefined, is_featured: featured || undefined, upcoming_only: upcoming || undefined }
-				: { entries_open: entriesOpen || undefined }),
+				: type === 'program'
+					? { entries_open: entriesOpen || undefined }
+					: {}),
 			page, limit: 30,
 		}],
 		{ dedupingInterval: 30_000 },
@@ -92,55 +109,64 @@ export function EcosystemView({ embedded = false }: { embedded?: boolean }) {
 		<div>
 			{!embedded && <PageHeader kicker={`Ecosystem · ${(stats.data?.total ?? 0).toLocaleString()} entities`} title="Programs & events" />}
 
-			<StatsPanel>
-				<StatStrip cols={4}>
-					<RichStatCard label="Total entities" Icon={Layers} loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()}
-						totalRows={stats.data?.total_rows} thisYear={stats.data?.this_year} lastYear={stats.data?.last_year} yoy={stats.data?.yoy_change} />
-					<StatCard
-						label="Added this month"
-						loading={stats.isLoading}
-						value={(stats.data?.added_this_month ?? 0).toLocaleString()}
-						delta={stats.data && (stats.data.added_last_month ?? 0) > 0 ? (((stats.data.added_this_month ?? 0) - (stats.data.added_last_month ?? 0)) / (stats.data.added_last_month ?? 1)) * 100 : null}
-					/>
-					<RichStatCard label="Upcoming events" Icon={CalendarClock} loading={stats.isLoading} value={(stats.data?.upcoming_events ?? 0).toLocaleString()} />
-					{(stats.data?.by_type ?? []).slice(0, 1).map((b) => (
-						<RichStatCard key={b.label} label={b.label} Icon={Package} loading={stats.isLoading} value={b.value.toLocaleString()} />
-					))}
-				</StatStrip>
-			</StatsPanel>
+			{!embedded && (
+				<StatsPanel>
+					<StatStrip cols={4}>
+						<RichStatCard label="Total entities" Icon={Layers} loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()}
+							thisYear={stats.data?.this_year} lastYear={stats.data?.last_year} yoy={stats.data?.yoy_change} />
+						<StatCard
+							label="Added this month"
+							loading={stats.isLoading}
+							value={(stats.data?.added_this_month ?? 0).toLocaleString()}
+							delta={stats.data && (stats.data.added_last_month ?? 0) > 0 ? (((stats.data.added_this_month ?? 0) - (stats.data.added_last_month ?? 0)) / (stats.data.added_last_month ?? 1)) * 100 : null}
+						/>
+						<RichStatCard label="Upcoming events" Icon={CalendarClock} loading={stats.isLoading} value={(stats.data?.upcoming_events ?? 0).toLocaleString()} />
+						{(stats.data?.by_type ?? []).slice(0, 1).map((b) => (
+							<RichStatCard key={b.label} label={b.label} Icon={Package} loading={stats.isLoading} value={b.value.toLocaleString()} />
+						))}
+					</StatStrip>
+				</StatsPanel>
+			)}
 
-			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-				<Section title="By type" meta="entities" center>
-					<AsyncState loading={stats.isLoading} error={stats.error} empty={typeSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
-						<div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
-							<PieDonut segments={typeSegments} size={170} mode="donut" />
-							<div style={{ flex: 1, minWidth: 160 }}><PieLegend segments={typeSegments} /></div>
-						</div>
-					</AsyncState>
-				</Section>
-				<Section title="By status" meta="entities" center>
-					<AsyncState loading={stats.isLoading} error={stats.error} empty={statusSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
-						<PieDonut segments={statusSegments} mode="bar" />
-					</AsyncState>
-				</Section>
-			</div>
+			{!embedded && (
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+					<Section title="By type" meta="entities" center>
+						<AsyncState loading={stats.isLoading} error={stats.error} empty={typeSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
+							<div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+								<PieDonut segments={typeSegments} size={170} mode="donut" />
+								<div style={{ flex: 1, minWidth: 160 }}><PieLegend segments={typeSegments} /></div>
+							</div>
+						</AsyncState>
+					</Section>
+					<Section title="By status" meta="entities" center>
+						<AsyncState loading={stats.isLoading} error={stats.error} empty={statusSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
+							<PieDonut segments={statusSegments} mode="bar" />
+						</AsyncState>
+					</Section>
+				</div>
+			)}
 
 			<FilterBar>
-				<button className={`chip ${type === 'program' ? 'on' : ''}`} onClick={() => { setType('program'); setPage(1); }}>Programs</button>
-				<button className={`chip ${type === 'event' ? 'on' : ''}`} onClick={() => { setType('event'); setPage(1); }}>Events</button>
+				{!entityType && (
+					<>
+						<button className={`chip ${type === 'program' ? 'on' : ''}`} onClick={() => { setType('program'); setPage(1); }}>Programs</button>
+						<button className={`chip ${type === 'event' ? 'on' : ''}`} onClick={() => { setType('event'); setPage(1); }}>Events</button>
+					</>
+				)}
 				<input className="search-input" style={{ flex: '0 0 220px', height: 32 }} placeholder="Search…" value={search} onChange={(e) => { setSearch(e.target.value); reset1(); }} />
 				<FilterSelect ariaLabel="Status" value={status} onChange={(v) => { setStatus(v); reset1(); }} options={[...STATUSES]} allLabel="All statuses" />
 				<RefSlugFilter kind="sports" ariaLabel="Sport" value={sport} onChange={(v) => { setSport(v); reset1(); }} allLabel="All sports" />
 				<input className="search-input" style={{ height: 32, width: 120 }} placeholder="Category" value={category} onChange={(e) => { setCategory(e.target.value); reset1(); }} />
 				<input className="search-input" style={{ height: 32, width: 120 }} placeholder="Country" value={country} onChange={(e) => { setCountry(e.target.value); reset1(); }} />
 				<FilterRange label="Founded" min={foundedMin} max={foundedMax} onMin={(v) => { setFoundedMin(v); reset1(); }} onMax={(v) => { setFoundedMax(v); reset1(); }} width={64} />
-				{type === 'event' ? (
+				{type === 'event' && (
 					<>
 						<FilterSelect ariaLabel="Mode" value={mode} onChange={(v) => { setMode(v); reset1(); }} options={[...EVENT_MODES]} allLabel="Any mode" />
 						<FilterSelect ariaLabel="Upcoming" value={upcoming} onChange={(v) => { setUpcoming(v); reset1(); }} options={[{ value: 'true', label: 'Upcoming only' }]} allLabel="All dates" />
 						<FilterSelect ariaLabel="Featured" value={featured} onChange={(v) => { setFeatured(v); reset1(); }} options={[{ value: 'true', label: 'Featured only' }]} allLabel="Any" />
 					</>
-				) : (
+				)}
+				{type === 'program' && (
 					<FilterSelect ariaLabel="Applications" value={entriesOpen} onChange={(v) => { setEntriesOpen(v); reset1(); }} options={[{ value: 'true', label: 'Applications open' }, { value: 'false', label: 'Closed' }]} allLabel="Any application status" />
 				)}
 				<div style={{ flex: 1 }} />
@@ -587,4 +613,69 @@ function LinksCohortPanel({ entityId }: { entityId: string }) {
 	);
 }
 
-export default function EcosystemAdminPage() { return <EcosystemView />; }
+// ── Combined Ecosystem page ──────────────────────────────────────────────────
+// Like Companies & Deals: one destination for the four ecosystem entities, with
+// a combined Statistics panel (date-range filter) and in-page tabs. Active tab
+// persists in the URL (?tab=).
+type EcoTab = 'programs' | 'events' | 'investors' | 'initiatives' | 'investor-claims' | 'entity-claims' | 'changes';
+const ECO_TABS: ReadonlyArray<{ key: EcoTab; label: string }> = [
+	{ key: 'programs', label: 'Programs' },
+	{ key: 'events', label: 'Events' },
+	{ key: 'investors', label: 'Investors' },
+	{ key: 'initiatives', label: 'Initiatives' },
+	{ key: 'investor-claims', label: 'Investor claims' },
+	{ key: 'entity-claims', label: 'Entity claims' },
+	{ key: 'changes', label: 'Data changes' },
+];
+
+export default function EcosystemAdminPage() {
+	const searchParams = useSearchParams();
+	const router = useRouter();
+	const pathname = usePathname();
+	const raw = searchParams.get('tab');
+	const tab: EcoTab = (ECO_TABS.some((t) => t.key === raw) ? raw : 'programs') as EcoTab;
+	const setTab = (t: EcoTab) => router.replace(`${pathname}?tab=${t}`, { scroll: false });
+
+	const [dateRange, setDateRange] = useState<RangeValue>({});
+	const { from, to } = dateRange;
+	const key = (path: string): [string] | [string, Record<string, string>] => {
+		const params: Record<string, string> = {};
+		if (from) params.from = from;
+		if (to) params.to = to;
+		return Object.keys(params).length ? [path, params] : [path];
+	};
+	const eStats = useSWR<EcoStats>(key('/api/admin/stats/ecosystem'), { dedupingInterval: 60_000 });
+	const iStats = useSWR<InvestorYoyStats>(key('/api/admin/stats/investors'), { dedupingInterval: 60_000 });
+	const e = eStats.data, i = iStats.data;
+
+	return (
+		<div>
+			<PageHeader kicker="Data" title="Ecosystem" subtitle="Programs, events, investors and initiatives." />
+
+			<StatsPanel action={<DateRangePicker value={dateRange} onChange={setDateRange} />}>
+				<StatStrip cols={4}>
+					<RichStatCard label="Programs" Icon={GraduationCap} loading={eStats.isLoading} value={(e?.programs ?? 0).toLocaleString()}
+						thisYear={e?.programs_this_year} lastYear={e?.programs_last_year} yoy={e?.programs_yoy} />
+					<RichStatCard label="Events" Icon={CalendarClock} loading={eStats.isLoading} value={(e?.events ?? 0).toLocaleString()}
+						thisYear={e?.events_this_year} lastYear={e?.events_last_year} yoy={e?.events_yoy} />
+					<RichStatCard label="Investors" Icon={Banknote} loading={iStats.isLoading} value={(i?.total ?? 0).toLocaleString()}
+						thisYear={i?.this_year} lastYear={i?.last_year} yoy={i?.yoy_change} />
+					<RichStatCard label="Initiatives" Icon={Lightbulb} loading={eStats.isLoading} value={(e?.initiatives ?? 0).toLocaleString()}
+						thisYear={e?.initiatives_this_year} lastYear={e?.initiatives_last_year} yoy={e?.initiatives_yoy} />
+				</StatStrip>
+			</StatsPanel>
+
+			<div style={{ marginBottom: 'var(--space-4)' }}>
+				<PillTabs tabs={ECO_TABS} value={tab} onChange={setTab} />
+			</div>
+
+			{tab === 'programs' && <EcosystemView embedded entityType="program" />}
+			{tab === 'events' && <EcosystemView embedded entityType="event" />}
+			{tab === 'investors' && <InvestorsView embedded />}
+			{tab === 'initiatives' && <EcosystemView embedded entityType="initiative" />}
+			{tab === 'investor-claims' && <ClaimsView embedded lockType="investor" />}
+			{tab === 'entity-claims' && <ClaimsView embedded lockType="ecosystem_entity" />}
+			{tab === 'changes' && <DataRequestsView embedded lockEntity="investor,ecosystem,investor_fund,investor_portfolio" />}
+		</div>
+	);
+}

@@ -108,31 +108,35 @@ export function InvestorsView({ embedded = false }: { embedded?: boolean }) {
 		<div>
 			{!embedded && <PageHeader kicker={`Capital · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} investors`} title="Investors" />}
 
-			<StatsPanel>
-				<StatStrip cols={4}>
-					<RichStatCard label="Total Investors" Icon={Banknote} loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()}
-						totalRows={stats.data?.total_rows} thisYear={stats.data?.this_year} lastYear={stats.data?.last_year} yoy={stats.data?.yoy_change} />
-					<RichStatCard label="Verified" Icon={BadgeCheck} loading={stats.isLoading} value={(stats.data?.verified ?? 0).toLocaleString()} />
-					<RichStatCard label="Actively investing" Icon={Coins} loading={stats.isLoading} value={(stats.data?.active ?? 0).toLocaleString()} />
-					<RichStatCard label="Categories" Icon={Layers} loading={stats.isLoading} value={(stats.data?.by_category?.length ?? 0).toLocaleString()} />
-				</StatStrip>
-			</StatsPanel>
+			{!embedded && (
+				<StatsPanel>
+					<StatStrip cols={4}>
+						<RichStatCard label="Total Investors" Icon={Banknote} loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()}
+							thisYear={stats.data?.this_year} lastYear={stats.data?.last_year} yoy={stats.data?.yoy_change} />
+						<RichStatCard label="Verified" Icon={BadgeCheck} loading={stats.isLoading} value={(stats.data?.verified ?? 0).toLocaleString()} />
+						<RichStatCard label="Actively investing" Icon={Coins} loading={stats.isLoading} value={(stats.data?.active ?? 0).toLocaleString()} />
+						<RichStatCard label="Categories" Icon={Layers} loading={stats.isLoading} value={(stats.data?.by_category?.length ?? 0).toLocaleString()} />
+					</StatStrip>
+				</StatsPanel>
+			)}
 
-			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-				<Section title="By category" meta="investors" center>
-					<AsyncState loading={stats.isLoading} error={stats.error} empty={categorySegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
-						<div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
-							<PieDonut segments={categorySegments} size={170} mode="donut" />
-							<div style={{ flex: 1, minWidth: 160 }}><PieLegend segments={categorySegments} /></div>
-						</div>
-					</AsyncState>
-				</Section>
-				<Section title="By status" meta="investors" center>
-					<AsyncState loading={stats.isLoading} error={stats.error} empty={statusSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
-						<PieDonut segments={statusSegments} mode="bar" />
-					</AsyncState>
-				</Section>
-			</div>
+			{!embedded && (
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+					<Section title="By category" meta="investors" center>
+						<AsyncState loading={stats.isLoading} error={stats.error} empty={categorySegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
+							<div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+								<PieDonut segments={categorySegments} size={170} mode="donut" />
+								<div style={{ flex: 1, minWidth: 160 }}><PieLegend segments={categorySegments} /></div>
+							</div>
+						</AsyncState>
+					</Section>
+					<Section title="By status" meta="investors" center>
+						<AsyncState loading={stats.isLoading} error={stats.error} empty={statusSegments.length === 0} emptyMsg="No data" onRetry={() => void stats.mutate()}>
+							<PieDonut segments={statusSegments} mode="bar" />
+						</AsyncState>
+					</Section>
+				</div>
+			)}
 
 			<FilterBar>
 				<input

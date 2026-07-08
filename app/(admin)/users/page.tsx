@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, StatCard, Section } from '@/components/atoms';
+import { PageHeader, AsyncState, StatCard, StatsPanel, Section } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, Funnel, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 
@@ -137,13 +137,15 @@ export function UsersView({ view }: { view: 'directory' | 'stats' | 'charts' }) 
 			<PageHeader kicker={`Identity · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} total`} title="Users" />
 
 			{view === 'stats' && (<>
-			<StatStrip cols={4}>
-				<StatCard label="Total users" loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()} />
-				<StatCard label="Admins" loading={stats.isLoading} value={(stats.data?.admins ?? 0).toLocaleString()} />
-				{(stats.data?.by_tier ?? []).slice(0, 2).map((b) => (
-					<StatCard key={b.label} label={`${b.label} tier`} loading={stats.isLoading} value={b.value.toLocaleString()} />
-				))}
-			</StatStrip>
+			<StatsPanel>
+				<StatStrip cols={4}>
+					<StatCard label="Total users" loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()} />
+					<StatCard label="Admins" loading={stats.isLoading} value={(stats.data?.admins ?? 0).toLocaleString()} />
+					{(stats.data?.by_tier ?? []).slice(0, 2).map((b) => (
+						<StatCard key={b.label} label={`${b.label} tier`} loading={stats.isLoading} value={b.value.toLocaleString()} />
+					))}
+				</StatStrip>
+			</StatsPanel>
 
 			<div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
 				<Section title="Signups by month" meta="last 12 months">

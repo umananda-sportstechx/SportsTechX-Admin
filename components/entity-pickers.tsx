@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { ChevronDown, Plus, Search, Star, X } from 'lucide-react';
 import { qk } from '@/lib/query-keys';
 import { api } from '@/lib/api';
+import { Select } from '@/components/select';
 
 // ─── inline reference creation ───────────────────────────────────────────────
 // Lets admins create a sector / sport / tech-tag / round-type in place instead
@@ -221,10 +222,8 @@ export function RoundTypeSelect({ value, onChange }: { value: string; onChange: 
 	return (
 		<div style={{ display: 'grid', gap: 6 }}>
 			<div style={{ display: 'flex', gap: 6 }}>
-				<select className="search-input" style={{ flex: 1 }} value={value} onChange={(e) => onChange(e.target.value)}>
-					<option value="">— round —</option>
-					{(data ?? []).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-				</select>
+				<Select value={value} onChange={onChange} width="100%" style={{ flex: 1 }} placeholder="— round —" searchable
+					options={(data ?? []).map((r) => ({ value: r.id, label: r.name }))} />
 				<button type="button" className="btn ghost" style={{ flex: '0 0 auto' }} onClick={() => setAdding((v) => !v)} title="Add a new round type">
 					<Plus size={12} />
 				</button>
@@ -238,10 +237,8 @@ interface CurrencyRow { code: string; name: string; symbol: string | null }
 export function CurrencySelect({ value, onChange }: { value: string; onChange: (code: string) => void }) {
 	const { data } = useSWR<CurrencyRow[]>(qk.reference.currencies(), { dedupingInterval: 60 * 60_000 });
 	return (
-		<select className="search-input" style={{ width: '100%' }} value={value} onChange={(e) => onChange(e.target.value)}>
-			<option value="">—</option>
-			{(data ?? []).map((c) => <option key={c.code} value={c.code}>{c.code}{c.symbol ? ` (${c.symbol})` : ''}</option>)}
-		</select>
+		<Select value={value} onChange={onChange} width="100%" style={{ width: '100%' }} placeholder="—" searchable
+			options={(data ?? []).map((c) => ({ value: c.code, label: `${c.code}${c.symbol ? ` (${c.symbol})` : ''}` }))} />
 	);
 }
 

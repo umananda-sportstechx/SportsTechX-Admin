@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
-import { Section, StatCard, AsyncState, Tag } from '@/components/atoms';
+import { Section, StatCard, StatsPanel, AsyncState, Tag } from '@/components/atoms';
 
 /**
  * Admin-wide credit usage — everyone's spend rolled up over the last 30 days
@@ -72,12 +72,14 @@ export default function CreditUsagePage() {
 				</p>
 			</div>
 
-			<div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-4)' }}>
-				<StatCard label="AI credits spent · 30d" value={(ai?.spent ?? 0).toLocaleString()} loading={isLoading} />
-				<StatCard label="Export credits spent · 30d" value={(integ?.spent ?? 0).toLocaleString()} loading={isLoading} />
-				<StatCard label="AI transactions" value={(ai?.txns ?? 0).toLocaleString()} loading={isLoading} />
-				<StatCard label="Export transactions" value={(integ?.txns ?? 0).toLocaleString()} loading={isLoading} />
-			</div>
+			<StatsPanel>
+				<div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-4)' }}>
+					<StatCard label="AI credits spent · 30d" value={(ai?.spent ?? 0).toLocaleString()} loading={isLoading} />
+					<StatCard label="Export credits spent · 30d" value={(integ?.spent ?? 0).toLocaleString()} loading={isLoading} />
+					<StatCard label="AI transactions" value={(ai?.txns ?? 0).toLocaleString()} loading={isLoading} />
+					<StatCard label="Export transactions" value={(integ?.txns ?? 0).toLocaleString()} loading={isLoading} />
+				</div>
+			</StatsPanel>
 
 			<Section title="Top spenders" meta="last 30 days · by total credits">
 				<AsyncState loading={isLoading} error={error} empty={!usage?.topUsers.length} emptyMsg="No spend in the last 30 days.">

@@ -5,7 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
-import { PageHeader, AsyncState, StatCard, Section } from '@/components/atoms';
+import { PageHeader, AsyncState, StatCard, StatsPanel, Section } from '@/components/atoms';
 import { Funnel } from '@/components/charts';
 import { StatStrip } from '@/components/filters';
 import { SectorCascade, LocationFields, EMPTY_LOCATION, type LocationValue } from '@/components/entity-pickers';
@@ -107,12 +107,14 @@ export function ClaimsView({ embedded = false, lockType }: { embedded?: boolean;
 			{!embedded && <PageHeader kicker={`Queues · ${(data?.total ?? 0).toLocaleString()} in ${status}`} title="Claims" />}
 
 			{!embedded && (
-				<StatStrip cols={4}>
-					<StatCard label="Pending" loading={stats.isLoading} value={(c?.pending ?? 0).toLocaleString()} urgent={(c?.pending ?? 0) > 0} />
-					<StatCard label="Picked up" loading={stats.isLoading} value={(c?.picked_up ?? 0).toLocaleString()} />
-					<StatCard label="Verified" loading={stats.isLoading} value={(c?.verified ?? 0).toLocaleString()} />
-					<StatCard label="Rejected" loading={stats.isLoading} value={(c?.rejected ?? 0).toLocaleString()} />
-				</StatStrip>
+				<StatsPanel>
+					<StatStrip cols={4}>
+						<StatCard label="Pending" loading={stats.isLoading} value={(c?.pending ?? 0).toLocaleString()} urgent={(c?.pending ?? 0) > 0} />
+						<StatCard label="Picked up" loading={stats.isLoading} value={(c?.picked_up ?? 0).toLocaleString()} />
+						<StatCard label="Verified" loading={stats.isLoading} value={(c?.verified ?? 0).toLocaleString()} />
+						<StatCard label="Rejected" loading={stats.isLoading} value={(c?.rejected ?? 0).toLocaleString()} />
+					</StatStrip>
+				</StatsPanel>
 			)}
 
 			{!embedded && (

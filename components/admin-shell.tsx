@@ -44,15 +44,7 @@ interface NavGroup { label: string; items: NavItem[] }
 const DATA_NAV: NavItem[] = [
 	{ label: 'Dashboard', href: '/dashboard', Icon: LayoutDashboard },
 	{ label: 'Companies & Deals', href: '/companies', Icon: Briefcase },
-	{
-		label: 'Ecosystem', Icon: Layers, children: [
-			{ href: '/ecosystem', label: 'Programs & events' },
-			{ href: '/investors', label: 'Investors' },
-			{ href: '/ecosystem/investor-claims', label: 'Investor claims' },
-			{ href: '/ecosystem/entity-claims', label: 'Entity claims' },
-			{ href: '/ecosystem/data-changes', label: 'Data changes' },
-		],
-	},
+	{ label: 'Ecosystem', href: '/ecosystem', Icon: Layers },
 	{ label: 'Startups to add', href: '/startups-pipeline', Icon: FilePlus },
 	{ label: 'Investors to add', href: '/investor-review', Icon: Banknote },
 	{ label: 'Reports', href: '/reports', Icon: FileText },

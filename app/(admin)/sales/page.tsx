@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
-import { PageHeader, StatCard, AsyncState, Section, Tag } from '@/components/atoms';
+import { PageHeader, StatCard, StatsPanel, AsyncState, Section, Tag } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, Funnel, toSegments, type PieSegment } from '@/components/charts';
 
 interface Sale {
@@ -107,18 +107,20 @@ export default function SalesAdminPage() {
 				<button className="btn ghost" onClick={() => void mutateA()}>Refresh</button>
 			</div>
 
-			<div className="grid-4" style={{ marginBottom: 'var(--space-4)' }}>
-				<StatCard label="MRR" loading={aLoading} value={money(a?.mrr ?? 0)} />
-				<StatCard label="ARR" loading={aLoading} value={money(a?.arr ?? 0)} />
-				<StatCard label="Active subscribers" loading={aLoading} value={(a?.activeSubscribers ?? 0).toLocaleString()} />
-				<StatCard label="Gross volume (period)" loading={aLoading} value={money(a?.grossVolume ?? 0)} delta={a ? pctChange(a.grossVolume, a.previousPeriod.grossVolume) : null} />
-			</div>
-			<div className="grid-4" style={{ marginBottom: 'var(--space-5)' }}>
-				<StatCard label="Net volume" loading={aLoading} value={money(a?.netVolume ?? 0)} />
-				<StatCard label="Churned MRR" loading={aLoading} value={money(a?.churnedMrr ?? 0)} urgent={(a?.churnedMrr ?? 0) > 0} />
-				<StatCard label="Trial → paid" loading={aLoading} value={`${(a?.trialConversion.conversionRate ?? 0).toFixed(1)}%`} />
-				<StatCard label="New customers" loading={aLoading} value={(a?.newCustomers ?? 0).toLocaleString()} delta={a ? pctChange(a.newCustomers, a.previousPeriod.newCustomers) : null} />
-			</div>
+			<StatsPanel>
+				<div className="grid-4" style={{ marginBottom: 'var(--space-4)' }}>
+					<StatCard label="MRR" loading={aLoading} value={money(a?.mrr ?? 0)} />
+					<StatCard label="ARR" loading={aLoading} value={money(a?.arr ?? 0)} />
+					<StatCard label="Active subscribers" loading={aLoading} value={(a?.activeSubscribers ?? 0).toLocaleString()} />
+					<StatCard label="Gross volume (period)" loading={aLoading} value={money(a?.grossVolume ?? 0)} delta={a ? pctChange(a.grossVolume, a.previousPeriod.grossVolume) : null} />
+				</div>
+				<div className="grid-4">
+					<StatCard label="Net volume" loading={aLoading} value={money(a?.netVolume ?? 0)} />
+					<StatCard label="Churned MRR" loading={aLoading} value={money(a?.churnedMrr ?? 0)} urgent={(a?.churnedMrr ?? 0) > 0} />
+					<StatCard label="Trial → paid" loading={aLoading} value={`${(a?.trialConversion.conversionRate ?? 0).toFixed(1)}%`} />
+					<StatCard label="New customers" loading={aLoading} value={(a?.newCustomers ?? 0).toLocaleString()} delta={a ? pctChange(a.newCustomers, a.previousPeriod.newCustomers) : null} />
+				</div>
+			</StatsPanel>
 
 			<AsyncState loading={aLoading} error={aError} empty={false} onRetry={() => void mutateA()}>
 				<div className="grid-2" style={{ marginBottom: 'var(--space-5)' }}>

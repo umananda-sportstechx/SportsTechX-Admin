@@ -3,11 +3,11 @@
 import { useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { Plus, Save, Trash2 } from 'lucide-react';
+import { Plus, Save, Trash2, Layers, CalendarClock, Package } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading, StatCard, Section, Pager } from '@/components/atoms';
+import { PageHeader, AsyncState, Loading, StatCard, RichStatCard, StatsPanel, Section, Pager } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip, FilterRange, RefSlugFilter } from '@/components/filters';
 import { CsvImportButton } from '@/components/csv-import';
@@ -27,7 +27,7 @@ interface Entity {
 	hq_country?: string | null;
 }
 interface Response { data: Entity[]; total: number; totalPages: number }
-interface EcoStats { total: number; upcoming_events?: number; added_this_month?: number; added_last_month?: number; by_type: Bucket[]; by_status: Bucket[] }
+interface EcoStats { total: number; upcoming_events?: number; added_this_month?: number; added_last_month?: number; total_rows?: number; this_year?: number; last_year?: number; yoy_change?: number | null; by_type: Bucket[]; by_status: Bucket[] }
 
 const STATUSES = ['active', 'inactive', 'paused'] as const;
 const ENTITY_TYPES = ['program', 'event', 'organization', 'initiative'] as const;
@@ -92,19 +92,22 @@ export function EcosystemView({ embedded = false }: { embedded?: boolean }) {
 		<div>
 			{!embedded && <PageHeader kicker={`Ecosystem · ${(stats.data?.total ?? 0).toLocaleString()} entities`} title="Programs & events" />}
 
-			<StatStrip cols={4}>
-				<StatCard label="Total entities" loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()} />
-				<StatCard
-					label="Added this month"
-					loading={stats.isLoading}
-					value={(stats.data?.added_this_month ?? 0).toLocaleString()}
-					delta={stats.data && (stats.data.added_last_month ?? 0) > 0 ? (((stats.data.added_this_month ?? 0) - (stats.data.added_last_month ?? 0)) / (stats.data.added_last_month ?? 1)) * 100 : null}
-				/>
-				<StatCard label="Upcoming events" loading={stats.isLoading} value={(stats.data?.upcoming_events ?? 0).toLocaleString()} />
-				{(stats.data?.by_type ?? []).slice(0, 1).map((b) => (
-					<StatCard key={b.label} label={b.label} loading={stats.isLoading} value={b.value.toLocaleString()} />
-				))}
-			</StatStrip>
+			<StatsPanel>
+				<StatStrip cols={4}>
+					<RichStatCard label="Total entities" Icon={Layers} loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()}
+						totalRows={stats.data?.total_rows} thisYear={stats.data?.this_year} lastYear={stats.data?.last_year} yoy={stats.data?.yoy_change} />
+					<StatCard
+						label="Added this month"
+						loading={stats.isLoading}
+						value={(stats.data?.added_this_month ?? 0).toLocaleString()}
+						delta={stats.data && (stats.data.added_last_month ?? 0) > 0 ? (((stats.data.added_this_month ?? 0) - (stats.data.added_last_month ?? 0)) / (stats.data.added_last_month ?? 1)) * 100 : null}
+					/>
+					<RichStatCard label="Upcoming events" Icon={CalendarClock} loading={stats.isLoading} value={(stats.data?.upcoming_events ?? 0).toLocaleString()} />
+					{(stats.data?.by_type ?? []).slice(0, 1).map((b) => (
+						<RichStatCard key={b.label} label={b.label} Icon={Package} loading={stats.isLoading} value={b.value.toLocaleString()} />
+					))}
+				</StatStrip>
+			</StatsPanel>
 
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
 				<Section title="By type" meta="entities" center>

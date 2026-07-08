@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { qk } from '@/lib/query-keys';
+import { Select } from '@/components/select';
 
 /**
  * Lightweight filter primitives for admin list pages. `FilterBar` is the row
@@ -32,22 +33,11 @@ export function FilterSelect({
 	allLabel?: string;
 	ariaLabel?: string;
 }) {
-	return (
-		<select
-			className="search-input"
-			aria-label={ariaLabel}
-			style={{ height: 32, flex: '0 0 auto', minWidth: 130 }}
-			value={value}
-			onChange={(e) => onChange(e.target.value)}
-		>
-			<option value="">{allLabel}</option>
-			{options.map((o) => {
-				const v = typeof o === 'string' ? o : o.value;
-				const l = typeof o === 'string' ? o.replace(/_/g, ' ') : o.label;
-				return <option key={v} value={v}>{l}</option>;
-			})}
-		</select>
-	);
+	const opts = [
+		{ value: '', label: allLabel },
+		...options.map((o) => (typeof o === 'string' ? { value: o, label: o.replace(/_/g, ' ') } : o)),
+	];
+	return <Select value={value} onChange={onChange} options={opts} ariaLabel={ariaLabel} placeholder={allLabel} />;
 }
 
 /** Tri-state boolean filter: All / Yes / No. Value is '' | 'true' | 'false'. */

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type CSSProperties } from 'react';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Save, Trash2, Building2, BadgeCheck, Rocket, Coins, Layers, CircleDollarSign, GitMerge } from 'lucide-react';
@@ -39,7 +40,7 @@ interface Company {
 	status?: string | null;
 }
 interface CompaniesResponse { data: Company[]; total: number; totalPages: number }
-interface CompanyStats { total: number; verified: number; unicorn: number; raising: number; total_rows?: number; this_year?: number; last_year?: number; yoy_change?: number | null; by_status: Bucket[]; by_sector: Bucket[]; by_business_model: Bucket[] }
+interface CompanyStats { total: number; verified: number; unicorn: number; raising: number; total_rows?: number; this_year?: number | null; last_year?: number | null; yoy_change?: number | null; verified_this_month?: number; verified_last_month?: number; verified_mom?: number | null; by_status: Bucket[]; by_sector: Bucket[]; by_business_model: Bucket[] }
 
 const STATUSES = ['active', 'inactive', 'needs_review', 'dead', 'acquired', 'ipo', 'not_sportstech'] as const;
 // d2c/b2g/other dropped - unused across all records (verified) and not wanted.
@@ -887,39 +888,57 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 
 // ── Combined "Companies & Deals" page ────────────────────────────────────────
 // Like the old admin: one destination for companies, funding deals and M&A, with
-// a combined Statistics panel and in-page tabs for the differentiable entities.
-interface EntityYoyStats { total: number; this_year?: number; last_year?: number; yoy_change?: number | null }
-type CdTab = 'companies' | 'deals' | 'acquisitions' | 'claims';
-type CdClaimTab = 'claims' | 'changes';
-
-function CompanyDealClaims() {
-	const [tab, setTab] = useState<CdClaimTab>('claims');
-	return (
-		<div>
-			<div style={{ marginBottom: 'var(--space-4)' }}>
-				<PillTabs
-					tabs={[{ key: 'claims', label: 'Ownership claims' }, { key: 'changes', label: 'Data changes' }] as ReadonlyArray<{ key: CdClaimTab; label: string }>}
-					value={tab}
-					onChange={setTab}
-				/>
-			</div>
-			{tab === 'claims' && <ClaimsView embedded lockType="company" />}
-			{tab === 'changes' && <DataRequestsView embedded lockEntity="company,deal" />}
-		</div>
-	);
+// a combined Statistics panel (with an "added since" date filter) and in-page
+// tabs for the differentiable entities. The active tab lives in the URL (?tab=)
+// so it survives a refresh.
+interface EntityYoyStats { total: number; this_year?: number | null; last_year?: number | null; yoy_change?: number | null }
+type CdTab = 'companies' | 'deals' | 'acquisitions' | 'claims' | 'changes';
+const CD_TABS: ReadonlyArray<{ key: CdTab; label: string }> = [
+	{ key: 'companies', label: 'Companies' },
+	{ key: 'deals', label: 'Deals' },
+	{ key: 'acquisitions', label: 'M&A' },
+	{ key: 'claims', label: 'Ownership claims' },
+	{ key: 'changes', label: 'Data changes' },
+];
+const RANGE_OPTS: Array<{ label: string; days: number }> = [
+	{ label: 'Last 30 days', days: 30 },
+	{ label: 'Last 90 days', days: 90 },
+	{ label: 'Last 12 months', days: 365 },
+];
+function toIsoDaysAgo(days: number): string {
+	const dt = new Date();
+	dt.setDate(dt.getDate() - days);
+	return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
 }
 
 export default function CompaniesAdminPage() {
-	const [tab, setTab] = useState<CdTab>('companies');
-	const cStats = useSWR<CompanyStats>(['/api/admin/stats/companies'], { dedupingInterval: 60_000 });
-	const dStats = useSWR<EntityYoyStats>(['/api/admin/stats/deals'], { dedupingInterval: 60_000 });
-	const aStats = useSWR<EntityYoyStats>(['/api/admin/stats/acquisitions'], { dedupingInterval: 60_000 });
+	const searchParams = useSearchParams();
+	const router = useRouter();
+	const pathname = usePathname();
+	const raw = searchParams.get('tab');
+	const tab: CdTab = (CD_TABS.some((t) => t.key === raw) ? raw : 'companies') as CdTab;
+	const setTab = (t: CdTab) => router.replace(`${pathname}?tab=${t}`, { scroll: false });
+
+	const [rangeDays, setRangeDays] = useState(0); // 0 = all time
+	const from = rangeDays > 0 ? toIsoDaysAgo(rangeDays) : undefined;
+	const key = (path: string): [string] | [string, { from: string }] => (from ? [path, { from }] : [path]);
+	const cStats = useSWR<CompanyStats>(key('/api/admin/stats/companies'), { dedupingInterval: 60_000 });
+	const dStats = useSWR<EntityYoyStats>(key('/api/admin/stats/deals'), { dedupingInterval: 60_000 });
+	const aStats = useSWR<EntityYoyStats>(key('/api/admin/stats/acquisitions'), { dedupingInterval: 60_000 });
 	const c = cStats.data, d = dStats.data, a = aStats.data;
+
+	const rangeFilter = (
+		<select className="search-input" style={{ height: 30, width: 150 }} value={rangeDays} onChange={(e) => setRangeDays(Number(e.target.value))} aria-label="Date range">
+			<option value={0}>All time</option>
+			{RANGE_OPTS.map((o) => <option key={o.days} value={o.days}>{o.label}</option>)}
+		</select>
+	);
+
 	return (
 		<div>
 			<PageHeader kicker="Data" title="Companies & Deals" subtitle="Manage companies, funding deals and M&A transactions." />
 
-			<StatsPanel>
+			<StatsPanel action={rangeFilter}>
 				<StatStrip cols={4}>
 					<RichStatCard label="Total Companies" Icon={Building2} loading={cStats.isLoading} value={(c?.total ?? 0).toLocaleString()}
 						totalRows={c?.total_rows} thisYear={c?.this_year} lastYear={c?.last_year} yoy={c?.yoy_change} />
@@ -927,27 +946,20 @@ export default function CompaniesAdminPage() {
 						thisYear={d?.this_year} lastYear={d?.last_year} yoy={d?.yoy_change} />
 					<RichStatCard label="Total M&A Transactions" Icon={GitMerge} loading={aStats.isLoading} value={(a?.total ?? 0).toLocaleString()}
 						thisYear={a?.this_year} lastYear={a?.last_year} yoy={a?.yoy_change} />
-					<RichStatCard label="Verified Companies" Icon={BadgeCheck} loading={cStats.isLoading} value={(c?.verified ?? 0).toLocaleString()} />
+					<RichStatCard label="Verified Companies" Icon={BadgeCheck} loading={cStats.isLoading} value={(c?.verified ?? 0).toLocaleString()}
+						period="month" thisYear={c?.verified_this_month} lastYear={c?.verified_last_month} yoy={c?.verified_mom} />
 				</StatStrip>
 			</StatsPanel>
 
 			<div style={{ marginBottom: 'var(--space-4)' }}>
-				<PillTabs
-					tabs={[
-						{ key: 'companies', label: 'Companies' },
-						{ key: 'deals', label: 'Deals' },
-						{ key: 'acquisitions', label: 'M&A' },
-						{ key: 'claims', label: 'Claims' },
-					] as ReadonlyArray<{ key: CdTab; label: string }>}
-					value={tab}
-					onChange={setTab}
-				/>
+				<PillTabs tabs={CD_TABS} value={tab} onChange={setTab} />
 			</div>
 
 			{tab === 'companies' && <CompaniesView embedded />}
 			{tab === 'deals' && <DealsView embedded />}
 			{tab === 'acquisitions' && <AcquisitionsView embedded />}
-			{tab === 'claims' && <CompanyDealClaims />}
+			{tab === 'claims' && <ClaimsView embedded lockType="company" />}
+			{tab === 'changes' && <DataRequestsView embedded lockEntity="company,deal" />}
 		</div>
 	);
 }

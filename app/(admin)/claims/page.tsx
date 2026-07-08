@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { ChevronDown, ChevronRight, ExternalLink, Mail, MailCheck } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader, AsyncState, StatCard, StatsPanel, Section } from '@/components/atoms';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { Funnel } from '@/components/charts';
 import { StatStrip } from '@/components/filters';
 import { SectorCascade, LocationFields, EMPTY_LOCATION, type LocationValue } from '@/components/entity-pickers';
@@ -55,9 +56,11 @@ export function ClaimsView({ embedded = false, lockType }: { embedded?: boolean;
 	const [sendEmail, setSendEmail] = useState(true);
 	const [expandedId, setExpandedId] = useState<string | null>(null);
 	const [showCompleted, setShowCompleted] = useState(false);
+	const [search, setSearch] = useState('');
+	const debouncedSearch = useDebouncedValue(search);
 
 	const { data, error, isLoading } = useSWR<ClaimsResponse>(
-		['/api/admin/claims', { claim_type: claimType || undefined, page, limit: 50 }],
+		['/api/admin/claims', { claim_type: claimType || undefined, q: debouncedSearch || undefined, page, limit: 50 }],
 		{ dedupingInterval: 30_000 },
 	);
 	const stats = useSWR<QueueStats>(['/api/admin/stats/queues'], { dedupingInterval: 60_000 });
@@ -242,13 +245,11 @@ export function ClaimsView({ embedded = false, lockType }: { embedded?: boolean;
 			<div style={{ height: 'var(--space-4)' }} />
 
 			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)', alignItems: 'center' }}>
+				<input className="search-input" style={{ flex: '0 0 260px', height: 32 }} placeholder="Search company / claimant…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
 				{!lockType && (
-					<>
-						<span style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 4px' }} />
-						<select className="search-input" style={{ height: 30, width: 150 }} value={claimType} onChange={(e) => { setClaimType(e.target.value); setPage(1); }}>
-							{TYPE_FILTERS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
-						</select>
-					</>
+					<select className="search-input" style={{ height: 32, width: 150 }} value={claimType} onChange={(e) => { setClaimType(e.target.value); setPage(1); }}>
+						{TYPE_FILTERS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+					</select>
 				)}
 				<div style={{ flex: 1 }} />
 				<label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--fg-2)' }}>

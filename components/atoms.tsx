@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
-import { ChevronUp, ChevronDown } from 'lucide-react';
 
 /**
  * Tiny shared atoms for admin pages. Mirrors the small subset of components
@@ -220,27 +219,29 @@ export function RichStatCard({
 	const thisLabel = period === 'month' ? 'This Month' : 'This Year';
 	const lastLabel = period === 'month' ? 'Last Month' : 'Last Year';
 	const deltaLabel = period === 'month' ? 'MoM Change' : 'YoY Change';
+	void totalRows; // deprecated — redundant with the headline value; no longer shown.
 	return (
-		<div className="card" style={{ padding: 'var(--space-4)' }}>
+		<div className="card" style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column' }}>
 			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
 				<div style={{ minWidth: 0 }}>
 					<div className="co-stat-label">{label}</div>
 					{loading
-						? <div className="skeleton-bar" style={{ width: 72, height: 26, marginTop: 8 }} />
-						: <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em', marginTop: 4 }}>{value}</div>}
+						? <div className="skeleton-bar" style={{ width: 72, height: 30, marginTop: 10 }} />
+						: <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, fontWeight: 800, letterSpacing: '-0.02em', marginTop: 6, lineHeight: 1.05 }}>{value}</div>}
 				</div>
-				{Icon && <Icon size={28} style={{ opacity: 0.4, color: 'var(--accent)', flexShrink: 0 }} />}
+				{Icon && (
+					<div style={{ width: 36, height: 36, borderRadius: 10, display: 'grid', placeItems: 'center', background: 'var(--accent-soft)', color: 'var(--accent)', flexShrink: 0 }}>
+						<Icon size={18} />
+					</div>
+				)}
 			</div>
-			{totalRows != null && (
-				<div style={{ fontSize: 11.5, color: 'var(--fg-muted)', marginTop: 8 }}>Total rows: {totalRows.toLocaleString()}</div>
-			)}
 			{hasYear && (
-				<div style={{ borderTop: '1px solid var(--border)', marginTop: 12, paddingTop: 12, display: 'grid', gap: 8 }}>
-					<div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+				<div style={{ borderTop: '1px solid var(--border)', marginTop: 14, paddingTop: 12, display: 'grid', gap: 9 }}>
+					<div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
 						<span style={{ color: 'var(--fg-muted)' }}>{thisLabel}</span>
 						<span style={{ fontWeight: 600 }}>{(thisYear ?? 0).toLocaleString()}</span>
 					</div>
-					<div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+					<div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
 						<span style={{ color: 'var(--fg-muted)' }}>{lastLabel}</span>
 						<span style={{ fontWeight: 600 }}>{(lastYear ?? 0).toLocaleString()}</span>
 					</div>
@@ -262,29 +263,19 @@ export function RichStatCard({
  * admin's Statistics section.
  */
 export function StatsPanel({
-	title = 'Statistics', action, children, defaultOpen = true,
+	title = 'Statistics', action, children,
 }: {
 	title?: string;
 	action?: React.ReactNode;
 	children: React.ReactNode;
-	defaultOpen?: boolean;
 }) {
-	const [open, setOpen] = useState(defaultOpen);
 	return (
 		<div className="card" style={{ marginBottom: 'var(--space-5)' }}>
-			<div
-				style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px var(--space-4)', borderBottom: open ? '1px solid var(--border)' : 'none', cursor: 'pointer', gap: 12 }}
-				onClick={() => setOpen((o) => !o)}
-			>
+			<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px var(--space-4)', borderBottom: '1px solid var(--border)', gap: 12 }}>
 				<div style={{ fontWeight: 700, fontSize: 15 }}>{title}</div>
-				<div style={{ display: 'flex', alignItems: 'center', gap: 12 }} onClick={(e) => e.stopPropagation()}>
-					{action}
-					<button className="btn ghost" onClick={() => setOpen((o) => !o)} aria-label="Toggle statistics">
-						{open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-					</button>
-				</div>
+				{action && <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>{action}</div>}
 			</div>
-			{open && <div style={{ padding: 'var(--space-4)' }}>{children}</div>}
+			<div style={{ padding: 'var(--space-4)' }}>{children}</div>
 		</div>
 	);
 }

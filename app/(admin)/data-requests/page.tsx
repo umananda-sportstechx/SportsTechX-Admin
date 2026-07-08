@@ -7,7 +7,8 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader, AsyncState, StatCard, StatsPanel, Section } from '@/components/atoms';
 import { Funnel } from '@/components/charts';
-import { StatStrip } from '@/components/filters';
+import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 
 type DcrStatus = 'open' | 'picked_up' | 'resolved' | 'rejected';
 interface QueueStats { data_requests: Array<{ label: string; value: number }> }
@@ -39,13 +40,15 @@ const TABS: Array<{ label: string; key: DcrStatus }> = [
 
 export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: boolean; lockEntity?: string }) {
 	const { mutate } = useSWRConfig();
-	const [status, setStatus] = useState<DcrStatus>('open');
+	const [status, setStatus] = useState('');
+	const [search, setSearch] = useState('');
+	const debouncedSearch = useDebouncedValue(search);
 	const [page, setPage] = useState(1);
 	const [pendingId, setPendingId] = useState<string | null>(null);
 	const [selected, setSelected] = useState<Set<string>>(new Set());
 
 	const { data, error, isLoading } = useSWR<DcrResponse>(
-		['/api/admin/data-change-requests', { status, entity_type: lockEntity || undefined, page, limit: 30 }],
+		['/api/admin/data-change-requests', { status: status || undefined, q: debouncedSearch || undefined, entity_type: lockEntity || undefined, page, limit: 30 }],
 		{ dedupingInterval: 15_000 },
 	);
 	const stats = useSWR<QueueStats>(['/api/admin/stats/queues'], { dedupingInterval: 60_000 });
@@ -108,7 +111,7 @@ export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: 
 	const toggleAll = () => setSelected(allSelected ? new Set() : new Set(items.map((r) => r.id)));
 	return (
 		<div>
-			{!embedded && <PageHeader kicker={`Queues · ${(data?.total ?? 0).toLocaleString()} in ${status}`} title="Data change requests" />}
+			{!embedded && <PageHeader kicker={`Queues · ${(data?.total ?? 0).toLocaleString()} requests`} title="Data change requests" />}
 
 			{!embedded && (
 				<StatsPanel>
@@ -134,13 +137,10 @@ export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: 
 
 			<div style={{ height: 'var(--space-4)' }} />
 
-			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)' }}>
-				{TABS.map((t) => (
-					<button key={t.key} className={`chip ${status === t.key ? 'on' : ''}`} onClick={() => { setStatus(t.key); setPage(1); }}>
-						{t.label}
-					</button>
-				))}
-			</div>
+			<FilterBar>
+				<input className="search-input" style={{ flex: '0 0 260px', height: 32 }} placeholder="Search target / requester / field…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
+				<FilterSelect ariaLabel="Status" value={status} onChange={(v) => { setStatus(v); setPage(1); }} options={TABS.map((t) => ({ value: t.key, label: t.label }))} allLabel="All statuses" />
+			</FilterBar>
 
 			{selected.size > 0 && (
 				<div className="card" style={{ padding: 12, marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -153,7 +153,7 @@ export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: 
 			)}
 
 			<div className="card">
-				<AsyncState loading={isLoading} error={error} empty={items.length === 0} emptyMsg={`Nothing in ${status}.`} onRetry={() => void refresh()}>
+				<AsyncState loading={isLoading} error={error} empty={items.length === 0} emptyMsg={search || status ? 'No matching requests.' : 'No data change requests.'} onRetry={() => void refresh()}>
 				<table className="data-table">
 					<thead>
 						<tr>

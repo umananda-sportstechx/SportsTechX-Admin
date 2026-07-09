@@ -8,8 +8,11 @@ import { api } from '@/lib/api';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
-import { PageHeader, StatCard, AsyncState, Tag, Chip, Section } from '@/components/atoms';
+import { PageHeader, StatCard, StatsPanel, AsyncState, Tag, Chip, Section } from '@/components/atoms';
 import { Funnel } from '@/components/charts';
+import { StatStrip } from '@/components/filters';
+import { DateRangePicker, type RangeValue } from '@/components/date-range-picker';
+import { CompletionByAdmin, TimeAnalytics, WeeklyMetrics } from '@/components/queue-stats';
 import { WorkSessionTimer, countWorkItem } from '@/components/work-session-timer';
 import { CandidateInput, parseCandidates } from '@/components/candidate-import';
 import { InvestorModal } from '../investors/page';
@@ -23,15 +26,13 @@ interface PerAdmin { assigned_to: string | null; full_name: string | null; pendi
 interface Stats {
 	counts: { pending: number; completed: number; skipped: number; total: number };
 	byAdmin: PerAdmin[];
-	weekly?: { completed_this_week: number; completed_last_week: number; carried: number };
+	weekly?: { completed_this_week: number; completed_last_week: number; carried: number; carried_last_week: number; avg_per_day: number; avg_per_day_last_week: number };
 }
 interface TimeStats { perAdmin: Array<{ admin_id: string; full_name: string | null; total_seconds: number; items: number; avg_seconds_per_item: number }>; totals: { total_seconds: number; items: number } }
 interface AdminUser { id: string; full_name?: string | null; display_name?: string | null; email: string; user_role: string }
 interface UsersResponse { data: AdminUser[] }
 interface DedupeMatch { id: string; name: string; website: string | null; slug: string | null }
 interface Preview { matches: DedupeMatch[]; prefill: { name: string; website: string; category: string; hq_country: string } }
-
-const fmtTime = (s: number) => { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h ? `${h}h ${m}m` : `${m}m`; };
 
 const STATUSES = ['pending', 'completed', 'skipped'] as const;
 
@@ -50,21 +51,25 @@ export default function InvestorReviewPage() {
 	const [promoting, setPromoting] = useState<QueueRow | null>(null);
 	const [skipping, setSkipping] = useState<QueueRow | null>(null);
 	const [bulkAssignee, setBulkAssignee] = useState('');
+	const [statsRange, setStatsRange] = useState<RangeValue>({});
 
 	const { data, error, isLoading } = useSWR<QueueResponse>(
 		['/api/admin/investor-review', { status: status || undefined, assigned_to: assigned || undefined, q: debouncedSearch || undefined, from: from || undefined, to: to || undefined, limit: 50 }],
 		{ dedupingInterval: 15_000 },
 	);
-	const { data: stats } = useSWR<Stats>(['/api/admin/investor-review/stats'], { dedupingInterval: 15_000 });
-	const { data: timeStats } = useSWR<TimeStats>(['/api/admin/work-sessions/stats', { queue: 'investor_review' }], { dedupingInterval: 30_000 });
+	const { data: stats } = useSWR<Stats>(['/api/admin/investor-review/stats', { from: statsRange.from, to: statsRange.to }], { dedupingInterval: 15_000 });
+	const { data: timeStats } = useSWR<TimeStats>(['/api/admin/work-sessions/stats', { queue: 'investor_review', from: statsRange.from, to: statsRange.to }], { dedupingInterval: 30_000 });
 	const { data: usersResp } = useSWR<UsersResponse>(['/api/admin/users', { limit: 100 }], { dedupingInterval: 300_000 });
 	const admins = (usersResp?.data ?? []).filter((u) => u.user_role === 'admin');
-	const timeFor = (id: string | null) => timeStats?.perAdmin.find((t) => t.admin_id === id);
 	const adminName = (id: string | null) => {
 		if (!id) return '—';
 		const u = admins.find((a) => a.id === id);
 		return u ? (u.full_name || u.display_name || u.email) : `${id.slice(0, 8)}…`;
 	};
+	const c = stats?.counts;
+	const pending = c?.pending ?? 0;
+	const weekDelta = stats?.weekly && stats.weekly.completed_last_week > 0 ? ((stats.weekly.completed_this_week - stats.weekly.completed_last_week) / stats.weekly.completed_last_week) * 100 : null;
+	const reviewers = (stats?.byAdmin ?? []).filter((a) => a.assigned_to);
 
 	const refreshAll = () => {
 		void mutate((key) => Array.isArray(key) && typeof key[0] === 'string' && (key[0].startsWith('/api/admin/investor-review') || key[0].startsWith('/api/admin/work-sessions')));
@@ -110,50 +115,35 @@ export default function InvestorReviewPage() {
 				<WorkSessionTimer queue="investor_review" />
 			</div>
 
-			<div className="grid-4" style={{ marginBottom: 'var(--space-5)' }}>
-				<StatCard label="Pending" value={(stats?.counts.pending ?? 0).toLocaleString()} urgent={(stats?.counts.pending ?? 0) > 0} />
-				<StatCard label="Completed" value={(stats?.counts.completed ?? 0).toLocaleString()} delta={stats?.weekly && stats.weekly.completed_last_week > 0 ? ((stats.weekly.completed_this_week - stats.weekly.completed_last_week) / stats.weekly.completed_last_week) * 100 : null} />
-				<StatCard label="Skipped" value={(stats?.counts.skipped ?? 0).toLocaleString()} />
-				<StatCard label="Total" value={(stats?.counts.total ?? 0).toLocaleString()} />
-			</div>
+			<StatsPanel title="Statistics" action={<DateRangePicker value={statsRange} onChange={setStatsRange} />}>
+				<StatStrip cols={4}>
+					<StatCard label="Total in Queue" tone="blue" value={(c?.total ?? 0).toLocaleString()} />
+					<StatCard label="Completed" tone="green" value={(c?.completed ?? 0).toLocaleString()} delta={weekDelta} />
+					<StatCard label="Pending" tone="amber" value={pending.toLocaleString()} urgent={pending > 0} />
+					<StatCard label="Completed this week" tone="purple" value={(stats?.weekly?.completed_this_week ?? 0).toLocaleString()} />
+				</StatStrip>
+			</StatsPanel>
+
+			{/* Per-admin completion + time, week-over-week throughput, and the funnel — matches the old admin panel. */}
+			<CompletionByAdmin rows={reviewers.map((a) => ({ key: a.assigned_to!, name: a.full_name ?? adminName(a.assigned_to), done: a.completed + a.skipped, total: a.completed + a.skipped + a.pending, rate: a.completion_rate }))} />
 
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-				<Section title="Review funnel" meta="pending → completed">
-					<Funnel stages={[
-						{ label: 'Pending', value: stats?.counts.pending ?? 0 },
-						{ label: 'Completed', value: stats?.counts.completed ?? 0, color: 'var(--pos)' },
-						{ label: 'Skipped', value: stats?.counts.skipped ?? 0, color: 'var(--warn)' },
-					]} />
-				</Section>
-				<Section title="Reviewer productivity" meta="pending · completed · time">
-					{(stats?.byAdmin ?? []).filter((a) => a.assigned_to).length === 0
-						? <div style={{ color: 'var(--fg-muted)', fontSize: 13 }}>No assigned reviewers yet.</div>
-						: (
-							<table className="data-table">
-								<thead><tr><th>Reviewer</th><th>Pending</th><th>Completed</th><th>Done %</th><th>Time</th></tr></thead>
-								<tbody>
-									{(stats?.byAdmin ?? []).filter((a) => a.assigned_to).map((a) => {
-										const t = timeFor(a.assigned_to);
-										return (
-											<tr key={a.assigned_to}>
-												<td>{a.full_name ?? `${a.assigned_to!.slice(0, 8)}…`}</td>
-												<td className="num">{a.pending}</td>
-												<td className="num">{a.completed}</td>
-												<td className="num">
-													{a.completion_rate}%
-													<div style={{ height: 4, background: 'var(--bg-2)', borderRadius: 2, marginTop: 3, overflow: 'hidden' }}>
-														<div style={{ height: '100%', width: `${a.completion_rate}%`, background: 'var(--pos)' }} />
-													</div>
-												</td>
-												<td className="num">{t ? fmtTime(t.total_seconds) : '—'}</td>
-											</tr>
-										);
-									})}
-								</tbody>
-							</table>
-						)}
-				</Section>
+				<TimeAnalytics timeStats={timeStats} adminName={adminName} />
+				<WeeklyMetrics metrics={stats?.weekly ? [
+					{ label: 'Investors Completed', cur: stats.weekly.completed_this_week, prev: stats.weekly.completed_last_week, fmt: (n) => n.toLocaleString() },
+					{ label: 'Carried Forward', cur: stats.weekly.carried, prev: stats.weekly.carried_last_week ?? 0, fmt: (n) => n.toLocaleString(), goodDown: true },
+					{ label: 'Avg Per Day', cur: stats.weekly.avg_per_day ?? 0, prev: stats.weekly.avg_per_day_last_week ?? 0, fmt: (n) => n.toFixed(1) },
+				] : null} />
 			</div>
+
+			<Section title="Review funnel" meta="pending → completed">
+				<Funnel stages={[
+					{ label: 'Pending', value: c?.pending ?? 0 },
+					{ label: 'Completed', value: c?.completed ?? 0, color: 'var(--pos)' },
+					{ label: 'Skipped', value: c?.skipped ?? 0, color: 'var(--warn)' },
+				]} />
+			</Section>
+			<div style={{ marginBottom: 'var(--space-5)' }} />
 
 			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)', gap: 8, flexWrap: 'wrap' }}>
 				<Chip active={status === ''} onClick={() => setStatus('')}>All</Chip>

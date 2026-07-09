@@ -21,7 +21,7 @@ interface PerAdmin { assigned_to: string | null; full_name: string | null; pendi
 interface Stats {
 	counts: { new: number; reviewing: number; added: number; rejected: number; total: number };
 	byAdmin: PerAdmin[];
-	weekly: { added_this_week: number; added_last_week: number; carried: number };
+	weekly: { added_this_week: number; added_last_week: number; carried: number; carried_last_week: number; avg_per_day: number; avg_per_day_last_week: number };
 }
 interface TimeStats { perAdmin: Array<{ admin_id: string; full_name: string | null; total_seconds: number; items: number; avg_seconds_per_item: number }>; totals: { total_seconds: number; items: number } }
 interface AdminUser { id: string; full_name?: string | null; display_name?: string | null; email: string; user_role: string }
@@ -41,6 +41,9 @@ const TABS: Array<{ label: string; key: Status | '' }> = [
 	{ label: 'Added', key: 'added' }, { label: 'Rejected', key: 'rejected' },
 ];
 const fmtTime = (s: number) => { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60); return h ? `${h}h ${m}m` : `${m}m`; };
+/** Decimal duration like the old admin: "12.96h" / "2.97 min" / "45s". */
+const fmtDur = (s: number): string => (s >= 3600 ? `${(s / 3600).toFixed(2)}h` : s >= 60 ? `${(s / 60).toFixed(2)} min` : `${Math.round(s)}s`);
+void fmtTime;
 
 export default function StartupsPipelinePage() {
 	const { mutate } = useSWRConfig();
@@ -71,6 +74,9 @@ export default function StartupsPipelinePage() {
 	const refreshAll = () => void mutate((key) => Array.isArray(key) && typeof key[0] === 'string' && (key[0].startsWith('/api/admin/startups-pipeline') || key[0].startsWith('/api/admin/work-sessions')));
 
 	const c = stats?.counts;
+	const pending = (c?.new ?? 0) + (c?.reviewing ?? 0);
+	const weekDelta = stats?.weekly && stats.weekly.added_last_week > 0 ? ((stats.weekly.added_this_week - stats.weekly.added_last_week) / stats.weekly.added_last_week) * 100 : null;
+	const reviewers = (stats?.byAdmin ?? []).filter((a) => a.assigned_to);
 	const entries = data?.data ?? [];
 	const allSelected = entries.length > 0 && entries.every((r) => selected.has(r.id));
 	const toggleAll = () => setSelected(allSelected ? new Set() : new Set(entries.map((r) => r.id)));
@@ -110,45 +116,29 @@ export default function StartupsPipelinePage() {
 			</div>
 
 			<StatStrip cols={4}>
-				<StatCard label="New" value={(c?.new ?? 0).toLocaleString()} urgent={(c?.new ?? 0) > 0} />
-				<StatCard label="Reviewing" value={(c?.reviewing ?? 0).toLocaleString()} />
-				<StatCard label="Added" value={(c?.added ?? 0).toLocaleString()} />
-				<StatCard label="Added this week" value={(stats?.weekly.added_this_week ?? 0).toLocaleString()} delta={stats?.weekly && stats.weekly.added_last_week > 0 ? ((stats.weekly.added_this_week - stats.weekly.added_last_week) / stats.weekly.added_last_week) * 100 : null} />
+				<StatCard label="Total in Sheet" tone="blue" value={(c?.total ?? 0).toLocaleString()} />
+				<StatCard label="Added" tone="green" value={(c?.added ?? 0).toLocaleString()} />
+				<StatCard label="Pending" tone="amber" value={pending.toLocaleString()} urgent={pending > 0} />
+				<StatCard label="Added this week" tone="purple" value={(stats?.weekly.added_this_week ?? 0).toLocaleString()} delta={weekDelta} />
 			</StatStrip>
 
+			{/* Per-admin completion + time, week-over-week throughput, and the funnel — matches the old admin panel. */}
+			<CompletionByAdmin rows={reviewers} adminName={adminName} />
+
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-				<Section title="Pipeline funnel" meta="new → added">
-					<Funnel stages={[
-						{ label: 'New', value: c?.new ?? 0 },
-						{ label: 'Reviewing', value: c?.reviewing ?? 0 },
-						{ label: 'Added', value: c?.added ?? 0, color: 'var(--pos)' },
-						{ label: 'Rejected', value: c?.rejected ?? 0, color: 'var(--neg)' },
-					]} />
-				</Section>
-				<Section title="Reviewer productivity" meta="assigned · added · time">
-					{(stats?.byAdmin ?? []).filter((a) => a.assigned_to).length === 0
-						? <div style={{ color: 'var(--fg-muted)', fontSize: 13 }}>No assigned reviewers yet.</div>
-						: (
-							<table className="data-table">
-								<thead><tr><th>Reviewer</th><th>Pending</th><th>Added</th><th>Done %</th><th>Time</th></tr></thead>
-								<tbody>
-									{(stats?.byAdmin ?? []).filter((a) => a.assigned_to).map((a) => {
-										const t = timeFor(a.assigned_to);
-										return (
-											<tr key={a.assigned_to}>
-												<td>{a.full_name ?? adminName(a.assigned_to)}</td>
-												<td className="num">{a.pending}</td>
-												<td className="num">{a.added}</td>
-												<td className="num">{a.completion_rate}%</td>
-												<td className="num">{t ? fmtTime(t.total_seconds) : '—'}</td>
-											</tr>
-										);
-									})}
-								</tbody>
-							</table>
-						)}
-				</Section>
+				<TimeAnalytics timeStats={timeStats} adminName={adminName} />
+				<WeeklyMetrics weekly={stats?.weekly} />
 			</div>
+
+			<Section title="Pipeline funnel" meta="new → added">
+				<Funnel stages={[
+					{ label: 'New', value: c?.new ?? 0 },
+					{ label: 'Reviewing', value: c?.reviewing ?? 0 },
+					{ label: 'Added', value: c?.added ?? 0, color: 'var(--pos)' },
+					{ label: 'Rejected', value: c?.rejected ?? 0, color: 'var(--neg)' },
+				]} />
+			</Section>
+			<div style={{ marginBottom: 'var(--space-5)' }} />
 
 			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)', gap: 8, flexWrap: 'wrap' }}>
 				{TABS.map((t) => <button key={t.key} className={`chip ${status === t.key ? 'on' : ''}`} onClick={() => setStatus(t.key)}>{t.label}</button>)}
@@ -406,4 +396,92 @@ function AddModal({ admins, onClose, onSaved }: { admins: AdminUser[]; onClose: 
 
 function L({ label, children }: { label: string; children: React.ReactNode }) {
 	return <div><div className="co-stat-label" style={{ marginBottom: 6 }}>{label}</div>{children}</div>;
+}
+
+/** Per-admin completion progress bars — mirrors the old admin's "Completion by Admin". */
+function CompletionByAdmin({ rows, adminName }: { rows: PerAdmin[]; adminName: (id: string | null) => string }) {
+	if (!rows.length) return null;
+	return (
+		<div style={{ marginBottom: 'var(--space-5)' }}>
+			<Section title="Completion by admin" meta="processed / assigned">
+				<div style={{ display: 'grid', gap: 14 }}>
+					{rows.map((a) => {
+						const done = a.added + a.rejected;
+						const total = done + a.pending;
+						const rate = a.completion_rate;
+						return (
+							<div key={a.assigned_to}>
+								<div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6, gap: 12 }}>
+									<span style={{ fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.full_name ?? adminName(a.assigned_to)}</span>
+									<span style={{ color: 'var(--fg-muted)', flexShrink: 0 }}>{done}/{total} completed <strong style={{ color: 'var(--fg)' }}>{rate}%</strong></span>
+								</div>
+								<div style={{ height: 8, borderRadius: 999, background: 'var(--bg-3)', overflow: 'hidden' }}>
+									<div style={{ width: `${Math.min(Math.max(rate, 0), 100)}%`, height: '100%', background: 'var(--pos)', borderRadius: 999, transition: 'width .3s ease' }} />
+								</div>
+							</div>
+						);
+					})}
+				</div>
+			</Section>
+		</div>
+	);
+}
+
+/** Per-admin work-time table (Total Time / Avg-per-item / Completed) + overall-average footer. */
+function TimeAnalytics({ timeStats, adminName }: { timeStats?: TimeStats; adminName: (id: string | null) => string }) {
+	const rows = timeStats?.perAdmin ?? [];
+	const t = timeStats?.totals;
+	const overall = t && t.items > 0 ? Math.round(t.total_seconds / t.items) : 0;
+	return (
+		<Section title="Time analytics" meta="work time per admin">
+			{rows.length === 0 ? <div style={{ color: 'var(--fg-muted)', fontSize: 13 }}>No time data yet</div> : (
+				<table className="data-table">
+					<thead><tr><th>Admin</th><th style={{ textAlign: 'right' }}>Total Time</th><th style={{ textAlign: 'right' }}>Avg/Item</th><th style={{ textAlign: 'right' }}>Completed</th></tr></thead>
+					<tbody>
+						{rows.map((r) => (
+							<tr key={r.admin_id}>
+								<td>{r.full_name ?? adminName(r.admin_id)}</td>
+								<td className="num">{fmtDur(r.total_seconds)}</td>
+								<td className="num">{fmtDur(r.avg_seconds_per_item)}</td>
+								<td className="num">{r.items}</td>
+							</tr>
+						))}
+					</tbody>
+					<tfoot><tr><td colSpan={3} style={{ color: 'var(--fg-muted)' }}>Overall Average</td><td className="num" style={{ fontWeight: 700 }}>{overall ? `${fmtDur(overall)}/item` : '—'}</td></tr></tfoot>
+				</table>
+			)}
+		</Section>
+	);
+}
+
+/** This-week vs last-week throughput with colored deltas — mirrors "Weekly Metrics". */
+function WeeklyMetrics({ weekly }: { weekly?: Stats['weekly'] }) {
+	const w = weekly;
+	const metric = (label: string, cur: number, prev: number, fmt: (n: number) => string, goodDown = false) => {
+		const change = prev > 0 ? Math.round(((cur - prev) / prev) * 100) : (cur > 0 ? 100 : 0);
+		const positive = goodDown ? change <= 0 : change >= 0;
+		return (
+			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '11px 0', borderBottom: '1px solid var(--border)' }}>
+				<div>
+					<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{label}</div>
+					<div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, letterSpacing: '-0.01em' }}>{fmt(cur)}</div>
+				</div>
+				<div style={{ textAlign: 'right' }}>
+					<span className={`tag ${positive ? 'pos' : 'neg'}`}>{change >= 0 ? '▲' : '▼'} {change >= 0 ? '+' : ''}{change}%</span>
+					<div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 4 }}>vs {fmt(prev)}</div>
+				</div>
+			</div>
+		);
+	};
+	return (
+		<Section title="Weekly metrics" meta="this week vs last">
+			{!w ? <div style={{ color: 'var(--fg-muted)', fontSize: 13 }}>No weekly data</div> : (
+				<div>
+					{metric('Startups Added', w.added_this_week, w.added_last_week, (n) => n.toLocaleString())}
+					{metric('Carried Forward', w.carried, w.carried_last_week ?? 0, (n) => n.toLocaleString(), true)}
+					{metric('Avg Per Day', w.avg_per_day ?? 0, w.avg_per_day_last_week ?? 0, (n) => n.toFixed(1))}
+				</div>
+			)}
+		</Section>
+	);
 }

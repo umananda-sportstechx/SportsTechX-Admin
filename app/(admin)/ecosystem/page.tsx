@@ -112,17 +112,18 @@ export function EcosystemView({ embedded = false, entityType }: { embedded?: boo
 			{!embedded && (
 				<StatsPanel>
 					<StatStrip cols={4}>
-						<RichStatCard label="Total entities" Icon={Layers} loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()}
+						<RichStatCard label="Total entities" tone="blue" Icon={Layers} loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()}
 							thisYear={stats.data?.this_year} lastYear={stats.data?.last_year} yoy={stats.data?.yoy_change} />
 						<StatCard
 							label="Added this month"
+							tone="indigo"
 							loading={stats.isLoading}
 							value={(stats.data?.added_this_month ?? 0).toLocaleString()}
 							delta={stats.data && (stats.data.added_last_month ?? 0) > 0 ? (((stats.data.added_this_month ?? 0) - (stats.data.added_last_month ?? 0)) / (stats.data.added_last_month ?? 1)) * 100 : null}
 						/>
-						<RichStatCard label="Upcoming events" Icon={CalendarClock} loading={stats.isLoading} value={(stats.data?.upcoming_events ?? 0).toLocaleString()} />
+						<RichStatCard label="Upcoming events" tone="amber" Icon={CalendarClock} loading={stats.isLoading} value={(stats.data?.upcoming_events ?? 0).toLocaleString()} />
 						{(stats.data?.by_type ?? []).slice(0, 1).map((b) => (
-							<RichStatCard key={b.label} label={b.label} Icon={Package} loading={stats.isLoading} value={b.value.toLocaleString()} />
+							<RichStatCard key={b.label} label={b.label} tone="purple" Icon={Package} loading={stats.isLoading} value={b.value.toLocaleString()} />
 						))}
 					</StatStrip>
 				</StatsPanel>
@@ -654,13 +655,13 @@ export default function EcosystemAdminPage() {
 
 			<StatsPanel action={<DateRangePicker value={dateRange} onChange={setDateRange} />}>
 				<StatStrip cols={4}>
-					<RichStatCard label="Programs" Icon={GraduationCap} loading={eStats.isLoading} value={(e?.programs ?? 0).toLocaleString()}
+					<RichStatCard label="Programs" tone="blue" Icon={GraduationCap} loading={eStats.isLoading} value={(e?.programs ?? 0).toLocaleString()}
 						thisYear={e?.programs_this_year} lastYear={e?.programs_last_year} yoy={e?.programs_yoy} />
-					<RichStatCard label="Events" Icon={CalendarClock} loading={eStats.isLoading} value={(e?.events ?? 0).toLocaleString()}
+					<RichStatCard label="Events" tone="amber" Icon={CalendarClock} loading={eStats.isLoading} value={(e?.events ?? 0).toLocaleString()}
 						thisYear={e?.events_this_year} lastYear={e?.events_last_year} yoy={e?.events_yoy} />
-					<RichStatCard label="Investors" Icon={Banknote} loading={iStats.isLoading} value={(i?.total ?? 0).toLocaleString()}
+					<RichStatCard label="Investors" tone="green" Icon={Banknote} loading={iStats.isLoading} value={(i?.total ?? 0).toLocaleString()}
 						thisYear={i?.this_year} lastYear={i?.last_year} yoy={i?.yoy_change} />
-					<RichStatCard label="Initiatives" Icon={Lightbulb} loading={eStats.isLoading} value={(e?.initiatives ?? 0).toLocaleString()}
+					<RichStatCard label="Initiatives" tone="purple" Icon={Lightbulb} loading={eStats.isLoading} value={(e?.initiatives ?? 0).toLocaleString()}
 						thisYear={e?.initiatives_this_year} lastYear={e?.initiatives_last_year} yoy={e?.initiatives_yoy} />
 				</StatStrip>
 			</StatsPanel>

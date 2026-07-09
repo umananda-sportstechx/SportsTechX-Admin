@@ -110,12 +110,12 @@ export function CompaniesView({ embedded = false }: { embedded?: boolean }) {
 			{!embedded && (
 				<StatsPanel>
 					<StatStrip cols={5}>
-						<RichStatCard label="Total Companies" Icon={Building2} loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()}
+						<RichStatCard label="Total Companies" tone="blue" Icon={Building2} loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()}
 							totalRows={stats.data?.total_rows} thisYear={stats.data?.this_year} lastYear={stats.data?.last_year} yoy={stats.data?.yoy_change} />
-						<RichStatCard label="Verified" Icon={BadgeCheck} loading={stats.isLoading} value={(stats.data?.verified ?? 0).toLocaleString()} />
-						<RichStatCard label="Unicorns" Icon={Rocket} loading={stats.isLoading} value={(stats.data?.unicorn ?? 0).toLocaleString()} />
-						<RichStatCard label="Actively raising" Icon={Coins} loading={stats.isLoading} value={(stats.data?.raising ?? 0).toLocaleString()} />
-						<RichStatCard label="Sectors covered" Icon={Layers} loading={stats.isLoading} value={(stats.data?.by_sector?.length ?? 0).toLocaleString()} />
+						<RichStatCard label="Verified" tone="green" Icon={BadgeCheck} loading={stats.isLoading} value={(stats.data?.verified ?? 0).toLocaleString()} />
+						<RichStatCard label="Unicorns" tone="purple" Icon={Rocket} loading={stats.isLoading} value={(stats.data?.unicorn ?? 0).toLocaleString()} />
+						<RichStatCard label="Actively raising" tone="amber" Icon={Coins} loading={stats.isLoading} value={(stats.data?.raising ?? 0).toLocaleString()} />
+						<RichStatCard label="Sectors covered" tone="teal" Icon={Layers} loading={stats.isLoading} value={(stats.data?.by_sector?.length ?? 0).toLocaleString()} />
 					</StatStrip>
 				</StatsPanel>
 			)}
@@ -930,13 +930,13 @@ export default function CompaniesAdminPage() {
 
 			<StatsPanel action={rangeFilter}>
 				<StatStrip cols={4}>
-					<RichStatCard label="Total Companies" Icon={Building2} loading={cStats.isLoading} value={(c?.total ?? 0).toLocaleString()}
+					<RichStatCard label="Total Companies" tone="blue" Icon={Building2} loading={cStats.isLoading} value={(c?.total ?? 0).toLocaleString()}
 						totalRows={c?.total_rows} thisYear={c?.this_year} lastYear={c?.last_year} yoy={c?.yoy_change} />
-					<RichStatCard label="Total Funding Deals" Icon={CircleDollarSign} loading={dStats.isLoading} value={(d?.total ?? 0).toLocaleString()}
+					<RichStatCard label="Total Funding Deals" tone="green" Icon={CircleDollarSign} loading={dStats.isLoading} value={(d?.total ?? 0).toLocaleString()}
 						thisYear={d?.this_year} lastYear={d?.last_year} yoy={d?.yoy_change} />
-					<RichStatCard label="Total M&A Transactions" Icon={GitMerge} loading={aStats.isLoading} value={(a?.total ?? 0).toLocaleString()}
+					<RichStatCard label="Total M&A Transactions" tone="purple" Icon={GitMerge} loading={aStats.isLoading} value={(a?.total ?? 0).toLocaleString()}
 						thisYear={a?.this_year} lastYear={a?.last_year} yoy={a?.yoy_change} />
-					<RichStatCard label="Verified Companies" Icon={BadgeCheck} loading={cStats.isLoading} value={(c?.verified ?? 0).toLocaleString()}
+					<RichStatCard label="Verified Companies" tone="teal" Icon={BadgeCheck} loading={cStats.isLoading} value={(c?.verified ?? 0).toLocaleString()}
 						period="month" thisYear={c?.verified_this_month} lastYear={c?.verified_last_month} yoy={c?.verified_mom} />
 				</StatStrip>
 			</StatsPanel>

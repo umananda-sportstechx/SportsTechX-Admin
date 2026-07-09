@@ -149,6 +149,7 @@ export function StatCard({
 	loading,
 	urgent,
 	delta,
+	tone,
 }: {
 	label: string;
 	value: React.ReactNode;
@@ -157,7 +158,11 @@ export function StatCard({
 	urgent?: boolean;
 	/** Optional period-over-period change (%). Renders a colored ▲/▼ sub-line. */
 	delta?: number | null;
+	/** Accent tone (STAT_TONES key or CSS color) — colors the value + top stripe. */
+	tone?: StatTone;
 }) {
+	const c = tone ? toneColor(tone) : null;
+	const valueColor = urgent ? 'var(--accent)' : c ?? 'var(--fg)';
 	const inner = (
 		<>
 			<div className="co-stat-label">{label}</div>
@@ -171,7 +176,7 @@ export function StatCard({
 						fontWeight: 800,
 						letterSpacing: '-0.02em',
 						marginTop: 4,
-						color: urgent ? 'var(--accent)' : 'var(--fg)',
+						color: valueColor,
 					}}
 				>
 					{value}
@@ -189,7 +194,7 @@ export function StatCard({
 		textDecoration: 'none',
 		color: 'inherit',
 		display: 'block',
-		borderTop: urgent ? '2px solid var(--accent)' : '2px solid transparent',
+		borderTop: `2px solid ${urgent ? 'var(--accent)' : c ?? 'transparent'}`,
 	};
 	return href
 		? <Link href={href} className="card" style={style}>{inner}</Link>
@@ -197,12 +202,33 @@ export function StatCard({
 }
 
 /**
+ * Curated, theme-agnostic accent tones for color-coding stat cards. Each pop
+ * is legible on both light and dark surfaces (oklch, high chroma). Pages pick a
+ * distinct tone per KPI so the panel reads like the dashboard's colored data.
+ */
+export const STAT_TONES = {
+	// Tuned for ≥3:1 large-text contrast on BOTH a white card and a near-black
+	// dark card (kept vibrant, mid-lightness). Icon badge uses a 15% tint of these.
+	brand: 'var(--accent)',
+	blue: 'oklch(55% 0.18 250)',
+	green: 'oklch(54% 0.15 155)',
+	amber: 'oklch(57% 0.13 65)',
+	purple: 'oklch(53% 0.20 305)',
+	teal: 'oklch(54% 0.11 200)',
+	indigo: 'oklch(51% 0.17 270)',
+	rose: 'oklch(56% 0.20 18)',
+} as const;
+export type StatTone = keyof typeof STAT_TONES | (string & {});
+const toneColor = (t?: StatTone): string => (t && t in STAT_TONES ? STAT_TONES[t as keyof typeof STAT_TONES] : (t as string) || 'var(--accent)');
+
+/**
  * Rich stat card matching the old admin's anatomy: label + big value + optional
- * icon, an optional "Total rows" sub-line, and an optional This Year / Last Year
- * / YoY block with a colored up/down badge.
+ * icon, an optional This Year / Last Year / YoY block with a colored up/down
+ * badge, and an optional `tone` that color-codes the icon badge, value, and a
+ * top accent stripe.
  */
 export function RichStatCard({
-	label, value, Icon, loading, totalRows, thisYear, lastYear, yoy, period = 'year',
+	label, value, Icon, loading, totalRows, thisYear, lastYear, yoy, period = 'year', tone,
 }: {
 	label: string;
 	value: React.ReactNode;
@@ -214,23 +240,26 @@ export function RichStatCard({
 	yoy?: number | null;
 	/** 'year' → This Year / Last Year / YoY; 'month' → This Month / Last Month / MoM. */
 	period?: 'year' | 'month';
+	/** Accent tone (a STAT_TONES key or any CSS color). Defaults to brand. */
+	tone?: StatTone;
 }) {
 	const hasYear = thisYear != null || lastYear != null;
 	const thisLabel = period === 'month' ? 'This Month' : 'This Year';
 	const lastLabel = period === 'month' ? 'Last Month' : 'Last Year';
 	const deltaLabel = period === 'month' ? 'MoM Change' : 'YoY Change';
+	const c = toneColor(tone);
 	void totalRows; // deprecated — redundant with the headline value; no longer shown.
 	return (
-		<div className="card" style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column' }}>
+		<div className="card" style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column', borderTop: `3px solid ${c}` }}>
 			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
 				<div style={{ minWidth: 0 }}>
 					<div className="co-stat-label">{label}</div>
 					{loading
 						? <div className="skeleton-bar" style={{ width: 72, height: 30, marginTop: 10 }} />
-						: <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, fontWeight: 800, letterSpacing: '-0.02em', marginTop: 6, lineHeight: 1.05 }}>{value}</div>}
+						: <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, fontWeight: 800, letterSpacing: '-0.02em', marginTop: 6, lineHeight: 1.05, color: c }}>{value}</div>}
 				</div>
 				{Icon && (
-					<div style={{ width: 36, height: 36, borderRadius: 10, display: 'grid', placeItems: 'center', background: 'var(--accent-soft)', color: 'var(--accent)', flexShrink: 0 }}>
+					<div style={{ width: 36, height: 36, borderRadius: 10, display: 'grid', placeItems: 'center', background: `color-mix(in srgb, ${c} 15%, transparent)`, color: c, flexShrink: 0 }}>
 						<Icon size={18} />
 					</div>
 				)}

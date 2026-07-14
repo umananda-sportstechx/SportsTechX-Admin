@@ -419,6 +419,7 @@ function CompanyClaimTab({ companyId, onFlags }: { companyId: string; onFlags?: 
 	const setRaising = (cid: string, on: boolean) => act(
 		() => api('POST', `/api/admin/claims/${cid}/toggle-active`, { active: on }),
 		on ? 'Marked actively raising' : 'Marked not raising', () => onFlags?.({ is_actively_raising: on }));
+	const sendEmail = (cid: string) => act(() => api('POST', `/api/admin/claims/${cid}/send-email`), 'Verified-claim email sent to claimant');
 	const copyLink = (token: string) => { void navigator.clipboard.writeText(`${window.location.origin}/verified/${token}`); toast.success('Shareable link copied'); };
 	const money = (v: string | number | null) => { const n = Number(v); return v != null && Number.isFinite(n) && n > 0 ? `$${n.toLocaleString()}` : '—'; };
 
@@ -463,10 +464,10 @@ function CompanyClaimTab({ companyId, onFlags }: { companyId: string; onFlags?: 
 						</div>
 					)}
 				</div>
-				{claim.is_verified && claim.shareable_token && (
-					<div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-						<div className="co-stat-label" style={{ marginBottom: 6 }}>Shareable link</div>
-						<button className="btn ghost" onClick={() => copyLink(claim.shareable_token!)}>Copy verified link</button>
+				{claim.is_verified && (
+					<div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+						<button className="btn ghost" disabled={busy} onClick={() => void sendEmail(claim.id)} title="Email the claimant that their claim is verified">Send email to claimant</button>
+						{claim.shareable_token && <button className="btn ghost" onClick={() => copyLink(claim.shareable_token!)}>Copy verified link</button>}
 					</div>
 				)}
 			</div>

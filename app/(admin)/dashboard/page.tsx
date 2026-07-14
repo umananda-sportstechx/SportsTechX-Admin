@@ -192,7 +192,7 @@ export default function AdminDashboard() {
 			<div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
 				<Section title="Top sectors" meta="by capital">
 					<AsyncState loading={sectorTree.isLoading} error={sectorTree.error} empty={sectorRows.length === 0} emptyMsg="No sector data" onRetry={() => void sectorTree.mutate()}>
-						<HBarDrilldown rows={sectorRows} total={sectorTotal} />
+						<HBarDrilldown rows={sectorRows} total={sectorTotal} accordion />
 					</AsyncState>
 				</Section>
 				<Section title="Investors by type" meta="count" center>

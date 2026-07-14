@@ -51,7 +51,7 @@ function MoneyStat({ label, value, sub, subHref, tone = 'var(--accent)', loading
 			{loading ? (
 				<div className="skeleton-bar" style={{ width: 80, height: 26, marginTop: 8 }} />
 			) : (
-				<div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em', marginTop: 4, color: tone }}>{value}</div>
+				<div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em', marginTop: 4 }}>{value}</div>
 			)}
 			{sub && (
 				subHref

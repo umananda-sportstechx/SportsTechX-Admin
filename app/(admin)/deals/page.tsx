@@ -274,7 +274,7 @@ function DealForm({ id, initial, onClose, onSaved, onStage }: { id: string | nul
 		<Modal
 			title={isEdit ? 'Edit deal' : stageMode ? 'Add funding round' : 'New deal'}
 			onClose={onClose}
-			width={680}
+			width={780}
 			footer={
 				<>
 					<button className="btn ghost" onClick={onClose}>Cancel</button>

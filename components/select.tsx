@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Check, Search } from 'lucide-react';
 
 export interface SelectOption { value: string; label: string }
@@ -11,7 +12,13 @@ export interface SelectOption { value: string; label: string }
  * hover/active states, a check on the selected row, click-outside + full
  * keyboard support (↑/↓ to move, Enter to pick, Esc to close). Same value/
  * onChange contract as a native select so call sites don't change.
+ *
+ * The popover renders in a portal with fixed positioning anchored to the
+ * trigger, so it floats ABOVE scrollable containers (modals, cards) instead of
+ * being clipped by their overflow, and flips upward when there's no room below.
  */
+const MENU_MAX = 320;
+
 export function Select({
 	value, onChange, options, placeholder = 'Select…', ariaLabel, width, height = 32, searchable = false, style,
 }: {
@@ -30,16 +37,43 @@ export function Select({
 	const [open, setOpen] = useState(false);
 	const [active, setActive] = useState(0);
 	const [query, setQuery] = useState('');
+	const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number; width: number; maxH: number } | null>(null);
 	const ref = useRef<HTMLDivElement>(null);
+	const menuRef = useRef<HTMLDivElement>(null);
 
 	const selected = options.find((o) => o.value === value);
 	const shown = searchable && query ? options.filter((o) => o.label.toLowerCase().includes(query.toLowerCase())) : options;
 
+	// Position the portaled menu against the trigger; flip up if it won't fit below.
+	const place = () => {
+		const el = ref.current;
+		if (!el) return;
+		const r = el.getBoundingClientRect();
+		const below = window.innerHeight - r.bottom - 8;
+		const above = r.top - 8;
+		const openUp = below < Math.min(MENU_MAX, 220) && above > below;
+		setPos(openUp
+			? { bottom: window.innerHeight - r.top + 4, left: r.left, width: r.width, maxH: Math.min(MENU_MAX, above) }
+			: { top: r.bottom + 4, left: r.left, width: r.width, maxH: Math.min(MENU_MAX, below) });
+	};
+
+	useEffect(() => { if (open) place(); }, [open]);
 	useEffect(() => {
 		if (!open) return;
-		const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+		const onDown = (e: MouseEvent) => {
+			const t = e.target as Node;
+			if (ref.current?.contains(t) || menuRef.current?.contains(t)) return;
+			setOpen(false);
+		};
+		const reposition = () => place();
 		document.addEventListener('mousedown', onDown);
-		return () => document.removeEventListener('mousedown', onDown);
+		window.addEventListener('resize', reposition);
+		window.addEventListener('scroll', reposition, true);
+		return () => {
+			document.removeEventListener('mousedown', onDown);
+			window.removeEventListener('resize', reposition);
+			window.removeEventListener('scroll', reposition, true);
+		};
 	}, [open]);
 	useEffect(() => { if (open) { setQuery(''); setActive(Math.max(0, options.findIndex((o) => o.value === value))); } }, [open, value, options]);
 	useEffect(() => { setActive(0); }, [query]);
@@ -73,10 +107,16 @@ export function Select({
 				</span>
 				<ChevronDown size={14} style={{ opacity: 0.6, flexShrink: 0, transition: 'transform .15s', transform: open ? 'rotate(180deg)' : 'none' }} />
 			</button>
-			{open && (
+			{open && pos && createPortal(
 				<div
+					ref={menuRef}
 					role="listbox"
-					style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, minWidth: '100%', maxHeight: 320, overflow: 'hidden', zIndex: 60, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-md)', display: 'flex', flexDirection: 'column' }}
+					style={{
+						position: 'fixed', left: pos.left, width: pos.width, top: pos.top, bottom: pos.bottom,
+						maxHeight: pos.maxH, overflow: 'hidden', zIndex: 2000,
+						background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)',
+						boxShadow: 'var(--shadow-lg, var(--shadow-md))', display: 'flex', flexDirection: 'column',
+					}}
 				>
 					{searchable && (
 						<div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderBottom: '1px solid var(--border)' }}>
@@ -102,7 +142,8 @@ export function Select({
 							</div>
 						))}
 					</div>
-				</div>
+				</div>,
+				document.body,
 			)}
 		</div>
 	);

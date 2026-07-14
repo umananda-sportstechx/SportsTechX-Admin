@@ -291,18 +291,18 @@ function AcquisitionForm({ id, initial, onClose, onSaved, onStage }: { id: strin
 					stageMode ? (
 						<div style={{ fontSize: 13, color: 'var(--fg-muted)', marginBottom: 4 }}>The new company is the acquiree — it will be linked when you save it.</div>
 					) : (
-						<Field label="Acquiree company"><CompanySelectOne value={form.acquiree_company_id} onChange={(v) => set('acquiree_company_id', v)} /></Field>
+						<Field label="Acquiree company *" hint="required — the company that was acquired"><CompanySelectOne value={form.acquiree_company_id} onChange={(v) => set('acquiree_company_id', v)} /></Field>
 					)
 				) : (
 					<>
-						<Field label="Acquirer company (if in DB)"><CompanySelectOne value={form.acquirer_company_id} onChange={(v) => set('acquirer_company_id', v)} /></Field>
+						<Field label="Acquirer company" hint="the buyer — pick from the catalog, or type a free-text name below if not listed"><CompanySelectOne value={form.acquirer_company_id} onChange={(v) => set('acquirer_company_id', v)} /></Field>
 						{!form.acquirer_company_id && (
 							<Field label="…or acquirer name (free text)"><input className="search-input" value={form.acquirer_name} onChange={(e) => set('acquirer_name', e.target.value)} /></Field>
 						)}
 					</>
 				)}
 				<Field label="Sector"><SectorCascade value={p.sector_id} onChange={(v) => setParty(party, { sector_id: v })} /></Field>
-				<Field label="Business model">
+				<Field label="Business model" hint="who they sell to — B2B, B2C or B2B2C">
 					<select className="search-input" value={p.business_model} onChange={(e) => setParty(party, { business_model: e.target.value })}>
 						<option value="">—</option>
 						{BUSINESS_MODELS.map((b) => <option key={b} value={b}>{b.toUpperCase()}</option>)}
@@ -311,7 +311,7 @@ function AcquisitionForm({ id, initial, onClose, onSaved, onStage }: { id: strin
 				<Field label="Location"><LocationFields value={p.hq} onChange={(v) => setParty(party, { hq: v })} /></Field>
 				<Field label="Sports"><SportsPicker value={p.sport_ids} onChange={(v) => setParty(party, { sport_ids: v })} /></Field>
 				<label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
-					<input type="checkbox" checked={p.is_sportstech} onChange={(e) => setParty(party, { is_sportstech: e.target.checked })} /> Is SportsTech
+					<input type="checkbox" checked={p.is_sportstech} onChange={(e) => setParty(party, { is_sportstech: e.target.checked })} /> Is SportsTech <span style={{ color: 'var(--fg-muted)' }}>— tick if this party operates in sports-tech</span>
 				</label>
 			</>
 		);
@@ -341,7 +341,7 @@ function AcquisitionForm({ id, initial, onClose, onSaved, onStage }: { id: strin
 						{ key: 'deal', label: 'Deal', node: (
 							<>
 								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-									<Field label="Acquisition date"><input className="search-input" type="date" value={form.acquisition_date} onChange={(e) => set('acquisition_date', e.target.value)} /></Field>
+									<Field label="Acquisition date" hint="sets the FX year used to convert the amount to USD"><input className="search-input" type="date" value={form.acquisition_date} onChange={(e) => set('acquisition_date', e.target.value)} /></Field>
 									<Field label="Type">
 										<select className="search-input" value={form.acquisition_type} onChange={(e) => set('acquisition_type', e.target.value)}>
 											{TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
@@ -349,8 +349,8 @@ function AcquisitionForm({ id, initial, onClose, onSaved, onStage }: { id: strin
 									</Field>
 								</div>
 								<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>
-									<Field label="Amount"><input className="search-input" type="number" value={form.amount} onChange={(e) => set('amount', e.target.value)} placeholder="in currency" /></Field>
-									<Field label="Currency"><CurrencySelect value={form.currency_code} onChange={(v) => set('currency_code', v)} /></Field>
+									<Field label="Amount" hint="in the currency at right — converted to USD automatically"><input className="search-input" type="number" value={form.amount} onChange={(e) => set('amount', e.target.value)} placeholder="e.g. 5000000" /></Field>
+									<Field label="Currency" hint="of the amount"><CurrencySelect value={form.currency_code} onChange={(v) => set('currency_code', v)} /></Field>
 								</div>
 								<Field label="Source URL"><input className="search-input" value={form.source_url} onChange={(e) => set('source_url', e.target.value)} placeholder="https://" /></Field>
 							</>

@@ -1,5 +1,7 @@
 'use client';
 
+import { Select } from '@/components/select';
+
 /**
  * Year dropdown for "founded" / "year launched" / cohort-year fields. These are
  * a single calendar year (not a full date), so a constrained dropdown beats a
@@ -18,9 +20,6 @@ export function YearSelect({
 	const years: number[] = [];
 	for (let y = max; y >= min; y--) years.push(y);
 	return (
-		<select className="search-input" style={{ width: '100%' }} value={value} onChange={(e) => onChange(e.target.value)}>
-			<option value="">{placeholder}</option>
-			{years.map((y) => <option key={y} value={String(y)}>{y}</option>)}
-		</select>
+		<Select value={value} onChange={onChange} searchable width="100%" style={{ display: 'block', width: '100%' }} placeholder={placeholder} options={[{ value: '', label: placeholder }, ...years.map((y) => ({ value: String(y), label: String(y) }))]} />
 	);
 }

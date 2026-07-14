@@ -67,19 +67,20 @@
 
 [data-theme="dark"],
 .dark {
-  --bg: #0F172A;
-  --bg-1: #0F172A;
-  --bg-2: #1E293B;
-  --bg-3: #334155;
-  --surface: #1E293B;
-  --fg: #E2E8F0;
-  --fg-2: #CBD5E1;
-  --fg-muted: #94A3B8;
-  --border: #334155;
-  --border-strong: #475569;
-  --grid-line: #1E293B;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.30);
-  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.35);
+  /* Near-black base to match the sidebar (#0B0F17); cards sit one step up. */
+  --bg: #0B0F17;
+  --bg-1: #0B0F17;
+  --bg-2: #14181F;
+  --bg-3: #232830;
+  --surface: #14181F;
+  --fg: #E7E7E9;
+  --fg-2: #C7C7CC;
+  --fg-muted: #8B8B93;
+  --border: #232830;
+  --border-strong: #333842;
+  --grid-line: #171B22;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.45);
 }
 
 @theme inline {

@@ -6,6 +6,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Save, Trash2, Building2, BadgeCheck, Rocket, Coins, Layers, CircleDollarSign, GitMerge } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Select } from '@/components/select';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useInitialQuery } from '@/hooks/use-initial-query';
 import { useConfirm } from '@/components/confirm';
@@ -662,25 +663,17 @@ function InlineFundingEditor({ onStage, onCancel }: { onStage: (d: StagedDeal) =
 				<Field label="Amount" hint="in the currency at right — converted to USD automatically"><input className="search-input" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 5000000" /></Field>
 				<Field label="Currency" hint="of the amount"><CurrencySelect value={currency} onChange={setCurrency} /></Field>
 				<Field label="Size bucket" hint="leave blank — auto-derived">
-					<select className="search-input" value={bucket} onChange={(e) => setBucket(e.target.value)}>
-						<option value="">—</option>
-						{SIZE_BUCKETS.map((b) => <option key={b} value={b}>{b.replace(/_/g, ' ')}</option>)}
-					</select>
+					<Select value={bucket} onChange={setBucket} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...SIZE_BUCKETS.map((b) => ({ value: b, label: b.replace(/_/g, ' ') }))]} />
 				</Field>
 			</div>
 			<Field label="Investors" hint="star marks the lead"><InvestorPicker value={investors} onChange={setInvestors} /></Field>
 			<Field label="Sector"><SectorCascade value={sectorId} onChange={setSectorId} /></Field>
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 				<Field label="Business model" hint="who they sell to — B2B, B2C or B2B2C">
-					<select className="search-input" value={model} onChange={(e) => setModel(e.target.value)}>
-						<option value="">—</option>
-						{PARTY_MODELS.map((b) => <option key={b} value={b}>{b.toUpperCase()}</option>)}
-					</select>
+					<Select value={model} onChange={setModel} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...PARTY_MODELS.map((b) => ({ value: b, label: b.toUpperCase() }))]} />
 				</Field>
 				<Field label="Status">
-					<select className="search-input" value={status} onChange={(e) => setStatus(e.target.value)}>
-						{DEAL_STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
-					</select>
+					<Select value={status} onChange={setStatus} width="100%" style={{ display: 'block', width: '100%' }} options={DEAL_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))} />
 				</Field>
 			</div>
 			<Field label="Location"><LocationFields value={hq} onChange={setHq} /></Field>
@@ -818,10 +811,7 @@ function InlineMaEditor({ onStage, onCancel }: { onStage: (a: StagedAcq) => void
 			<Field label="Counterparty sector"><SectorCascade value={party.sector_id} onChange={(v) => setParty((p) => ({ ...p, sector_id: v }))} /></Field>
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 				<Field label="Counterparty business model">
-					<select className="search-input" value={party.business_model} onChange={(e) => setParty((p) => ({ ...p, business_model: e.target.value }))}>
-						<option value="">—</option>
-						{PARTY_MODELS.map((b) => <option key={b} value={b}>{b.toUpperCase()}</option>)}
-					</select>
+					<Select value={party.business_model} onChange={(v) => setParty((p) => ({ ...p, business_model: v }))} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...PARTY_MODELS.map((b) => ({ value: b, label: b.toUpperCase() }))]} />
 				</Field>
 				<label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, alignSelf: 'end', paddingBottom: 8 }}>
 					<input type="checkbox" checked={party.is_sportstech} onChange={(e) => setParty((p) => ({ ...p, is_sportstech: e.target.checked }))} /> Counterparty is SportsTech <span style={{ color: 'var(--fg-muted)' }}>— tick if the other party operates in sports-tech</span>
@@ -833,9 +823,7 @@ function InlineMaEditor({ onStage, onCancel }: { onStage: (a: StagedAcq) => void
 				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 					<Field label="Acquisition date" hint="sets the FX year used to convert the amount to USD"><input className="search-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
 					<Field label="Type">
-						<select className="search-input" value={type} onChange={(e) => setType(e.target.value)}>
-							{ACQ_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
-						</select>
+						<Select value={type} onChange={setType} width="100%" style={{ display: 'block', width: '100%' }} options={ACQ_TYPES.map((t) => ({ value: t, label: t.replace(/_/g, ' ') }))} />
 					</Field>
 				</div>
 				<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>
@@ -989,10 +977,7 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 								<>
 									<Field label="Sector" hint="drill into sub-sectors as needed"><SectorCascade value={form.sector_id} onChange={(v) => set('sector_id', v)} /></Field>
 									<Field label="Business model" hint="who they sell to — B2B, B2C or B2B2C">
-										<select className="search-input" value={form.business_model} onChange={(e) => set('business_model', e.target.value)}>
-											<option value="">—</option>
-											{BUSINESS_MODELS.map((b) => <option key={b} value={b}>{b.toUpperCase()}</option>)}
-										</select>
+										<Select value={form.business_model} onChange={(v) => set('business_model', v)} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...BUSINESS_MODELS.map((b) => ({ value: b, label: b.toUpperCase() }))]} />
 									</Field>
 									<Field label="Sports" hint={form.sport_ids.length ? `${form.sport_ids.length} selected · pick “Multisport” for 5+` : 'pick “Multisport” for 5+ sports'}><SportsPicker value={form.sport_ids} onChange={(v) => set('sport_ids', v)} /></Field>
 									<Field label="Tech tags" hint={form.tech_tag_ids.length ? `${form.tech_tag_ids.length} selected` : undefined}><TechTagsPicker value={form.tech_tag_ids} onChange={(v) => set('tech_tag_ids', v)} /></Field>
@@ -1038,9 +1023,7 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 							key: 'status', label: 'Status', node: (
 								<>
 									<Field label="Status">
-										<select className="search-input" value={form.status} onChange={(e) => set('status', e.target.value)} title="active = live & listed · needs_review = imported, unverified · not_sportstech = out of scope · dead = defunct · acquired / ipo set automatically by M&A / IPO date">
-											{STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
-										</select>
+										<Select value={form.status} onChange={(v) => set('status', v)} width="100%" style={{ display: 'block', width: '100%' }} options={STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))} />
 									</Field>
 									<label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
 										<input type="checkbox" checked={form.is_verified} onChange={(e) => set('is_verified', e.target.checked)} /> Verified <span style={{ color: 'var(--fg-muted)', fontWeight: 400 }}>— shows the verified badge on the public profile</span>

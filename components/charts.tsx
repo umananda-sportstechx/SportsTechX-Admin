@@ -442,16 +442,21 @@ export interface HBarRow {
 }
 
 export function HBarDrilldown({
-	rows, total, defaultOpen,
+	rows, total, defaultOpen, accordion,
 }: {
 	rows: HBarRow[];
 	total?: number;
 	defaultOpen?: Record<string, boolean>;
+	/** Single-open top level: expanding one row collapses any other open row. */
+	accordion?: boolean;
 }) {
 	const [openMap, setOpenMap] = useState<Record<string, boolean>>(defaultOpen ?? {});
 	const grandTotal = (total ?? rows.reduce((s, r) => s + r.value, 0)) || 1;
 
-	const toggle = (id: string) => setOpenMap((o) => ({ ...o, [id]: !o[id] }));
+	// In accordion mode, opening a row resets the map to just that row — which
+	// also collapses the previously-open row and its children.
+	const toggle = (id: string) =>
+		setOpenMap((o) => (accordion ? (o[id] ? {} : { [id]: true }) : { ...o, [id]: !o[id] }));
 
 	return (
 		<div>

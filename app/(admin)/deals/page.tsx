@@ -298,12 +298,12 @@ function DealForm({ id, initial, onClose, onSaved, onStage }: { id: string | nul
 								)}
 								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 									<Field label="Round type"><RoundTypeSelect value={form.round_type_id} onChange={(v) => set('round_type_id', v)} /></Field>
-									<Field label="Announced date"><input className="search-input" type="date" value={form.announced_date} onChange={(e) => set('announced_date', e.target.value)} /></Field>
+									<Field label="Announced date" hint="sets the FX year used to convert the amount to USD"><input className="search-input" type="date" value={form.announced_date} onChange={(e) => set('announced_date', e.target.value)} /></Field>
 								</div>
 								<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 1fr', gap: 12 }}>
-									<Field label="Amount"><input className="search-input" type="number" value={form.amount} onChange={(e) => set('amount', e.target.value)} placeholder="in currency below" /></Field>
-									<Field label="Currency"><CurrencySelect value={form.currency_code} onChange={(v) => set('currency_code', v)} /></Field>
-									<Field label="Size bucket">
+									<Field label="Amount" hint="in the currency at right — converted to USD automatically"><input className="search-input" type="number" value={form.amount} onChange={(e) => set('amount', e.target.value)} placeholder="e.g. 5000000" /></Field>
+									<Field label="Currency" hint="of the amount"><CurrencySelect value={form.currency_code} onChange={(v) => set('currency_code', v)} /></Field>
+									<Field label="Size bucket" hint="leave blank — auto-derived from the USD amount">
 										<select className="search-input" value={form.deal_size_bucket} onChange={(e) => set('deal_size_bucket', e.target.value)}>
 											<option value="">—</option>
 											{SIZE_BUCKETS.map((b) => <option key={b} value={b}>{b.replace(/_/g, ' ')}</option>)}
@@ -327,7 +327,7 @@ function DealForm({ id, initial, onClose, onSaved, onStage }: { id: string | nul
 						{ key: 'class', label: 'Classification', hint: form.sport_ids.length, node: (
 							<>
 								<Field label="Sector"><SectorCascade value={form.sector_id} onChange={(v) => set('sector_id', v)} /></Field>
-								<Field label="Business model">
+								<Field label="Business model" hint="who they sell to — B2B, B2C or B2B2C">
 									<select className="search-input" value={form.business_model} onChange={(e) => set('business_model', e.target.value)}>
 										<option value="">—</option>
 										{BUSINESS_MODELS.map((b) => <option key={b} value={b}>{b.toUpperCase()}</option>)}

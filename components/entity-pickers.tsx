@@ -371,7 +371,7 @@ export function LocationFields({ value, onChange, prefix }: { value: LocationVal
 	const field = (key: keyof LocationValue, label: string) => (
 		<div>
 			<div className="co-stat-label" style={{ marginBottom: 6 }}>{lbl(label)}</div>
-			<input className="search-input" value={value[key]} onChange={(e) => onChange({ ...value, [key]: e.target.value })} />
+			<input className="search-input" value={value[key] ?? ''} onChange={(e) => onChange({ ...value, [key]: e.target.value })} />
 		</div>
 	);
 	const pickCity = (h: LocHit) => {
@@ -389,7 +389,7 @@ export function LocationFields({ value, onChange, prefix }: { value: LocationVal
 	return (
 		<div style={{ display: 'grid', gap: 12 }}>
 			<div ref={ref} style={{ position: 'relative' }}>
-				<div className="co-stat-label" style={{ marginBottom: 6 }}>{lbl('city')} <span style={{ textTransform: 'none', letterSpacing: 0, color: 'var(--fg-muted)', fontWeight: 400 }}>· pick to auto-fill country/region/continent</span></div>
+				<div className="co-stat-label" style={{ marginBottom: 6 }}>{lbl('city')} <span style={{ textTransform: 'none', letterSpacing: 0, color: 'var(--fg-muted)', fontWeight: 400 }}>· pick to auto-fill country / region / continent / report region</span></div>
 				<div style={{ position: 'relative' }}>
 					<Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--fg-muted)' }} />
 					<input className="search-input" style={{ width: '100%', paddingLeft: 26 }} placeholder="Search a city…"
@@ -415,6 +415,7 @@ export function LocationFields({ value, onChange, prefix }: { value: LocationVal
 				{field('state', 'state')}
 				{field('region', 'region')}
 				{field('continent', 'continent')}
+				{field('report_region', 'report region')}
 			</div>
 		</div>
 	);

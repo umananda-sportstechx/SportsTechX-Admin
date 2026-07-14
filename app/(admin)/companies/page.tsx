@@ -472,12 +472,12 @@ function InlineFundingEditor({ onStage, onCancel }: { onStage: (d: StagedDeal) =
 		<div style={editorBox}>
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 				<Field label="Round type"><RoundTypeSelect value={roundTypeId} onChange={setRoundTypeId} /></Field>
-				<Field label="Announced date"><input className="search-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+				<Field label="Announced date" hint="sets the FX year used to convert the amount to USD"><input className="search-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
 			</div>
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 1fr', gap: 12 }}>
-				<Field label="Amount"><input className="search-input" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="in currency" /></Field>
-				<Field label="Currency"><CurrencySelect value={currency} onChange={setCurrency} /></Field>
-				<Field label="Size bucket">
+				<Field label="Amount" hint="in the currency at right — converted to USD automatically"><input className="search-input" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 5000000" /></Field>
+				<Field label="Currency" hint="of the amount"><CurrencySelect value={currency} onChange={setCurrency} /></Field>
+				<Field label="Size bucket" hint="leave blank — auto-derived">
 					<select className="search-input" value={bucket} onChange={(e) => setBucket(e.target.value)}>
 						<option value="">—</option>
 						{SIZE_BUCKETS.map((b) => <option key={b} value={b}>{b.replace(/_/g, ' ')}</option>)}
@@ -487,7 +487,7 @@ function InlineFundingEditor({ onStage, onCancel }: { onStage: (d: StagedDeal) =
 			<Field label="Investors" hint="star marks the lead"><InvestorPicker value={investors} onChange={setInvestors} /></Field>
 			<Field label="Sector"><SectorCascade value={sectorId} onChange={setSectorId} /></Field>
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-				<Field label="Business model">
+				<Field label="Business model" hint="who they sell to — B2B, B2C or B2B2C">
 					<select className="search-input" value={model} onChange={(e) => setModel(e.target.value)}>
 						<option value="">—</option>
 						{PARTY_MODELS.map((b) => <option key={b} value={b}>{b.toUpperCase()}</option>)}
@@ -640,14 +640,14 @@ function InlineMaEditor({ onStage, onCancel }: { onStage: (a: StagedAcq) => void
 					</select>
 				</Field>
 				<label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, alignSelf: 'end', paddingBottom: 8 }}>
-					<input type="checkbox" checked={party.is_sportstech} onChange={(e) => setParty((p) => ({ ...p, is_sportstech: e.target.checked }))} /> Counterparty is SportsTech
+					<input type="checkbox" checked={party.is_sportstech} onChange={(e) => setParty((p) => ({ ...p, is_sportstech: e.target.checked }))} /> Counterparty is SportsTech <span style={{ color: 'var(--fg-muted)' }}>— tick if the other party operates in sports-tech</span>
 				</label>
 			</div>
 			<Field label="Counterparty location"><LocationFields value={party.hq} onChange={(v) => setParty((p) => ({ ...p, hq: v }))} /></Field>
 			<Field label="Counterparty sports"><SportsPicker value={party.sport_ids} onChange={(v) => setParty((p) => ({ ...p, sport_ids: v }))} /></Field>
 			<div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, display: 'grid', gap: 12 }}>
 				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-					<Field label="Acquisition date"><input className="search-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+					<Field label="Acquisition date" hint="sets the FX year used to convert the amount to USD"><input className="search-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
 					<Field label="Type">
 						<select className="search-input" value={type} onChange={(e) => setType(e.target.value)}>
 							{ACQ_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
@@ -655,8 +655,8 @@ function InlineMaEditor({ onStage, onCancel }: { onStage: (a: StagedAcq) => void
 					</Field>
 				</div>
 				<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>
-					<Field label="Amount"><input className="search-input" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="in currency" /></Field>
-					<Field label="Currency"><CurrencySelect value={currency} onChange={setCurrency} /></Field>
+					<Field label="Amount" hint="in the currency at right — converted to USD automatically"><input className="search-input" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 5000000" /></Field>
+					<Field label="Currency" hint="of the amount"><CurrencySelect value={currency} onChange={setCurrency} /></Field>
 				</div>
 				<Field label="Source URL"><input className="search-input" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://" /></Field>
 			</div>
@@ -783,18 +783,18 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 						{
 							key: 'profile', label: 'Profile', node: (
 								<>
-									<Field label="Name"><input className="search-input" value={form.name} onChange={(e) => set('name', e.target.value)} /></Field>
-									<Field label="Website (required, must be unique)">
+									<Field label="Name *" hint="required — the display name used everywhere"><input className="search-input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Acme Sports" /></Field>
+									<Field label="Website *" hint="required & unique — used to dedupe and to enrich from Attio">
 										<div style={{ display: 'flex', gap: 6 }}>
-											<input className="search-input" type="url" value={form.website} onChange={(e) => set('website', e.target.value)} placeholder="https://" style={{ flex: 1 }} />
-											<button type="button" className="btn ghost" disabled={enriching || !form.website.trim()} onClick={() => void enrich()} title="Fill empty fields from Attio">{enriching ? 'Enriching…' : 'Enrich'}</button>
+											<input className="search-input" type="url" value={form.website} onChange={(e) => set('website', e.target.value)} placeholder="https://acmesports.com" style={{ flex: 1 }} />
+											<button type="button" className="btn ghost" disabled={enriching || !form.website.trim()} onClick={() => void enrich()} title="Fill empty fields (name, description, logo, founded, HQ) from Attio using this domain">{enriching ? 'Enriching…' : 'Enrich'}</button>
 										</div>
 									</Field>
-									<Field label={isEdit ? 'Slug' : 'Slug (optional — auto from name)'}><input className="search-input" style={{ fontFamily: 'var(--font-mono)' }} value={form.slug} onChange={(e) => set('slug', e.target.value)} disabled={isEdit} /></Field>
-									<Field label="Description"><textarea className="search-input" style={{ minHeight: 80, resize: 'vertical' }} value={form.description} onChange={(e) => set('description', e.target.value)} /></Field>
-									<Field label="Logo"><ImageInput value={form.custom_logo_url} onChange={(u) => set('custom_logo_url', u)} pathPrefix="companies/logos" /></Field>
+									<Field label="Slug" hint={isEdit ? 'the public URL is fixed once created' : 'optional — auto-generated from the name if left blank'}><input className="search-input" style={{ fontFamily: 'var(--font-mono)' }} value={form.slug} onChange={(e) => set('slug', e.target.value)} disabled={isEdit} placeholder={isEdit ? undefined : 'acme-sports'} /></Field>
+									<Field label="Description" hint="one or two sentences shown on the public profile"><textarea className="search-input" style={{ minHeight: 80, resize: 'vertical' }} value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="What the company does, in a sentence or two." /></Field>
+									<Field label="Logo" hint="square image works best; leave blank to fall back to the fetched favicon"><ImageInput value={form.custom_logo_url} onChange={(u) => set('custom_logo_url', u)} pathPrefix="companies/logos" /></Field>
 									<div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 12 }}>
-										<Field label="Founded"><YearSelect value={form.founded_year} onChange={(v) => set('founded_year', v)} /></Field>
+										<Field label="Founded" hint="year"><YearSelect value={form.founded_year} onChange={(v) => set('founded_year', v)} /></Field>
 										<Field label="IPO date"><input className="search-input" type="date" value={form.ipo_date} onChange={(e) => set('ipo_date', e.target.value)} /></Field>
 									</div>
 								</>
@@ -804,7 +804,7 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 							key: 'class', label: 'Classification', hint: form.sport_ids.length + form.tech_tag_ids.length, node: (
 								<>
 									<Field label="Sector" hint="drill into sub-sectors as needed"><SectorCascade value={form.sector_id} onChange={(v) => set('sector_id', v)} /></Field>
-									<Field label="Business model">
+									<Field label="Business model" hint="who they sell to — B2B, B2C or B2B2C">
 										<select className="search-input" value={form.business_model} onChange={(e) => set('business_model', e.target.value)}>
 											<option value="">—</option>
 											{BUSINESS_MODELS.map((b) => <option key={b} value={b}>{b.toUpperCase()}</option>)}
@@ -853,18 +853,18 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 							key: 'status', label: 'Status', node: (
 								<>
 									<Field label="Status">
-										<select className="search-input" value={form.status} onChange={(e) => set('status', e.target.value)}>
+										<select className="search-input" value={form.status} onChange={(e) => set('status', e.target.value)} title="active = live & listed · needs_review = imported, unverified · not_sportstech = out of scope · dead = defunct · acquired / ipo set automatically by M&A / IPO date">
 											{STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
 										</select>
 									</Field>
 									<label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-										<input type="checkbox" checked={form.is_verified} onChange={(e) => set('is_verified', e.target.checked)} /> Verified
+										<input type="checkbox" checked={form.is_verified} onChange={(e) => set('is_verified', e.target.checked)} /> Verified <span style={{ color: 'var(--fg-muted)', fontWeight: 400 }}>— shows the verified badge on the public profile</span>
 									</label>
 									<label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-										<input type="checkbox" checked={form.is_unicorn} onChange={(e) => set('is_unicorn', e.target.checked)} /> Unicorn
+										<input type="checkbox" checked={form.is_unicorn} onChange={(e) => set('is_unicorn', e.target.checked)} /> Unicorn <span style={{ color: 'var(--fg-muted)', fontWeight: 400 }}>— valuation has reached $1B or more</span>
 									</label>
 									<label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-										<input type="checkbox" checked={form.is_actively_raising} onChange={(e) => set('is_actively_raising', e.target.checked)} /> Actively raising
+										<input type="checkbox" checked={form.is_actively_raising} onChange={(e) => set('is_actively_raising', e.target.checked)} /> Actively raising <span style={{ color: 'var(--fg-muted)', fontWeight: 400 }}>— surfaces in “raising” filters and reveals the raise details below</span>
 									</label>
 									{form.is_actively_raising && (
 										<div style={{ display: 'grid', gap: 12, padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)' }}>

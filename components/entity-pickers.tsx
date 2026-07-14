@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { ChevronDown, Plus, Search, Star, X } from 'lucide-react';
@@ -368,23 +368,27 @@ export function LocationFields({ value, onChange, prefix }: { value: LocationVal
 	);
 	const hits = data ?? [];
 	const lbl = (s: string) => (prefix ? `${prefix} ${s}` : s.charAt(0).toUpperCase() + s.slice(1));
-	const uid = useId();
 	// HQ geo dropdowns — distinct values from the locations table, cascaded by the
-	// current continent/country. A native <datalist> gives a suggestion dropdown
-	// while still allowing a free-typed value (mirrors the legacy "add to list").
+	// current continent/country. Uses the searchable Select combobox (search box
+	// over the options) so 150-country lists stay usable.
 	const geoOpts = { dedupingInterval: 60 * 60_000, keepPreviousData: true } as const;
 	const countries = useSWR<string[]>(['/api/locations/values', { field: 'country' }], geoOpts);
 	const continents = useSWR<string[]>(['/api/locations/values', { field: 'continent' }], geoOpts);
 	const regions = useSWR<string[]>(['/api/locations/values', { field: 'region', ...(value.continent ? { continent: value.continent } : {}) }], geoOpts);
 	const reportRegions = useSWR<string[]>(['/api/locations/values', { field: 'report_region', ...(value.continent ? { continent: value.continent } : {}) }], geoOpts);
 	const states = useSWR<string[]>(['/api/locations/values', { field: 'state', ...(value.country ? { country: value.country } : {}) }], geoOpts);
-	const geoField = (key: keyof LocationValue, label: string, opts: string[] | undefined, listId: string) => (
-		<div>
-			<div className="co-stat-label" style={{ marginBottom: 6 }}>{lbl(label)}</div>
-			<input className="search-input" list={listId} value={value[key] ?? ''} onChange={(e) => onChange({ ...value, [key]: e.target.value })} />
-			<datalist id={listId}>{(opts ?? []).map((o) => <option key={o} value={o} />)}</datalist>
-		</div>
-	);
+	const geoField = (key: keyof LocationValue, label: string, opts: string[] | undefined) => {
+		const cur = value[key] ?? '';
+		const options = (opts ?? []).map((o) => ({ value: o, label: o }));
+		// Keep an already-saved value selectable even if it's absent from the list.
+		if (cur && !options.some((o) => o.value === cur)) options.unshift({ value: cur, label: cur });
+		return (
+			<div>
+				<div className="co-stat-label" style={{ marginBottom: 6 }}>{lbl(label)}</div>
+				<Select value={cur} onChange={(v) => onChange({ ...value, [key]: v })} options={options} searchable placeholder="Select…" width="100%" style={{ display: 'block', width: '100%' }} />
+			</div>
+		);
+	};
 	const pickCity = (h: LocHit) => {
 		onChange({
 			city: h.city ?? '',
@@ -422,11 +426,11 @@ export function LocationFields({ value, onChange, prefix }: { value: LocationVal
 				)}
 			</div>
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-				{geoField('country', 'country', countries.data, `${uid}-country`)}
-				{geoField('state', 'state', states.data, `${uid}-state`)}
-				{geoField('region', 'region', regions.data, `${uid}-region`)}
-				{geoField('continent', 'continent', continents.data, `${uid}-continent`)}
-				{geoField('report_region', 'report region', reportRegions.data, `${uid}-report`)}
+				{geoField('country', 'country', countries.data)}
+				{geoField('state', 'state', states.data)}
+				{geoField('region', 'region', regions.data)}
+				{geoField('continent', 'continent', continents.data)}
+				{geoField('report_region', 'report region', reportRegions.data)}
 			</div>
 		</div>
 	);

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Plus, Save, Trash2, GitMerge, Banknote, Trophy } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { useInitialQuery } from '@/hooks/use-initial-query';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, RichStatCard, StatsPanel, Section, Pager, SortableTh } from '@/components/atoms';
@@ -44,7 +45,7 @@ const fmtMoney = (n: number): string => n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` :
 export function AcquisitionsView({ embedded = false }: { embedded?: boolean }) {
 	const { mutate } = useSWRConfig();
 	const ask = useConfirm();
-	const [search, setSearch] = useState('');
+	const [search, setSearch] = useState(useInitialQuery());
 	const debouncedSearch = useDebouncedValue(search);
 	const [type, setType] = useState('');
 	const [year, setYear] = useState('');

@@ -14,10 +14,10 @@
 
 :root {
   /* STX-WebApp admin identity: magenta brand, IBM Plex Sans, rounded, light-first. */
-  --accent-hue: 345;
-  --accent: #ED1A52;          /* brand magenta (hsl 345 83% 52%) */
-  --accent-2: #F2517D;        /* lighter magenta */
-  --accent-soft: rgba(237, 26, 82, 0.12);
+  --accent-hue: 338;
+  --accent: #E11D62;          /* refined brand rose (softer than the old neon magenta) */
+  --accent-2: #F43F76;        /* lighter rose — hover */
+  --accent-soft: rgba(225, 29, 98, 0.12);
   --accent-fg: #FFFFFF;
 
   --pos: oklch(72% 0.18 145);
@@ -26,23 +26,23 @@
   --warn: oklch(78% 0.16 75);
 
   /* Light theme — shadcn neutral/slate palette (matches STX-WebApp). */
-  --bg: #F5F9FC;
-  --bg-1: #F5F9FC;
-  --bg-2: #F1F5F9;
-  --bg-3: #E2E8F0;
+  --bg: #FAFAFA;
+  --bg-1: #FAFAFA;
+  --bg-2: #F4F4F5;
+  --bg-3: #E4E4E7;
   --surface: #FFFFFF;
-  --fg: #1E293B;
-  --fg-2: #334155;
-  --fg-muted: #64748B;
-  --border: #E2E8F0;
-  --border-strong: #CBD5E1;
-  --grid-line: #EEF2F6;
+  --fg: #18181B;
+  --fg-2: #3F3F46;
+  --fg-muted: #71717A;
+  --border: #E7E7E9;
+  --border-strong: #D4D4D8;
+  --grid-line: #F1F1F3;
 
   /* Dark-slate sidebar — always dark in both themes (STX-WebApp shared sidebar). */
-  --sidebar-bg: #2D3B49;
+  --sidebar-bg: #0B0F17;
   --sidebar-fg: #FFFFFF;
-  --sidebar-muted: rgba(255, 255, 255, 0.62);
-  --sidebar-hover: #3A4D5E;
+  --sidebar-muted: rgba(255, 255, 255, 0.60);
+  --sidebar-hover: rgba(255, 255, 255, 0.07);
   --sidebar-border: rgba(255, 255, 255, 0.08);
 
   --font-display: var(--font-ibm-plex-sans), system-ui, sans-serif;
@@ -61,8 +61,8 @@
   --topbar-h: 56px;
   --ticker-h: 32px;
   --radius: 0.5rem;
-  --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.06);
-  --shadow-md: 0 4px 14px rgba(15, 23, 42, 0.08);
+  --shadow-sm: 0 1px 2px 0 rgba(9, 9, 11, 0.06);
+  --shadow-md: 0 4px 14px rgba(9, 9, 11, 0.08);
 }
 
 [data-theme="dark"],

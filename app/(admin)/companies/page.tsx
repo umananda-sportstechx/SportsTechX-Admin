@@ -949,7 +949,7 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 		<Modal
 			title={isEdit ? 'Edit company' : 'New company'}
 			onClose={onClose}
-			width={960}
+			width={860}
 			footer={
 				<>
 					<button className="btn ghost" onClick={onClose}>Cancel</button>

@@ -10,7 +10,7 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useInitialQuery } from '@/hooks/use-initial-query';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading, StatCard, RichStatCard, StatsPanel, PillTabs, Section, Pager, SortableTh } from '@/components/atoms';
+import { PageHeader, AsyncState, Loading, ErrorState, StatCard, RichStatCard, StatsPanel, PillTabs, Section, Pager, SortableTh } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip, BoolFilter, FilterRange, RefSlugFilter, SectorTierFilter } from '@/components/filters';
 import { CsvImportButton, CsvTemplateButton, CsvCheckButton } from '@/components/csv-import';
@@ -370,6 +370,189 @@ function CompanyMaTab({ companyId }: { companyId: string }) {
 				</table>
 			</AsyncState>
 			{modal && <AcquisitionModal id={modal.id} onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} />}
+		</div>
+	);
+}
+
+// ── Claim tab: manage the company's ownership claim (view + create on behalf) ──
+interface CompanyClaimRow {
+	id: string;
+	is_verified: boolean;
+	shareable_token: string | null;
+	created_at: string;
+	profile_id: string | null;
+	position_at_company: string | null;
+	company_email: string | null;
+	claimant_name: string | null;
+	claimant_email: string | null;
+	claimant_linkedin: string | null;
+	claimant_city: string | null;
+	claimant_country: string | null;
+	picked_up_by_email: string | null;
+	is_actively_raising: boolean | null;
+	actively_raising_amount: string | number | null;
+	actively_raising_round: string | null;
+	actively_raising_valuation: string | number | null;
+}
+
+/** onFlags keeps the parent CompanyForm in sync when Verified / Actively-raising
+ *  are changed here, so saving the modal (whose Status tab holds the same flags)
+ *  never clobbers a change made on this tab. */
+function CompanyClaimTab({ companyId, onFlags }: { companyId: string; onFlags?: (f: { is_verified?: boolean; is_actively_raising?: boolean }) => void }) {
+	const { mutate } = useSWRConfig();
+	const { data, isLoading, error } = useSWR<{ claim: CompanyClaimRow | null }>(
+		[`/api/admin/companies/${companyId}/claim`], { dedupingInterval: 10_000 },
+	);
+	const refresh = () => mutate((k) => Array.isArray(k) && k[0] === `/api/admin/companies/${companyId}/claim`);
+	const claim = data?.claim ?? null;
+	const [busy, setBusy] = useState(false);
+
+	const act = async (fn: () => Promise<unknown>, ok: string, after?: () => void) => {
+		setBusy(true);
+		try { await fn(); toast.success(ok); after?.(); refresh(); }
+		catch (e) { toast.error((e as Error).message); }
+		finally { setBusy(false); }
+	};
+	const setVerified = (cid: string, on: boolean) => act(
+		() => api('POST', `/api/admin/claims/${cid}/${on ? 'verify' : 'unverify'}`, on ? { send_email: false } : undefined),
+		on ? 'Claim verified' : 'Verification removed', () => onFlags?.({ is_verified: on }));
+	const setRaising = (cid: string, on: boolean) => act(
+		() => api('POST', `/api/admin/claims/${cid}/toggle-active`, { active: on }),
+		on ? 'Marked actively raising' : 'Marked not raising', () => onFlags?.({ is_actively_raising: on }));
+	const copyLink = (token: string) => { void navigator.clipboard.writeText(`${window.location.origin}/verified/${token}`); toast.success('Shareable link copied'); };
+	const money = (v: string | number | null) => { const n = Number(v); return v != null && Number.isFinite(n) && n > 0 ? `$${n.toLocaleString()}` : '—'; };
+
+	if (isLoading) return <Loading />;
+	if (error) return <ErrorState error={error} onRetry={() => void refresh()} />;
+
+	if (claim) {
+		return (
+			<div style={{ display: 'grid', gap: 14 }}>
+				<div style={{ fontWeight: 700, fontSize: 14 }}>Existing claim</div>
+				{!claim.profile_id && (
+					<div style={{ fontSize: 12, color: 'var(--fg-2)', background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px' }}>
+						<span className="tag warn">Pending signup</span> This user hasn’t signed up yet. When they create an account with <strong>{claim.claimant_email}</strong>, this claim links to it automatically.
+					</div>
+				)}
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
+					<div><div className="co-stat-label">Claimed by</div>{claim.claimant_name ?? '—'}</div>
+					<div><div className="co-stat-label">Email</div>{claim.claimant_email ?? '—'}</div>
+					<div><div className="co-stat-label">Position</div>{claim.position_at_company || '—'}</div>
+					<div><div className="co-stat-label">Location</div>{[claim.claimant_city, claim.claimant_country].filter(Boolean).join(', ') || '—'}</div>
+					{claim.claimant_linkedin && (
+						<div><div className="co-stat-label">LinkedIn</div><a href={claim.claimant_linkedin.startsWith('http') ? claim.claimant_linkedin : `https://${claim.claimant_linkedin}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>View profile</a></div>
+					)}
+					<div><div className="co-stat-label">Submitted</div>{new Date(claim.created_at).toLocaleDateString()}</div>
+				</div>
+				<div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, display: 'grid', gap: 12 }}>
+					<div className="co-stat-label">Verification status</div>
+					<div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+						<button className={`tg ${claim.is_verified ? 'on' : ''}`} disabled={busy} onClick={() => void setVerified(claim.id, !claim.is_verified)} aria-label="Toggle verified"><span className="tg-knob" /></button>
+						<span><strong>Verified</strong> <span style={{ color: 'var(--fg-muted)' }}>— company ownership confirmed (sets the public badge)</span></span>
+					</div>
+					<div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+						<button className={`tg ${claim.is_actively_raising ? 'on' : ''}`} disabled={busy} onClick={() => void setRaising(claim.id, !claim.is_actively_raising)} aria-label="Toggle actively raising"><span className="tg-knob" /></button>
+						<span><strong>Actively raising</strong> <span style={{ color: 'var(--fg-muted)' }}>— currently fundraising</span></span>
+					</div>
+					{claim.is_actively_raising && (
+						<div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', fontSize: 13 }}>
+							<div><div className="co-stat-label">Amount</div>{money(claim.actively_raising_amount)}</div>
+							<div><div className="co-stat-label">Round</div>{claim.actively_raising_round || '—'}</div>
+							<div><div className="co-stat-label">Valuation</div>{money(claim.actively_raising_valuation)}</div>
+							<div style={{ gridColumn: '1 / -1', fontSize: 11, color: 'var(--fg-muted)' }}>Edit these on the Status tab.</div>
+						</div>
+					)}
+				</div>
+				{claim.is_verified && claim.shareable_token && (
+					<div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+						<div className="co-stat-label" style={{ marginBottom: 6 }}>Shareable link</div>
+						<button className="btn ghost" onClick={() => copyLink(claim.shareable_token!)}>Copy verified link</button>
+					</div>
+				)}
+			</div>
+		);
+	}
+
+	return <CreateClaimOnBehalf companyId={companyId} onDone={refresh} onFlags={onFlags} />;
+}
+
+function CreateClaimOnBehalf({ companyId, onDone, onFlags }: { companyId: string; onDone: () => void; onFlags?: (f: { is_verified?: boolean; is_actively_raising?: boolean }) => void }) {
+	const [f, setF] = useState({ user_email: '', company_email: '', first_name: '', last_name: '', position: '', linkedin: '', city: '', country: '' });
+	const [verified, setVerified] = useState(false);
+	const [raising, setRaising] = useState(false);
+	const [raiseAmount, setRaiseAmount] = useState('');
+	const [raiseRound, setRaiseRound] = useState('');
+	const [raiseValuation, setRaiseValuation] = useState('');
+	const [pending, setPending] = useState(false);
+	const set = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v }));
+
+	const submit = async () => {
+		if (!f.user_email.trim()) { toast.error('User email is required.'); return; }
+		setPending(true);
+		try {
+			const body: Record<string, unknown> = { user_email: f.user_email.trim() };
+			for (const k of ['company_email', 'first_name', 'last_name', 'position', 'linkedin', 'city', 'country'] as const) {
+				if (f[k].trim()) body[k] = f[k].trim();
+			}
+			const created = await api<{ id: string }>('POST', `/api/admin/companies/${companyId}/claim`, body);
+			// Verify + active-raise are applied through the vetted claim/company
+			// endpoints so their side-effects (badge sync, report, cache) all run.
+			if (verified && created?.id) await api('POST', `/api/admin/claims/${created.id}/verify`, { send_email: false });
+			if (raising) {
+				await api('PATCH', `/api/admin/companies/${companyId}`, {
+					is_actively_raising: true,
+					actively_raising_amount: raiseAmount.trim() ? Number(raiseAmount) : undefined,
+					actively_raising_round: raiseRound.trim() || undefined,
+					actively_raising_valuation: raiseValuation.trim() ? Number(raiseValuation) : undefined,
+				});
+			}
+			if (verified || raising) onFlags?.({ ...(verified ? { is_verified: true } : {}), ...(raising ? { is_actively_raising: true } : {}) });
+			toast.success('Claim created');
+			onDone();
+		} catch (e) { toast.error((e as Error).message); }
+		finally { setPending(false); }
+	};
+
+	return (
+		<div style={{ display: 'grid', gap: 12 }}>
+			<div style={{ fontSize: 13, color: 'var(--fg-2)' }}>
+				No claim exists for this company. Create one on behalf of a user to enable the verified badge and let them submit edit requests.
+			</div>
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+				<Field label="User email *" hint="the person's login email — links the claim to their account"><input className="search-input" value={f.user_email} onChange={(e) => set('user_email', e.target.value)} placeholder="user@company.com" /></Field>
+				<Field label="Company email" hint="public contact address"><input className="search-input" value={f.company_email} onChange={(e) => set('company_email', e.target.value)} placeholder="contact@company.com" /></Field>
+			</div>
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+				<Field label="First name"><input className="search-input" value={f.first_name} onChange={(e) => set('first_name', e.target.value)} /></Field>
+				<Field label="Last name"><input className="search-input" value={f.last_name} onChange={(e) => set('last_name', e.target.value)} /></Field>
+			</div>
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+				<Field label="Position at company"><input className="search-input" value={f.position} onChange={(e) => set('position', e.target.value)} placeholder="CEO, Founder, etc." /></Field>
+				<Field label="LinkedIn"><input className="search-input" value={f.linkedin} onChange={(e) => set('linkedin', e.target.value)} placeholder="https://linkedin.com/in/…" /></Field>
+			</div>
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+				<Field label="City"><input className="search-input" value={f.city} onChange={(e) => set('city', e.target.value)} /></Field>
+				<Field label="Country"><input className="search-input" value={f.country} onChange={(e) => set('country', e.target.value)} /></Field>
+			</div>
+			<div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, display: 'grid', gap: 10 }}>
+				<div className="co-stat-label">Verification options</div>
+				<label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+					<input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} /> Verify immediately <span style={{ color: 'var(--fg-muted)' }}>— sets the public verified badge</span>
+				</label>
+				<label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+					<input type="checkbox" checked={raising} onChange={(e) => setRaising(e.target.checked)} /> Mark actively raising
+				</label>
+				{raising && (
+					<div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)' }}>
+						<Field label="Amount ($)"><input className="search-input" type="number" value={raiseAmount} onChange={(e) => setRaiseAmount(e.target.value)} placeholder="target raise" /></Field>
+						<Field label="Round"><input className="search-input" value={raiseRound} onChange={(e) => setRaiseRound(e.target.value)} placeholder="e.g. Series A" /></Field>
+						<Field label="Valuation ($)"><input className="search-input" type="number" value={raiseValuation} onChange={(e) => setRaiseValuation(e.target.value)} placeholder="pre/post" /></Field>
+					</div>
+				)}
+			</div>
+			<div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+				<button className="btn" disabled={pending || !f.user_email.trim()} onClick={() => void submit()}>{pending ? 'Creating…' : 'Create claim'}</button>
+			</div>
 		</div>
 	);
 }
@@ -810,8 +993,12 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 											{BUSINESS_MODELS.map((b) => <option key={b} value={b}>{b.toUpperCase()}</option>)}
 										</select>
 									</Field>
-									<Field label="Sports"><SportsPicker value={form.sport_ids} onChange={(v) => set('sport_ids', v)} /></Field>
-									<Field label="Tech tags"><TechTagsPicker value={form.tech_tag_ids} onChange={(v) => set('tech_tag_ids', v)} /></Field>
+									<Field label="Sports" hint={form.sport_ids.length ? `${form.sport_ids.length} selected · pick “Multisport” for 5+` : 'pick “Multisport” for 5+ sports'}><SportsPicker value={form.sport_ids} onChange={(v) => set('sport_ids', v)} /></Field>
+									<Field label="Tech tags" hint={form.tech_tag_ids.length ? `${form.tech_tag_ids.length} selected` : undefined}><TechTagsPicker value={form.tech_tag_ids} onChange={(v) => set('tech_tag_ids', v)} /></Field>
+									<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+										<Field label="Accelerator" hint="programs the company joined"><input className="search-input" value={form.accelerator} onChange={(e) => set('accelerator', e.target.value)} placeholder="e.g. Techstars" /></Field>
+										<Field label="Cohort" hint="batch / year, if any"><input className="search-input" value={form.cohort} onChange={(e) => set('cohort', e.target.value)} placeholder="e.g. 2023 Spring" /></Field>
+									</div>
 								</>
 							),
 						},
@@ -833,10 +1020,6 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 										<Field label="POC personal email"><input className="search-input" value={form.poc_personal_email} onChange={(e) => set('poc_personal_email', e.target.value)} placeholder="personal@email.com" /></Field>
 										<Field label="POC personal LinkedIn"><input className="search-input" value={form.poc_personal_linkedin} onChange={(e) => set('poc_personal_linkedin', e.target.value)} placeholder="https://linkedin.com/in/…" /></Field>
 									</div>
-									<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-										<Field label="Accelerator"><input className="search-input" value={form.accelerator} onChange={(e) => set('accelerator', e.target.value)} /></Field>
-										<Field label="Cohort"><input className="search-input" value={form.cohort} onChange={(e) => set('cohort', e.target.value)} /></Field>
-									</div>
 								</>
 							),
 						},
@@ -844,6 +1027,7 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 							? [
 								{ key: 'funding', label: 'Funding', node: <CompanyFundingTab companyId={id} /> },
 								{ key: 'ma', label: 'M&A', node: <CompanyMaTab companyId={id} /> },
+								{ key: 'claim', label: 'Claim', node: <CompanyClaimTab companyId={id} onFlags={(f) => { if (f.is_verified !== undefined) set('is_verified', f.is_verified); if (f.is_actively_raising !== undefined) set('is_actively_raising', f.is_actively_raising); }} /> },
 							]
 							: [
 								{ key: 'funding', label: 'Funding', hint: stagedDeals.length || undefined, node: <StagedFundingTab drafts={stagedDeals} onChange={setStagedDeals} /> },

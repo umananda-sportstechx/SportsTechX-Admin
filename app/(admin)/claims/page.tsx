@@ -7,6 +7,7 @@ import { ChevronDown, ChevronRight, ExternalLink, Mail, MailCheck } from 'lucide
 import { api } from '@/lib/api';
 import { PageHeader, AsyncState, StatCard, StatsPanel, Section } from '@/components/atoms';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { useInitialQuery } from '@/hooks/use-initial-query';
 import { Funnel } from '@/components/charts';
 import { StatStrip } from '@/components/filters';
 import { SectorCascade, LocationFields, EMPTY_LOCATION, type LocationValue } from '@/components/entity-pickers';
@@ -56,7 +57,7 @@ export function ClaimsView({ embedded = false, lockType }: { embedded?: boolean;
 	const [sendEmail, setSendEmail] = useState(true);
 	const [expandedId, setExpandedId] = useState<string | null>(null);
 	const [showCompleted, setShowCompleted] = useState(false);
-	const [search, setSearch] = useState('');
+	const [search, setSearch] = useState(useInitialQuery());
 	const debouncedSearch = useDebouncedValue(search);
 
 	const { data, error, isLoading } = useSWR<ClaimsResponse>(

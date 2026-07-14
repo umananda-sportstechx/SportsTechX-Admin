@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Plus, Save, Trash2, Building2, BadgeCheck, Rocket, Coins, Layers, CircleDollarSign, GitMerge } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { useInitialQuery } from '@/hooks/use-initial-query';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, RichStatCard, StatsPanel, PillTabs, Section, Pager, SortableTh } from '@/components/atoms';
@@ -50,7 +51,7 @@ const BUSINESS_MODELS = ['b2b', 'b2c', 'b2b2c'] as const;
 export function CompaniesView({ embedded = false }: { embedded?: boolean }) {
 	const { mutate } = useSWRConfig();
 	const ask = useConfirm();
-	const [search, setSearch] = useState('');
+	const [search, setSearch] = useState(useInitialQuery());
 	const debouncedSearch = useDebouncedValue(search);
 	const [status, setStatus] = useState('');
 	const [sector, setSector] = useState('');

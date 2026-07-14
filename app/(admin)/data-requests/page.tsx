@@ -9,6 +9,7 @@ import { PageHeader, AsyncState, StatCard, StatsPanel, Section } from '@/compone
 import { Funnel } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { useInitialQuery } from '@/hooks/use-initial-query';
 
 type DcrStatus = 'open' | 'picked_up' | 'resolved' | 'rejected';
 interface QueueStats { data_requests: Array<{ label: string; value: number }> }
@@ -41,7 +42,7 @@ const TABS: Array<{ label: string; key: DcrStatus }> = [
 export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: boolean; lockEntity?: string }) {
 	const { mutate } = useSWRConfig();
 	const [status, setStatus] = useState('');
-	const [search, setSearch] = useState('');
+	const [search, setSearch] = useState(useInitialQuery());
 	const debouncedSearch = useDebouncedValue(search);
 	const [page, setPage] = useState(1);
 	const [pendingId, setPendingId] = useState<string | null>(null);

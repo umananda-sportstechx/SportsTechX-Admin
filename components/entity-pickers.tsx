@@ -328,16 +328,7 @@ export function SectorCascade({ value, onChange }: { value: string; onChange: (s
 				)}
 			</div>
 			{levels.map((lvl, depth) => (
-				<select
-					key={depth}
-					className="search-input"
-					style={{ width: '100%' }}
-					value={lvl.selected}
-					onChange={(e) => pick(depth, e.target.value)}
-				>
-					<option value="">{depth === 0 ? '— sector —' : '— more specific (optional) —'}</option>
-					{lvl.options.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-				</select>
+				<Select key={depth} value={lvl.selected} onChange={(v) => pick(depth, v)} searchable width="100%" style={{ display: 'block', width: '100%' }} placeholder={depth === 0 ? '— sector —' : '— more specific (optional) —'} options={[{ value: '', label: depth === 0 ? '— sector —' : '— more specific (optional) —' }, ...lvl.options.map((o) => ({ value: o.id, label: o.name }))]} />
 			))}
 			<button type="button" className="btn ghost" style={{ justifySelf: 'start', height: 28 }} onClick={() => setAdding((v) => !v)}>
 				<Plus size={12} /> {value ? 'New sub-sector here' : 'New sector'}

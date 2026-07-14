@@ -321,7 +321,7 @@ function AcquisitionForm({ id, initial, onClose, onSaved, onStage }: { id: strin
 		<Modal
 			title={isEdit ? 'Edit acquisition' : stageMode ? 'Add acquisition' : 'New acquisition'}
 			onClose={onClose}
-			width={680}
+			width={780}
 			footer={
 				<>
 					<button className="btn ghost" onClick={onClose}>Cancel</button>

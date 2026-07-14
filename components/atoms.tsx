@@ -162,7 +162,8 @@ export function StatCard({
 	tone?: StatTone;
 }) {
 	const c = tone ? toneColor(tone) : null;
-	const valueColor = urgent ? 'var(--accent)' : c ?? 'var(--fg)';
+	// Numbers stay in the default text colour; the tone only tints the top stripe.
+	const valueColor = urgent ? 'var(--accent)' : 'var(--fg)';
 	const inner = (
 		<>
 			<div className="co-stat-label">{label}</div>
@@ -256,7 +257,7 @@ export function RichStatCard({
 					<div className="co-stat-label">{label}</div>
 					{loading
 						? <div className="skeleton-bar" style={{ width: 72, height: 30, marginTop: 10 }} />
-						: <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, fontWeight: 800, letterSpacing: '-0.02em', marginTop: 6, lineHeight: 1.05, color: c }}>{value}</div>}
+						: <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, fontWeight: 800, letterSpacing: '-0.02em', marginTop: 6, lineHeight: 1.05 }}>{value}</div>}
 				</div>
 				{Icon && (
 					<div style={{ width: 36, height: 36, borderRadius: 10, display: 'grid', placeItems: 'center', background: `color-mix(in srgb, ${c} 15%, transparent)`, color: c, flexShrink: 0 }}>

@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Save, Trash2, CircleDollarSign, Banknote, TrendingUp } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Select } from '@/components/select';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
@@ -304,10 +305,7 @@ function DealForm({ id, initial, onClose, onSaved, onStage }: { id: string | nul
 									<Field label="Amount" hint="in the currency at right — converted to USD automatically"><input className="search-input" type="number" value={form.amount} onChange={(e) => set('amount', e.target.value)} placeholder="e.g. 5000000" /></Field>
 									<Field label="Currency" hint="of the amount"><CurrencySelect value={form.currency_code} onChange={(v) => set('currency_code', v)} /></Field>
 									<Field label="Size bucket" hint="leave blank — auto-derived from the USD amount">
-										<select className="search-input" value={form.deal_size_bucket} onChange={(e) => set('deal_size_bucket', e.target.value)}>
-											<option value="">—</option>
-											{SIZE_BUCKETS.map((b) => <option key={b} value={b}>{b.replace(/_/g, ' ')}</option>)}
-										</select>
+										<Select value={form.deal_size_bucket} onChange={(v) => set('deal_size_bucket', v)} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...SIZE_BUCKETS.map((b) => ({ value: b, label: b.replace(/_/g, ' ') }))]} />
 									</Field>
 								</div>
 								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -315,9 +313,7 @@ function DealForm({ id, initial, onClose, onSaved, onStage }: { id: string | nul
 									<Field label="Transaction URL"><input className="search-input" value={form.transaction_url} onChange={(e) => set('transaction_url', e.target.value)} placeholder="https://" /></Field>
 								</div>
 								<Field label="Status">
-									<select className="search-input" value={form.status} onChange={(e) => set('status', e.target.value)}>
-										{STATUSES.map((s) => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
-									</select>
+									<Select value={form.status} onChange={(v) => set('status', v)} width="100%" style={{ display: 'block', width: '100%' }} options={STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))} />
 								</Field>
 							</>
 						) },
@@ -328,10 +324,7 @@ function DealForm({ id, initial, onClose, onSaved, onStage }: { id: string | nul
 							<>
 								<Field label="Sector"><SectorCascade value={form.sector_id} onChange={(v) => set('sector_id', v)} /></Field>
 								<Field label="Business model" hint="who they sell to — B2B, B2C or B2B2C">
-									<select className="search-input" value={form.business_model} onChange={(e) => set('business_model', e.target.value)}>
-										<option value="">—</option>
-										{BUSINESS_MODELS.map((b) => <option key={b} value={b}>{b.toUpperCase()}</option>)}
-									</select>
+									<Select value={form.business_model} onChange={(v) => set('business_model', v)} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...BUSINESS_MODELS.map((b) => ({ value: b, label: b.toUpperCase() }))]} />
 								</Field>
 								<Field label="Location"><LocationFields value={form.hq} onChange={(v) => set('hq', v)} /></Field>
 								<Field label="Sports"><SportsPicker value={form.sport_ids} onChange={(v) => set('sport_ids', v)} /></Field>

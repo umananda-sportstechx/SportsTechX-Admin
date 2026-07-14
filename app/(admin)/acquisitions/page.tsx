@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Save, Trash2, GitMerge, Banknote, Trophy } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Select } from '@/components/select';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useInitialQuery } from '@/hooks/use-initial-query';
 import { useConfirm } from '@/components/confirm';
@@ -303,10 +304,7 @@ function AcquisitionForm({ id, initial, onClose, onSaved, onStage }: { id: strin
 				)}
 				<Field label="Sector"><SectorCascade value={p.sector_id} onChange={(v) => setParty(party, { sector_id: v })} /></Field>
 				<Field label="Business model" hint="who they sell to — B2B, B2C or B2B2C">
-					<select className="search-input" value={p.business_model} onChange={(e) => setParty(party, { business_model: e.target.value })}>
-						<option value="">—</option>
-						{BUSINESS_MODELS.map((b) => <option key={b} value={b}>{b.toUpperCase()}</option>)}
-					</select>
+					<Select value={p.business_model} onChange={(v) => setParty(party, { business_model: v })} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...BUSINESS_MODELS.map((b) => ({ value: b, label: b.toUpperCase() }))]} />
 				</Field>
 				<Field label="Location"><LocationFields value={p.hq} onChange={(v) => setParty(party, { hq: v })} /></Field>
 				<Field label="Sports"><SportsPicker value={p.sport_ids} onChange={(v) => setParty(party, { sport_ids: v })} /></Field>
@@ -343,9 +341,7 @@ function AcquisitionForm({ id, initial, onClose, onSaved, onStage }: { id: strin
 								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 									<Field label="Acquisition date" hint="sets the FX year used to convert the amount to USD"><input className="search-input" type="date" value={form.acquisition_date} onChange={(e) => set('acquisition_date', e.target.value)} /></Field>
 									<Field label="Type">
-										<select className="search-input" value={form.acquisition_type} onChange={(e) => set('acquisition_type', e.target.value)}>
-											{TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
-										</select>
+										<Select value={form.acquisition_type} onChange={(v) => set('acquisition_type', v)} width="100%" style={{ display: 'block', width: '100%' }} options={TYPES.map((t) => ({ value: t, label: t.replace(/_/g, ' ') }))} />
 									</Field>
 								</div>
 								<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>

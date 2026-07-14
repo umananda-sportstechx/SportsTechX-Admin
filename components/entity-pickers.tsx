@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { ChevronDown, Plus, Search, Star, X } from 'lucide-react';
@@ -111,11 +112,47 @@ function MultiCheckPicker({
 	createLabel?: string;
 }) {
 	const [open, setOpen] = useState(false);
-	const ref = useClickOutside<HTMLDivElement>(() => setOpen(false));
+	const [query, setQuery] = useState('');
+	const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number; width: number; maxH: number } | null>(null);
+	const ref = useRef<HTMLDivElement>(null);
+	const menuRef = useRef<HTMLDivElement>(null);
 	const byId = new Map(rows.map((s) => [s.id, s] as const));
 	const selectedNames = value.map((id) => byId.get(id)?.name).filter(Boolean) as string[];
 	const toggle = (id: string) =>
 		onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id]);
+	const shown = query ? rows.filter((r) => r.name.toLowerCase().includes(query.toLowerCase())) : rows;
+
+	// Portaled popover positioned against the trigger, so it floats above modals
+	// (no overflow clipping) and flips up when there's no room below.
+	const place = () => {
+		const el = ref.current;
+		if (!el) return;
+		const r = el.getBoundingClientRect();
+		const below = window.innerHeight - r.bottom - 8;
+		const above = r.top - 8;
+		const openUp = below < 240 && above > below;
+		setPos(openUp
+			? { bottom: window.innerHeight - r.top + 4, left: r.left, width: r.width, maxH: Math.min(320, above) }
+			: { top: r.bottom + 4, left: r.left, width: r.width, maxH: Math.min(320, below) });
+	};
+	useEffect(() => { if (open) { place(); setQuery(''); } }, [open]);
+	useEffect(() => {
+		if (!open) return;
+		const onDown = (e: MouseEvent) => {
+			const target = e.target as Node;
+			if (ref.current?.contains(target) || menuRef.current?.contains(target)) return;
+			setOpen(false);
+		};
+		const reposition = () => place();
+		document.addEventListener('mousedown', onDown);
+		window.addEventListener('resize', reposition);
+		window.addEventListener('scroll', reposition, true);
+		return () => {
+			document.removeEventListener('mousedown', onDown);
+			window.removeEventListener('resize', reposition);
+			window.removeEventListener('scroll', reposition, true);
+		};
+	}, [open]);
 
 	return (
 		<div ref={ref} style={{ position: 'relative' }}>
@@ -125,39 +162,52 @@ function MultiCheckPicker({
 				onClick={() => setOpen(!open)}
 				style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
 			>
-				<span style={{ color: selectedNames.length === 0 ? 'var(--fg-muted)' : 'var(--fg)' }}>
+				<span style={{ color: selectedNames.length === 0 ? 'var(--fg-muted)' : 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
 					{selectedNames.length === 0
 						? placeholder
 						: selectedNames.length <= 3
 							? selectedNames.join(', ')
 							: `${selectedNames.slice(0, 2).join(', ')} +${selectedNames.length - 2} more`}
 				</span>
-				<ChevronDown size={12} />
+				<ChevronDown size={12} style={{ flexShrink: 0, transition: 'transform .15s', transform: open ? 'rotate(180deg)' : 'none' }} />
 			</button>
-			{open && (
-				<div style={{
-					position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20,
-					marginTop: 2, maxHeight: 320, overflowY: 'auto',
-					background: 'var(--bg-1)', border: '1px solid var(--border)', borderRadius: 4,
-					boxShadow: '0 6px 24px rgba(0,0,0,0.15)',
-				}}>
-					{rows.length === 0 && <div style={{ padding: 10, fontSize: 12, color: 'var(--fg-muted)' }}>{loadingMsg}</div>}
-					{rows.map((s) => {
-						const isOn = value.includes(s.id);
-						return (
-							<label key={s.id} style={{
-								display: 'flex', alignItems: 'center', gap: 8,
-								padding: '6px 10px', cursor: 'pointer', fontSize: 13,
-								background: isOn ? 'var(--bg-3)' : 'transparent',
-							}}>
-								<input type="checkbox" checked={isOn} onChange={() => toggle(s.id)} />
-								<span>{s.name}</span>
-								{s.is_bulk_sport && <span style={{ color: 'var(--fg-muted)', fontSize: 11 }}>· group</span>}
-							</label>
-						);
-					})}
-					{onCreate && <InlineCreate label={createLabel ?? 'New item name…'} onCreate={onCreate} />}
-				</div>
+			{open && pos && createPortal(
+				<div
+					ref={menuRef}
+					style={{
+						position: 'fixed', left: pos.left, width: pos.width, top: pos.top, bottom: pos.bottom,
+						maxHeight: pos.maxH, overflow: 'hidden', zIndex: 2000,
+						background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)',
+						boxShadow: 'var(--shadow-lg, var(--shadow-md))', display: 'flex', flexDirection: 'column',
+					}}
+				>
+					<div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderBottom: '1px solid var(--border)' }}>
+						<Search size={13} style={{ color: 'var(--fg-muted)', flexShrink: 0 }} />
+						{/* eslint-disable-next-line jsx-a11y/no-autofocus */}
+						<input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search…"
+							style={{ flex: 1, border: 0, outline: 'none', background: 'transparent', color: 'var(--fg)', fontSize: 13 }} />
+					</div>
+					<div style={{ overflow: 'auto', padding: 4 }}>
+						{rows.length === 0 && <div style={{ padding: 10, fontSize: 12, color: 'var(--fg-muted)' }}>{loadingMsg}</div>}
+						{rows.length > 0 && shown.length === 0 && <div style={{ padding: 10, fontSize: 12, color: 'var(--fg-muted)' }}>No matches</div>}
+						{shown.map((s) => {
+							const isOn = value.includes(s.id);
+							return (
+								<label key={s.id} style={{
+									display: 'flex', alignItems: 'center', gap: 8,
+									padding: '6px 8px', cursor: 'pointer', fontSize: 13, borderRadius: 6,
+									background: isOn ? 'var(--bg-2)' : 'transparent',
+								}}>
+									<input type="checkbox" checked={isOn} onChange={() => toggle(s.id)} />
+									<span>{s.name}</span>
+									{s.is_bulk_sport && <span style={{ color: 'var(--fg-muted)', fontSize: 11 }}>· group</span>}
+								</label>
+							);
+						})}
+						{onCreate && <InlineCreate label={createLabel ?? 'New item name…'} onCreate={onCreate} />}
+					</div>
+				</div>,
+				document.body,
 			)}
 		</div>
 	);

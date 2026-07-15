@@ -44,7 +44,11 @@ interface EcoStats {
 interface InvestorYoyStats { total: number; this_year?: number; last_year?: number; yoy_change?: number | null }
 
 const STATUSES = ['active', 'inactive', 'paused'] as const;
-const ENTITY_TYPES = ['program', 'event', 'initiative'] as const;
+const TYPE_META = [
+	{ key: 'program' as const, label: 'Program', Icon: GraduationCap, desc: 'Accelerator, incubator, or startup program' },
+	{ key: 'event' as const, label: 'Event', Icon: CalendarClock, desc: 'Conference, summit, or networking event' },
+	{ key: 'initiative' as const, label: 'Initiative', Icon: Lightbulb, desc: 'Industry initiative, body, or partnership' },
+];
 const PROGRAM_CATEGORIES = ['Accelerator', 'Incubator', 'Challenge/Competition'] as const;
 const EVENT_MODES = ['in_person', 'virtual', 'hybrid'] as const;
 
@@ -459,10 +463,19 @@ function EntityForm({ id, initial, onClose, onSaved }: { id: string | null; init
 							<>
 								<Field label="Name *" hint="required — the display name used everywhere"><input className="search-input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Techstars Sports" /></Field>
 								<Field label="Type">
-									<div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-										{ENTITY_TYPES.map((t) => (
-											<button key={t} type="button" className={`chip ${form.entity_type === t ? 'on' : ''}`} onClick={() => set('entity_type', t)}>{t}</button>
-										))}
+									<div style={{ display: 'grid', gridTemplateColumns: `repeat(${TYPE_META.length}, 1fr)`, gap: 8 }}>
+										{TYPE_META.map((tm) => {
+											const on = form.entity_type === tm.key;
+											return (
+												<button key={tm.key} type="button" onClick={() => set('entity_type', tm.key)}
+													style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start', padding: '9px 11px', borderRadius: 8, cursor: 'pointer', textAlign: 'left', color: 'inherit', background: on ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'transparent', border: `1px solid ${on ? 'var(--accent)' : 'var(--border)'}` }}>
+													<span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, fontSize: 13 }}>
+														<tm.Icon size={14} style={{ color: on ? 'var(--accent)' : 'var(--fg-muted)' }} /> {tm.label}
+													</span>
+													<span style={{ fontSize: 11, color: 'var(--fg-muted)', lineHeight: 1.3 }}>{tm.desc}</span>
+												</button>
+											);
+										})}
 									</div>
 								</Field>
 								<Field label="Slug" hint={isEdit ? 'the public URL is fixed once created' : 'optional — auto-generated from the name if left blank'}><input className="search-input" style={{ fontFamily: 'var(--font-mono)' }} value={form.slug} onChange={(e) => set('slug', e.target.value)} disabled={isEdit} /></Field>

@@ -131,9 +131,11 @@ function MultiCheckPicker({
 		const below = window.innerHeight - r.bottom - 8;
 		const above = r.top - 8;
 		const openUp = below < 240 && above > below;
+		const width = Math.min(Math.max(r.width, 200), window.innerWidth - 16);
+		const left = Math.max(8, Math.min(r.left, window.innerWidth - 8 - width));
 		setPos(openUp
-			? { bottom: window.innerHeight - r.top + 4, left: r.left, width: r.width, maxH: Math.min(320, above) }
-			: { top: r.bottom + 4, left: r.left, width: r.width, maxH: Math.min(320, below) });
+			? { bottom: window.innerHeight - r.top + 4, left, width, maxH: Math.min(320, above) }
+			: { top: r.bottom + 4, left, width, maxH: Math.min(320, below) });
 	};
 	useEffect(() => { if (open) { place(); setQuery(''); } }, [open]);
 	useEffect(() => {

@@ -52,9 +52,13 @@ export function Select({
 		const below = window.innerHeight - r.bottom - 8;
 		const above = r.top - 8;
 		const openUp = below < Math.min(MENU_MAX, 220) && above > below;
+		// At least 200px wide so a narrow trigger (e.g. a currency box) still gets a
+		// readable, non-truncated list; clamped to stay inside the viewport.
+		const width = Math.min(Math.max(r.width, 200), window.innerWidth - 16);
+		const left = Math.max(8, Math.min(r.left, window.innerWidth - 8 - width));
 		setPos(openUp
-			? { bottom: window.innerHeight - r.top + 4, left: r.left, width: r.width, maxH: Math.min(MENU_MAX, above) }
-			: { top: r.bottom + 4, left: r.left, width: r.width, maxH: Math.min(MENU_MAX, below) });
+			? { bottom: window.innerHeight - r.top + 4, left, width, maxH: Math.min(MENU_MAX, above) }
+			: { top: r.bottom + 4, left, width, maxH: Math.min(MENU_MAX, below) });
 	};
 
 	useEffect(() => { if (open) place(); }, [open]);

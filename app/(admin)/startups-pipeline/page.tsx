@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Check, X, Trash2, Upload, Rocket } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Select } from '@/components/select';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
@@ -147,11 +148,7 @@ export default function StartupsPipelinePage() {
 
 			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)', gap: 8, flexWrap: 'wrap' }}>
 				{TABS.map((t) => <button key={t.key} className={`chip ${status === t.key ? 'on' : ''}`} onClick={() => setStatus(t.key)}>{t.label}</button>)}
-				<select className="search-input" style={{ height: 30, width: 190 }} value={assigned} onChange={(e) => setAssigned(e.target.value)}>
-					<option value="">Any assignee</option>
-					<option value="unassigned">Unassigned</option>
-					{admins.map((a) => <option key={a.id} value={a.id}>{a.full_name || a.display_name || a.email}</option>)}
-				</select>
+				<Select value={assigned} onChange={setAssigned} searchable width={190} options={[{ value: '', label: 'Any assignee' }, { value: 'unassigned', label: 'Unassigned' }, ...admins.map((a) => ({ value: a.id, label: a.full_name || a.display_name || a.email }))]} />
 				<input className="search-input" style={{ flex: '0 0 200px', height: 30 }} placeholder="Search name / site…" value={search} onChange={(e) => setSearch(e.target.value)} />
 				<input className="search-input" type="date" style={{ height: 30 }} value={from} onChange={(e) => setFrom(e.target.value)} title="Added from" />
 				<input className="search-input" type="date" style={{ height: 30 }} value={to} onChange={(e) => setTo(e.target.value)} title="Added to" />
@@ -164,10 +161,7 @@ export default function StartupsPipelinePage() {
 				<div className="card" style={{ padding: 12, marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
 					<strong>{selected.size} selected</strong>
 					{(data?.total ?? 0) > selected.size && <button className="btn ghost" onClick={() => void selectAllMatching()}>Select all {(data?.total ?? 0).toLocaleString()} matching</button>}
-					<select className="search-input" style={{ height: 30, width: 180 }} value={bulkAssignee} onChange={(e) => setBulkAssignee(e.target.value)}>
-						<option value="">Unassign</option>
-						{admins.map((a) => <option key={a.id} value={a.id}>{a.full_name || a.display_name || a.email}</option>)}
-					</select>
+					<Select value={bulkAssignee} onChange={setBulkAssignee} searchable width={180} placeholder="Unassign" options={[{ value: '', label: 'Unassign' }, ...admins.map((a) => ({ value: a.id, label: a.full_name || a.display_name || a.email }))]} />
 					<button className="btn ghost" onClick={() => void bulkAssign(false)}>Assign</button>
 					<button className="btn ghost" disabled={admins.length === 0} onClick={() => void bulkAssign(true)} title="Distribute evenly across admins">Round-robin</button>
 					<button className="btn ghost" onClick={() => void bulkStatus('added')}><Check size={12} /> Added</button>
@@ -388,10 +382,7 @@ function AddModal({ admins, onClose, onSaved }: { admins: AdminUser[]; onClose: 
 				</div>
 				<L label="Source"><input className="search-input" value={f.source} onChange={(e) => set('source', e.target.value)} placeholder="Twitter, news…" /></L>
 				<L label="Assign to">
-					<select className="search-input" value={f.assigned_to} onChange={(e) => set('assigned_to', e.target.value)}>
-						<option value="">— unassigned —</option>
-						{admins.map((a) => <option key={a.id} value={a.id}>{a.full_name || a.display_name || a.email}</option>)}
-					</select>
+					<Select value={f.assigned_to} onChange={(v) => set('assigned_to', v)} searchable width="100%" style={{ display: 'block', width: '100%' }} placeholder="— unassigned —" options={[{ value: '', label: '— unassigned —' }, ...admins.map((a) => ({ value: a.id, label: a.full_name || a.display_name || a.email }))]} />
 				</L>
 				<L label="Notes"><textarea className="search-input" style={{ minHeight: 60, resize: 'vertical' }} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></L>
 			</div>

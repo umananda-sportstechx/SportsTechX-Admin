@@ -15,7 +15,7 @@ import { StatStrip } from '@/components/filters';
 import { DateRangePicker, type RangeValue } from '@/components/date-range-picker';
 import { CompletionByAdmin, TimeAnalytics, WeeklyMetrics } from '@/components/queue-stats';
 import { WorkSessionTimer, countWorkItem } from '@/components/work-session-timer';
-import { CandidateInput, parseCandidates } from '@/components/candidate-import';
+import { CandidateInput, parseInvestorCandidates } from '@/components/candidate-import';
 import { InvestorModal } from '../investors/page';
 
 interface QueueRow {
@@ -373,7 +373,7 @@ function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 	const [text, setText] = useState('');
 	const [pending, setPending] = useState(false);
 	const submit = async () => {
-		const rows = parseCandidates(text);
+		const rows = parseInvestorCandidates(text);
 		if (!rows.length) { toast.error('Paste at least one line'); return; }
 		setPending(true);
 		try {
@@ -388,7 +388,13 @@ function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 				<button className="btn" disabled={!text.trim() || pending} onClick={() => void submit()}>{pending ? 'Importing…' : 'Import'}</button>
 			</>
 		}>
-			<CandidateInput text={text} onText={setText} sampleName="Sequoia Capital" placeholder={'Sequoia Capital, https://sequoiacap.com\nhttps://a16z.com'} />
+			<CandidateInput
+				text={text} onText={setText} sampleName="Sequoia Capital"
+				placeholder={'Name, Website, Category, Country, City, Year_Launched, LinkedIn\nSequoia Capital, https://sequoiacap.com, venture_capital, USA, Menlo Park, 1972, https://linkedin.com/company/sequoia'}
+				parse={(t) => parseInvestorCandidates(t).map((r) => ({ name: r.name, website: r.website }))}
+				templateColumns={['Name', 'Website', 'Category', 'Country', 'City', 'Year_Launched', 'Description', 'LinkedIn', 'Twitter', 'Instagram', 'Facebook', 'POC_Name', 'POC_Position', 'POC_Email', 'POC_LinkedIn']}
+				templateRows={[['Sequoia Capital', 'https://sequoiacap.com', 'venture_capital', 'USA', 'Menlo Park', '1972', 'Global venture capital firm', 'https://linkedin.com/company/sequoia', 'https://x.com/sequoia', '', '', 'Roelof Botha', 'Managing Partner', 'roelof@sequoiacap.com', 'https://linkedin.com/in/roelofbotha']]}
+			/>
 		</Modal>
 	);
 }

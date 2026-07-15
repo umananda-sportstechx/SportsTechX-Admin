@@ -25,13 +25,79 @@ export function parseCandidates(text: string): Candidate[] {
 	});
 }
 
+// ─── Rich investor CSV import (header-aware) ─────────────────────────────────
+// Supports a full-column CSV (Name, Website, Category, Country, City, Year,
+// Description, socials, POC…) when the first line is a recognizable header;
+// otherwise falls back to the simple "Name, website" parse.
+
+export interface InvestorCandidate {
+	name: string; website?: string; category?: string; country?: string; city?: string; year_launched?: number;
+	description?: string; twitter_url?: string; instagram_url?: string; facebook_url?: string; linkedin_url?: string;
+	poc_name?: string; poc_position?: string; poc_email?: string; poc_linkedin?: string;
+}
+
+/** Split one CSV line, honoring double-quoted fields (so a description may hold commas). */
+function splitCsvLine(line: string): string[] {
+	const out: string[] = []; let cur = ''; let q = false;
+	for (let i = 0; i < line.length; i++) {
+		const ch = line[i];
+		if (q) { if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+		else if (ch === '"') q = true;
+		else if (ch === ',' || ch === '\t') { out.push(cur); cur = ''; }
+		else cur += ch;
+	}
+	out.push(cur);
+	return out.map((s) => s.trim());
+}
+
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '');
+const INV_ALIASES: Record<string, keyof InvestorCandidate> = {
+	name: 'name', investorname: 'name', website: 'website', url: 'website', site: 'website',
+	category: 'category', type: 'category', country: 'country', city: 'city',
+	year: 'year_launched', yearlaunched: 'year_launched', founded: 'year_launched', foundedyear: 'year_launched',
+	description: 'description', about: 'description', bio: 'description',
+	linkedin: 'linkedin_url', linkedinurl: 'linkedin_url', twitter: 'twitter_url', x: 'twitter_url',
+	instagram: 'instagram_url', facebook: 'facebook_url',
+	pocname: 'poc_name', contactname: 'poc_name',
+	pocposition: 'poc_position', position: 'poc_position', title: 'poc_position', contacttitle: 'poc_position',
+	pocemail: 'poc_email', contactemail: 'poc_email', email: 'poc_email',
+	poclinkedin: 'poc_linkedin', contactlinkedin: 'poc_linkedin',
+};
+
+export function parseInvestorCandidates(text: string): InvestorCandidate[] {
+	const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+	if (!lines.length) return [];
+	const header = splitCsvLine(lines[0]!).map(norm);
+	const hasHeader = header.includes('name') && header.some((h) => h !== 'name' && h in INV_ALIASES);
+	if (!hasHeader) return parseCandidates(text).map((c) => ({ name: c.name, website: c.website }));
+	const map = header.map((h) => INV_ALIASES[h]);
+	return lines.slice(1).map((line) => {
+		const cells = splitCsvLine(line);
+		const row: InvestorCandidate = { name: '' };
+		cells.forEach((val, i) => {
+			const key = map[i];
+			if (!key || !val) return;
+			if (key === 'year_launched') { const n = Number(val); if (Number.isFinite(n)) row.year_launched = n; }
+			else (row as unknown as Record<string, unknown>)[key] = val;
+		});
+		return row;
+	}).filter((r) => r.name);
+}
+
 export function CandidateInput({
-	text, onText, placeholder, sampleName,
-}: { text: string; onText: (t: string) => void; placeholder?: string; sampleName: string }) {
+	text, onText, placeholder, sampleName, parse = parseCandidates, templateColumns, templateRows,
+}: {
+	text: string; onText: (t: string) => void; placeholder?: string; sampleName: string;
+	/** Preview parser (defaults to the simple Name/Website parse). */
+	parse?: (t: string) => Candidate[];
+	/** Header + example rows for the downloadable template (defaults to Name/Website). */
+	templateColumns?: string[];
+	templateRows?: string[][];
+}) {
 	const fileRef = useRef<HTMLInputElement>(null);
 	const onFile = (file: File) => { const r = new FileReader(); r.onload = () => onText(String(r.result ?? '')); r.readAsText(file); };
-	const rows = parseCandidates(text);
-	const template = () => downloadCsv('candidates-template.csv', ['Name', 'Website'], [
+	const rows = parse(text);
+	const template = () => downloadCsv('candidates-template.csv', templateColumns ?? ['Name', 'Website'], templateRows ?? [
 		[sampleName, 'https://example.com'],
 		[`${sampleName} Two`, 'https://example.io'],
 	]);

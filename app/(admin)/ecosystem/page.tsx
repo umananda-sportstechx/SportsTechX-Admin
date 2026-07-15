@@ -9,7 +9,7 @@ import { api } from '@/lib/api';
 import { Select } from '@/components/select';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, Loading, StatCard, RichStatCard, StatsPanel, PillTabs, Section, Pager } from '@/components/atoms';
+import { PageHeader, AsyncState, Loading, ErrorState, StatCard, RichStatCard, StatsPanel, PillTabs, Section, Pager } from '@/components/atoms';
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip, FilterRange, RefSlugFilter } from '@/components/filters';
 import { CsvImportButton, CsvTemplateButton, CsvCheckButton } from '@/components/csv-import';
@@ -71,6 +71,7 @@ export function EcosystemView({ embedded = false, entityType }: { embedded?: boo
 	const [creating, setCreating] = useState(false);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [removePending, setRemovePending] = useState(false);
+	const [viewingId, setViewingId] = useState<string | null>(null);
 
 	const { data, error, isLoading } = useSWR<Response>(
 		['/api/ecosystem-entities', {
@@ -149,6 +150,19 @@ export function EcosystemView({ embedded = false, entityType }: { embedded?: boo
 				</div>
 			)}
 
+			{(creating || editingId) && (
+				<EntityModal
+					id={editingId}
+					defaultType={type}
+					onClose={() => { setCreating(false); setEditingId(null); }}
+					onSaved={() => { setCreating(false); setEditingId(null); void refresh(); }}
+				/>
+			)}
+
+			{viewingId ? (
+				<EntityDetail id={viewingId} onBack={() => setViewingId(null)} onEdit={(eid) => setEditingId(eid)} onView={setViewingId} />
+			) : (
+				<>
 			<FilterBar>
 				{!entityType && (
 					<>
@@ -178,16 +192,6 @@ export function EcosystemView({ embedded = false, entityType }: { embedded?: boo
 				<CsvCheckButton entity="ecosystem" />
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add {type}</button>
 			</FilterBar>
-
-			{(creating || editingId) && (
-				<EntityModal
-					id={editingId}
-					defaultType={type}
-					onClose={() => { setCreating(false); setEditingId(null); }}
-					onSaved={() => { setCreating(false); setEditingId(null); void refresh(); }}
-				/>
-			)}
-
 			<div className="card">
 				<AsyncState loading={isLoading} error={error} empty={entities.length === 0} emptyMsg={`No ${type}s yet.`} onRetry={() => void refresh()}>
 					<table className="data-table">
@@ -195,7 +199,7 @@ export function EcosystemView({ embedded = false, entityType }: { embedded?: boo
 						<tbody>
 							{entities.map((e) => (
 								<tr key={e.id}>
-									<td>{e.name}</td>
+									<td><button className="btn ghost" style={{ padding: '2px 4px', fontWeight: 600, textAlign: 'left' }} onClick={() => setViewingId(e.id)}>{e.name}</button></td>
 									<td className="num">{e.slug ?? '—'}</td>
 									<td>{e.category ?? '—'}</td>
 									<td>{e.status ?? '—'}</td>
@@ -213,6 +217,8 @@ export function EcosystemView({ embedded = false, entityType }: { embedded?: boo
 				</AsyncState>
 			</div>
 			<Pager page={page} totalPages={data?.totalPages} onPage={setPage} />
+				</>
+			)}
 		</div>
 	);
 }
@@ -508,7 +514,7 @@ interface PartRow { id: string; company_id: string | null; name: string | null; 
 interface EcoHit { id: string; name: string; entity_type: string }
 
 /** Relationship-linking + cohort-participant management for an existing entity. */
-function LinksCohortPanel({ entityId }: { entityId: string }) {
+function LinksCohortPanel({ entityId, onView }: { entityId: string; onView?: (id: string) => void }) {
 	const { mutate } = useSWRConfig();
 	const ask = useConfirm();
 	const rels = useSWR<RelRow[]>([`/api/admin/ecosystem-entities/${entityId}/relationships`], { dedupingInterval: 10_000 });
@@ -580,7 +586,7 @@ function LinksCohortPanel({ entityId }: { entityId: string }) {
 				<AsyncState loading={rels.isLoading} error={rels.error} empty={(rels.data?.length ?? 0) === 0} emptyMsg="No linked entities." onRetry={() => void refreshRels()}>
 					<table className="data-table"><tbody>
 						{(rels.data ?? []).map((r) => (
-							<tr key={r.id}><td>{r.child_name} <span style={{ color: 'var(--fg-muted)', fontSize: 11 }}>· {r.child_type}</span></td><td style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)' }}>{r.relationship_type.replace(/_/g, ' ')}</td><td style={{ textAlign: 'right' }}><button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => void delRel(r.id)}><Trash2 size={12} /></button></td></tr>
+							<tr key={r.id}><td>{onView ? <button className="btn ghost" style={{ padding: '2px 4px', fontWeight: 600 }} onClick={() => onView(r.child_id)}>{r.child_name}</button> : r.child_name} <span style={{ color: 'var(--fg-muted)', fontSize: 11 }}>· {r.child_type}</span></td><td style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)' }}>{r.relationship_type.replace(/_/g, ' ')}</td><td style={{ textAlign: 'right' }}><button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => void delRel(r.id)}><Trash2 size={12} /></button></td></tr>
 						))}
 					</tbody></table>
 				</AsyncState>
@@ -615,6 +621,62 @@ function LinksCohortPanel({ entityId }: { entityId: string }) {
 						))}
 					</div>
 				</AsyncState>
+			</div>
+		</div>
+	);
+}
+
+/** Full-page drill-down for one entity: header + key facts + linked entities &
+ *  cohorts. Linked entities are clickable to hop straight to their own detail. */
+function EntityDetail({ id, onBack, onEdit, onView }: { id: string; onBack: () => void; onEdit: (id: string) => void; onView: (id: string) => void }) {
+	const { data: e, isLoading, error, mutate } = useSWR<EntityEdit>([`/api/admin/ecosystem-entities/${id}/edit`], { revalidateOnFocus: false });
+	if (isLoading || (!e && !error)) return <div className="card" style={{ padding: 'var(--space-4)' }}><Loading msg="Loading entity…" /></div>;
+	if (error || !e) return <div className="card" style={{ padding: 'var(--space-4)' }}><ErrorState error={error} onRetry={() => void mutate()} /></div>;
+	const p = (e.program ?? {}) as Record<string, unknown>;
+	const ev = (e.event ?? {}) as Record<string, unknown>;
+	const isEvent = e.entity_type === 'event';
+	const isProgram = e.entity_type === 'program';
+	const yn = (v: unknown) => (v == null ? '—' : v ? 'Yes' : 'No');
+	const s = (v: unknown) => (v == null || v === '' ? '—' : String(v));
+	const facts: Array<[string, string]> = isEvent
+		? [['Mode', s(ev.mode).replace(/_/g, ' ')], ['Start', s(ev.start_date).slice(0, 10)], ['End', s(ev.end_date).slice(0, 10)], ['Featured', yn(ev.is_featured)], ['Discount', s(ev.discount_code)]]
+		: isProgram
+			? [['Duration', s(p.duration_label)], ['Interval', s(p.interval_label)], ['Investment', s(p.investment_label)], ['Equity', s(p.equity_label)], ['Stage', s(p.stage_label)], ['Cohort size', s(p.cohort_size)], ['Virtual', s(p.virtual_mode)], ['Office space', yn(p.has_office_space)], ['Profit', p.is_profitable == null ? '—' : (p.is_profitable ? 'For profit' : 'Non-profit')], ['Latest cohort', s(p.latest_cohort_year)], ['Entries open', yn(p.entries_open)]]
+			: [];
+	const info: Array<[string, string]> = [
+		['Type', s(e.entity_type)], ['Status', s(e.status)], ['Category', s(e.category)],
+		['HQ', [e.hq_city, e.hq_country].filter(Boolean).join(', ') || '—'],
+		['Founded', s(e.founded_year)], ['Latest activity', s(e.latest_activity_year)],
+		['POC', s(e.poc_name)], ['POC email', s(e.poc_email)],
+	];
+	return (
+		<div style={{ display: 'grid', gap: 16 }}>
+			<div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+				<button className="btn ghost" onClick={onBack}>← Back to list</button>
+				<div style={{ flex: 1 }} />
+				<button className="btn" onClick={() => onEdit(id)}>Edit</button>
+			</div>
+			<div className="card" style={{ padding: 'var(--space-4)' }}>
+				<div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+					<h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 800, margin: 0 }}>{e.name}</h2>
+					<span className="tag">{e.entity_type}</span>
+					{e.status && <span className="tag">{e.status}</span>}
+				</div>
+				{e.website && <a href={e.website.startsWith('http') ? e.website : `https://${e.website}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', fontSize: 13 }}>{e.website}</a>}
+				{e.description && <p style={{ fontSize: 13, color: 'var(--fg-2)', marginTop: 8, marginBottom: 0 }}>{e.description}</p>}
+				<div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 14 }}>
+					{info.map(([k, v]) => <div key={k}><div className="co-stat-label">{k}</div><div style={{ fontSize: 13 }}>{v}</div></div>)}
+				</div>
+			</div>
+			{facts.length > 0 && (
+				<Section title={isEvent ? 'Event details' : 'Program details'} meta={e.entity_type}>
+					<div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+						{facts.map(([k, v]) => <div key={k}><div className="co-stat-label">{k}</div><div style={{ fontSize: 13, textTransform: 'capitalize' }}>{v}</div></div>)}
+					</div>
+				</Section>
+			)}
+			<div className="card" style={{ padding: 'var(--space-4)' }}>
+				<LinksCohortPanel entityId={id} onView={onView} />
 			</div>
 		</div>
 	);

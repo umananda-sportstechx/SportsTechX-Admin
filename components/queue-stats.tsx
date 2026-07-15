@@ -50,7 +50,7 @@ export function TimeAnalytics({ timeStats, adminName }: { timeStats?: QueueTimeS
 							<tr key={r.admin_id}>
 								<td>{r.full_name ?? adminName(r.admin_id)}</td>
 								<td className="num">{fmtDur(r.total_seconds)}</td>
-								<td className="num">{fmtDur(r.avg_seconds_per_item)}</td>
+								<td className="num">{r.items > 0 ? fmtDur(r.avg_seconds_per_item) : '—'}</td>
 								<td className="num">{r.items}</td>
 							</tr>
 						))}

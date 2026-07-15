@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Trash2, Check, SkipForward, Rocket, Undo2 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Select } from '@/components/select';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
@@ -148,11 +149,7 @@ export default function InvestorReviewPage() {
 			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)', gap: 8, flexWrap: 'wrap' }}>
 				<Chip active={status === ''} onClick={() => setStatus('')}>All</Chip>
 				{STATUSES.map((s) => <Chip key={s} active={status === s} onClick={() => setStatus(s)}>{s}</Chip>)}
-				<select className="search-input" style={{ height: 30, width: 200 }} value={assigned} onChange={(e) => setAssigned(e.target.value)}>
-					<option value="">Any assignee</option>
-					<option value="unassigned">Unassigned</option>
-					{admins.map((a) => <option key={a.id} value={a.id}>{a.full_name || a.display_name || a.email}</option>)}
-				</select>
+				<Select value={assigned} onChange={setAssigned} searchable width={200} options={[{ value: '', label: 'Any assignee' }, { value: 'unassigned', label: 'Unassigned' }, ...admins.map((a) => ({ value: a.id, label: a.full_name || a.display_name || a.email }))]} />
 				<input className="search-input" style={{ flex: '0 0 200px', height: 30 }} placeholder="Search name…" value={search} onChange={(e) => setSearch(e.target.value)} />
 				<input className="search-input" type="date" style={{ height: 30 }} value={from} onChange={(e) => setFrom(e.target.value)} title="Added from" />
 				<input className="search-input" type="date" style={{ height: 30 }} value={to} onChange={(e) => setTo(e.target.value)} title="Added to" />
@@ -167,10 +164,7 @@ export default function InvestorReviewPage() {
 					{(data?.total ?? 0) > selected.size && (
 						<button className="btn ghost" onClick={() => void selectAllMatching()}>Select all {(data?.total ?? 0).toLocaleString()} matching</button>
 					)}
-					<select className="search-input" style={{ height: 30, width: 200 }} value={bulkAssignee} onChange={(e) => setBulkAssignee(e.target.value)}>
-						<option value="">Unassign</option>
-						{admins.map((a) => <option key={a.id} value={a.id}>{a.full_name || a.display_name || a.email}</option>)}
-					</select>
+					<Select value={bulkAssignee} onChange={setBulkAssignee} searchable width={200} placeholder="Unassign" options={[{ value: '', label: 'Unassign' }, ...admins.map((a) => ({ value: a.id, label: a.full_name || a.display_name || a.email }))]} />
 					<button className="btn ghost" onClick={() => void bulkAssign(false)}>Assign</button>
 					<button className="btn ghost" disabled={admins.length === 0} onClick={() => void bulkAssign(true)} title="Distribute evenly across admins">Round-robin</button>
 					<button className="btn ghost" onClick={() => void bulkComplete()}><Check size={12} /> Completed</button>
@@ -257,10 +251,7 @@ function AddModal({ admins, onClose, onSaved }: { admins: AdminUser[]; onClose: 
 					<L label="Country"><input className="search-input" value={country} onChange={(e) => setCountry(e.target.value)} /></L>
 				</div>
 				<L label="Assign to">
-					<select className="search-input" value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)}>
-						<option value="">— unassigned —</option>
-						{admins.map((a) => <option key={a.id} value={a.id}>{a.full_name || a.display_name || a.email}</option>)}
-					</select>
+					<Select value={assignedTo} onChange={setAssignedTo} searchable width="100%" style={{ display: 'block', width: '100%' }} placeholder="— unassigned —" options={[{ value: '', label: '— unassigned —' }, ...admins.map((a) => ({ value: a.id, label: a.full_name || a.display_name || a.email }))]} />
 				</L>
 			</div>
 		</Modal>

@@ -6,6 +6,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Save, Trash2, Layers, CalendarClock, Package, GraduationCap, Lightbulb, Banknote } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Select } from '@/components/select';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading, StatCard, RichStatCard, StatsPanel, PillTabs, Section, Pager } from '@/components/atoms';
@@ -43,7 +44,8 @@ interface EcoStats {
 interface InvestorYoyStats { total: number; this_year?: number; last_year?: number; yoy_change?: number | null }
 
 const STATUSES = ['active', 'inactive', 'paused'] as const;
-const ENTITY_TYPES = ['program', 'event', 'organization', 'initiative'] as const;
+const ENTITY_TYPES = ['program', 'event', 'initiative'] as const;
+const PROGRAM_CATEGORIES = ['Accelerator', 'Incubator', 'Challenge/Competition'] as const;
 const EVENT_MODES = ['in_person', 'virtual', 'hybrid'] as const;
 
 type EcoType = 'program' | 'event' | 'initiative' | 'organization';
@@ -218,7 +220,7 @@ export function EcosystemView({ embedded = false, entityType }: { embedded?: boo
 interface ProgramDetails {
 	duration_label: string; interval_label: string; investment_label: string; equity_label: string;
 	stage_label: string; cohort_size: string; latest_cohort_year: string; cohort_history_label: string;
-	details: string; entries_open: boolean; entries_end_date: string; is_virtual: boolean; has_office_space: boolean; is_profitable: boolean;
+	details: string; entries_open: boolean; entries_end_date: string; virtual_mode: string; has_office_space: string; is_profitable: string;
 }
 interface EventDetails {
 	mode: string; start_date: string; end_date: string; is_featured: boolean;
@@ -234,7 +236,7 @@ interface EntityForm {
 const EMPTY_PROGRAM: ProgramDetails = {
 	duration_label: '', interval_label: '', investment_label: '', equity_label: '', stage_label: '',
 	cohort_size: '', latest_cohort_year: '', cohort_history_label: '', details: '',
-	entries_open: false, entries_end_date: '', is_virtual: false, has_office_space: false, is_profitable: false,
+	entries_open: false, entries_end_date: '', virtual_mode: '', has_office_space: '', is_profitable: '',
 };
 const EMPTY_EVENT: EventDetails = {
 	mode: '', start_date: '', end_date: '', is_featured: false, cover_url: '', discount_code: '', discount_description: '',
@@ -248,7 +250,7 @@ const emptyEntity = (type: string): EntityForm => ({
 interface EntityEdit extends Entity {
 	description?: string | null; website?: string | null; founded_year?: number | null; latest_activity_year?: number | null;
 	poc_name?: string | null; poc_position?: string | null; poc_email?: string | null; poc_linkedin?: string | null;
-	hq_city?: string | null; hq_continent?: string | null; hq_region?: string | null; hq_state?: string | null;
+	hq_city?: string | null; hq_continent?: string | null; hq_region?: string | null; hq_state?: string | null; hq_report_region?: string | null;
 	twitter_url?: string | null; instagram_url?: string | null; facebook_url?: string | null;
 	linkedin_url?: string | null; youtube_url?: string | null; email?: string | null;
 	sport_ids?: string[];
@@ -266,7 +268,7 @@ function toEntityForm(h: EntityEdit, defaultType: string): EntityForm {
 		description: h.description ?? '', website: h.website ?? '', category: h.category ?? '',
 		founded_year: h.founded_year ? String(h.founded_year) : '', latest_activity_year: h.latest_activity_year ? String(h.latest_activity_year) : '', status: h.status ?? 'active',
 		poc_name: h.poc_name ?? '', poc_position: h.poc_position ?? '', poc_email: h.poc_email ?? '', poc_linkedin: h.poc_linkedin ?? '',
-		hq: { country: h.hq_country ?? '', city: h.hq_city ?? '', continent: h.hq_continent ?? '', region: h.hq_region ?? '', state: h.hq_state ?? '' },
+		hq: { country: h.hq_country ?? '', city: h.hq_city ?? '', continent: h.hq_continent ?? '', region: h.hq_region ?? '', state: h.hq_state ?? '', report_region: h.hq_report_region ?? '' },
 		social: {
 			twitter_url: h.twitter_url ?? '', instagram_url: h.instagram_url ?? '', facebook_url: h.facebook_url ?? '',
 			linkedin_url: h.linkedin_url ?? '', youtube_url: h.youtube_url ?? '', email: h.email ?? '',
@@ -276,7 +278,7 @@ function toEntityForm(h: EntityEdit, defaultType: string): EntityForm {
 			duration_label: str(p.duration_label), interval_label: str(p.interval_label), investment_label: str(p.investment_label),
 			equity_label: str(p.equity_label), stage_label: str(p.stage_label), cohort_size: str(p.cohort_size),
 			latest_cohort_year: str(p.latest_cohort_year), cohort_history_label: str(p.cohort_history_label), details: str(p.details),
-			entries_open: !!p.entries_open, entries_end_date: date(p.entries_end_date), is_virtual: !!p.is_virtual, has_office_space: !!p.has_office_space, is_profitable: !!p.is_profitable,
+			entries_open: !!p.entries_open, entries_end_date: date(p.entries_end_date), virtual_mode: str(p.virtual_mode), has_office_space: p.has_office_space == null ? '' : (p.has_office_space ? 'yes' : 'no'), is_profitable: p.is_profitable == null ? '' : (p.is_profitable ? 'yes' : 'no'),
 		},
 		event: {
 			mode: str(ev.mode), start_date: date(ev.start_date), end_date: date(ev.end_date),
@@ -300,6 +302,7 @@ function EntityForm({ id, initial, onClose, onSaved }: { id: string | null; init
 
 	const set = <K extends keyof EntityForm>(k: K, v: EntityForm[K]) => setForm((f) => ({ ...f, [k]: v }));
 	const numOrNull = (s: string) => (s.trim() === '' ? null : Number(s));
+	const yesNoNull = (s: string) => (s === '' ? null : s === 'yes');
 
 	const submit = async () => {
 		setPending(true);
@@ -323,10 +326,11 @@ function EntityForm({ id, initial, onClose, onSaved }: { id: string | null; init
 				hq_continent: form.hq.continent.trim() || undefined,
 				hq_region: form.hq.region.trim() || undefined,
 				hq_state: form.hq.state.trim() || undefined,
+				hq_report_region: (form.hq.report_region ?? '').trim() || undefined,
 				social: form.social,
 				sport_ids: form.sport_ids,
 			};
-			if (form.entity_type === 'program' || form.entity_type === 'initiative' || form.entity_type === 'organization') {
+			if (form.entity_type === 'program') {
 				body.program = {
 					duration_label: form.program.duration_label.trim() || null,
 					interval_label: form.program.interval_label.trim() || null,
@@ -339,9 +343,9 @@ function EntityForm({ id, initial, onClose, onSaved }: { id: string | null; init
 					details: form.program.details.trim() || null,
 					entries_open: form.program.entries_open,
 					entries_end_date: form.program.entries_end_date || null,
-					is_virtual: form.program.is_virtual,
-					has_office_space: form.program.has_office_space,
-					is_profitable: form.program.is_profitable,
+					virtual_mode: form.program.virtual_mode || null,
+					has_office_space: yesNoNull(form.program.has_office_space),
+					is_profitable: yesNoNull(form.program.is_profitable),
 				};
 			}
 			if (form.entity_type === 'event') {
@@ -367,14 +371,70 @@ function EntityForm({ id, initial, onClose, onSaved }: { id: string | null; init
 	};
 
 	const isEvent = form.entity_type === 'event';
+	const isProgram = form.entity_type === 'program';
 	const setProgram = <K extends keyof ProgramDetails>(k: K, v: ProgramDetails[K]) => set('program', { ...form.program, [k]: v });
 	const setEvent = <K extends keyof EventDetails>(k: K, v: EventDetails[K]) => set('event', { ...form.event, [k]: v });
 
+	const detailsTab = isEvent ? {
+		key: 'details', label: 'Event details', node: (
+			<>
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+					<Field label="Mode" hint="how attendees join"><Select value={form.event.mode} onChange={(v) => setEvent('mode', v)} width="100%" style={{ display: 'block', width: '100%' }} placeholder="—" options={[{ value: '', label: '—' }, ...EVENT_MODES.map((m) => ({ value: m, label: m.replace(/_/g, ' ') }))]} /></Field>
+					<Field label="Cover image"><ImageInput value={form.event.cover_url} onChange={(u) => setEvent('cover_url', u)} pathPrefix="ecosystem/events" /></Field>
+				</div>
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+					<Field label="Start date"><input className="search-input" type="date" value={form.event.start_date} onChange={(e) => setEvent('start_date', e.target.value)} /></Field>
+					<Field label="End date"><input className="search-input" type="date" value={form.event.end_date} onChange={(e) => setEvent('end_date', e.target.value)} /></Field>
+				</div>
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+					<Field label="Discount code"><input className="search-input" value={form.event.discount_code} onChange={(e) => setEvent('discount_code', e.target.value)} placeholder="e.g. SPORTSTECH20" /></Field>
+					<Field label="Discount description"><input className="search-input" value={form.event.discount_description} onChange={(e) => setEvent('discount_description', e.target.value)} placeholder="e.g. 20% off tickets" /></Field>
+				</div>
+				<label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
+					<input type="checkbox" checked={form.event.is_featured} onChange={(e) => setEvent('is_featured', e.target.checked)} /> Featured event <span style={{ color: 'var(--fg-muted)' }}>— pins it in the events list</span>
+				</label>
+			</>
+		),
+	} : {
+		key: 'details', label: 'Program details', node: (
+			<>
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+					<Field label="Duration"><input className="search-input" value={form.program.duration_label} onChange={(e) => setProgram('duration_label', e.target.value)} placeholder="e.g. 12 weeks" /></Field>
+					<Field label="Interval"><input className="search-input" value={form.program.interval_label} onChange={(e) => setProgram('interval_label', e.target.value)} placeholder="e.g. Twice per year" /></Field>
+				</div>
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+					<Field label="Investment"><input className="search-input" value={form.program.investment_label} onChange={(e) => setProgram('investment_label', e.target.value)} placeholder="$120k" /></Field>
+					<Field label="Equity"><input className="search-input" value={form.program.equity_label} onChange={(e) => setProgram('equity_label', e.target.value)} placeholder="6%" /></Field>
+				</div>
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 120px', gap: 12 }}>
+					<Field label="Stage"><input className="search-input" value={form.program.stage_label} onChange={(e) => setProgram('stage_label', e.target.value)} placeholder="e.g. Idea to Seed" /></Field>
+					<Field label="Cohort size"><input className="search-input" type="number" value={form.program.cohort_size} onChange={(e) => setProgram('cohort_size', e.target.value)} /></Field>
+					<Field label="Latest cohort"><YearSelect value={form.program.latest_cohort_year} onChange={(v) => setProgram('latest_cohort_year', v)} /></Field>
+				</div>
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+					<Field label="Virtual"><Select value={form.program.virtual_mode} onChange={(v) => setProgram('virtual_mode', v)} width="100%" style={{ display: 'block', width: '100%' }} placeholder="—" options={[{ value: '', label: '—' }, { value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }, { value: 'hybrid', label: 'Hybrid' }]} /></Field>
+					<Field label="Office space"><Select value={form.program.has_office_space} onChange={(v) => setProgram('has_office_space', v)} width="100%" style={{ display: 'block', width: '100%' }} placeholder="—" options={[{ value: '', label: '—' }, { value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }]} /></Field>
+					<Field label="Profit type"><Select value={form.program.is_profitable} onChange={(v) => setProgram('is_profitable', v)} width="100%" style={{ display: 'block', width: '100%' }} placeholder="—" options={[{ value: '', label: '—' }, { value: 'yes', label: 'For profit' }, { value: 'no', label: 'Non-profit' }]} /></Field>
+				</div>
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+					<Field label="Cohort history"><input className="search-input" value={form.program.cohort_history_label} onChange={(e) => setProgram('cohort_history_label', e.target.value)} /></Field>
+					<Field label="Applications close"><input className="search-input" type="date" value={form.program.entries_end_date} onChange={(e) => setProgram('entries_end_date', e.target.value)} /></Field>
+				</div>
+				<label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
+					<input type="checkbox" checked={form.program.entries_open} onChange={(e) => setProgram('entries_open', e.target.checked)} /> Entries open <span style={{ color: 'var(--fg-muted)' }}>— applications currently accepted</span>
+				</label>
+				{form.program.entries_open && (
+					<Field label="Application details" hint="deadlines, requirements — shown while entries are open"><textarea className="search-input" style={{ minHeight: 60, resize: 'vertical' }} value={form.program.details} onChange={(e) => setProgram('details', e.target.value)} placeholder="Enter application details, deadlines, or requirements…" /></Field>
+				)}
+			</>
+		),
+	};
+
 	return (
 		<Modal
-			title={isEdit ? 'Edit entity' : 'New entity'}
+			title={isEdit ? `Edit ${form.entity_type}` : `New ${form.entity_type}`}
 			onClose={onClose}
-			width={680}
+			width={860}
 			footer={
 				<>
 					<button className="btn ghost" onClick={onClose}>Cancel</button>
@@ -391,7 +451,7 @@ function EntityForm({ id, initial, onClose, onSaved }: { id: string | null; init
 					tabs={[
 						{ key: 'profile', label: 'Profile', node: (
 							<>
-								<Field label="Name"><input className="search-input" value={form.name} onChange={(e) => set('name', e.target.value)} /></Field>
+								<Field label="Name *" hint="required — the display name used everywhere"><input className="search-input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Techstars Sports" /></Field>
 								<Field label="Type">
 									<div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
 										{ENTITY_TYPES.map((t) => (
@@ -399,18 +459,18 @@ function EntityForm({ id, initial, onClose, onSaved }: { id: string | null; init
 										))}
 									</div>
 								</Field>
-								<Field label={isEdit ? 'Slug' : 'Slug (optional — auto from name)'}><input className="search-input" style={{ fontFamily: 'var(--font-mono)' }} value={form.slug} onChange={(e) => set('slug', e.target.value)} disabled={isEdit} /></Field>
-								<Field label="Description"><textarea className="search-input" style={{ minHeight: 70, resize: 'vertical' }} value={form.description} onChange={(e) => set('description', e.target.value)} /></Field>
+								<Field label="Slug" hint={isEdit ? 'the public URL is fixed once created' : 'optional — auto-generated from the name if left blank'}><input className="search-input" style={{ fontFamily: 'var(--font-mono)' }} value={form.slug} onChange={(e) => set('slug', e.target.value)} disabled={isEdit} /></Field>
+								<Field label="Description"><textarea className="search-input" style={{ minHeight: 70, resize: 'vertical' }} value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="What this entity does, in a sentence or two." /></Field>
 								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 120px', gap: 12 }}>
 									<Field label="Website"><input className="search-input" type="url" value={form.website} onChange={(e) => set('website', e.target.value)} placeholder="https://" /></Field>
-									<Field label="Category"><input className="search-input" value={form.category} onChange={(e) => set('category', e.target.value)} placeholder="Incubator, VC…" /></Field>
+									<Field label="Category" hint={isProgram ? 'program type' : undefined}>
+										{isProgram
+											? <Select value={form.category} onChange={(v) => set('category', v)} width="100%" style={{ display: 'block', width: '100%' }} placeholder="—" options={[{ value: '', label: '—' }, ...PROGRAM_CATEGORIES.map((c) => ({ value: c, label: c }))]} />
+											: <input className="search-input" value={form.category} onChange={(e) => set('category', e.target.value)} placeholder="e.g. Industry body" />}
+									</Field>
 									<Field label="Founded"><YearSelect value={form.founded_year} onChange={(v) => set('founded_year', v)} /></Field>
 								</div>
-								<Field label="Status">
-									<select className="search-input" value={form.status} onChange={(e) => set('status', e.target.value)}>
-										{STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-									</select>
-								</Field>
+								<Field label="Status"><Select value={form.status} onChange={(v) => set('status', v)} width="100%" style={{ display: 'block', width: '100%' }} options={STATUSES.map((s) => ({ value: s, label: s }))} /></Field>
 							</>
 						) },
 						{ key: 'contact', label: 'Contact', node: (
@@ -420,66 +480,14 @@ function EntityForm({ id, initial, onClose, onSaved }: { id: string | null; init
 									<Field label="POC position"><input className="search-input" value={form.poc_position} onChange={(e) => set('poc_position', e.target.value)} /></Field>
 								</div>
 								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-									<Field label="POC email"><input className="search-input" value={form.poc_email} onChange={(e) => set('poc_email', e.target.value)} placeholder="name@org.com" /></Field>
+									<Field label="POC email"><input className="search-input" type="email" value={form.poc_email} onChange={(e) => set('poc_email', e.target.value)} placeholder="name@org.com" /></Field>
 									<Field label="POC LinkedIn"><input className="search-input" value={form.poc_linkedin} onChange={(e) => set('poc_linkedin', e.target.value)} placeholder="https://linkedin.com/in/…" /></Field>
 								</div>
 								<Field label="Latest activity year" hint="most recent year this entity was active"><YearSelect value={form.latest_activity_year} onChange={(v) => set('latest_activity_year', v)} /></Field>
 							</>
 						) },
 						{ key: 'location', label: 'Location', node: <Field label="Headquarters"><LocationFields value={form.hq} onChange={(v) => set('hq', v)} /></Field> },
-						{
-							key: 'details', label: isEvent ? 'Event details' : 'Program details', node: isEvent ? (
-								<>
-									<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-										<Field label="Mode">
-											<select className="search-input" value={form.event.mode} onChange={(e) => setEvent('mode', e.target.value)}>
-												<option value="">—</option>
-												{EVENT_MODES.map((m) => <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>)}
-											</select>
-										</Field>
-										<Field label="Cover image"><ImageInput value={form.event.cover_url} onChange={(u) => setEvent('cover_url', u)} pathPrefix="ecosystem/events" /></Field>
-									</div>
-									<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-										<Field label="Start date"><input className="search-input" type="date" value={form.event.start_date} onChange={(e) => setEvent('start_date', e.target.value)} /></Field>
-										<Field label="End date"><input className="search-input" type="date" value={form.event.end_date} onChange={(e) => setEvent('end_date', e.target.value)} /></Field>
-									</div>
-									<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-										<Field label="Discount code"><input className="search-input" value={form.event.discount_code} onChange={(e) => setEvent('discount_code', e.target.value)} /></Field>
-										<Field label="Discount description"><input className="search-input" value={form.event.discount_description} onChange={(e) => setEvent('discount_description', e.target.value)} /></Field>
-									</div>
-									<label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
-										<input type="checkbox" checked={form.event.is_featured} onChange={(e) => setEvent('is_featured', e.target.checked)} /> Featured event
-									</label>
-								</>
-							) : (
-								<>
-									<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-										<Field label="Duration"><input className="search-input" value={form.program.duration_label} onChange={(e) => setProgram('duration_label', e.target.value)} placeholder="12 weeks" /></Field>
-										<Field label="Interval"><input className="search-input" value={form.program.interval_label} onChange={(e) => setProgram('interval_label', e.target.value)} placeholder="Annual" /></Field>
-									</div>
-									<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-										<Field label="Investment"><input className="search-input" value={form.program.investment_label} onChange={(e) => setProgram('investment_label', e.target.value)} placeholder="$120k" /></Field>
-										<Field label="Equity"><input className="search-input" value={form.program.equity_label} onChange={(e) => setProgram('equity_label', e.target.value)} placeholder="6%" /></Field>
-									</div>
-									<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 120px', gap: 12 }}>
-										<Field label="Stage"><input className="search-input" value={form.program.stage_label} onChange={(e) => setProgram('stage_label', e.target.value)} placeholder="Pre-seed" /></Field>
-										<Field label="Cohort size"><input className="search-input" type="number" value={form.program.cohort_size} onChange={(e) => setProgram('cohort_size', e.target.value)} /></Field>
-										<Field label="Latest cohort"><YearSelect value={form.program.latest_cohort_year} onChange={(v) => setProgram('latest_cohort_year', v)} /></Field>
-									</div>
-									<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-										<Field label="Cohort history"><input className="search-input" value={form.program.cohort_history_label} onChange={(e) => setProgram('cohort_history_label', e.target.value)} /></Field>
-										<Field label="Applications close"><input className="search-input" type="date" value={form.program.entries_end_date} onChange={(e) => setProgram('entries_end_date', e.target.value)} /></Field>
-									</div>
-									<Field label="Details"><textarea className="search-input" style={{ minHeight: 60, resize: 'vertical' }} value={form.program.details} onChange={(e) => setProgram('details', e.target.value)} /></Field>
-									<div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-										<label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}><input type="checkbox" checked={form.program.entries_open} onChange={(e) => setProgram('entries_open', e.target.checked)} /> Entries open</label>
-										<label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}><input type="checkbox" checked={form.program.is_virtual} onChange={(e) => setProgram('is_virtual', e.target.checked)} /> Virtual</label>
-										<label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}><input type="checkbox" checked={form.program.has_office_space} onChange={(e) => setProgram('has_office_space', e.target.checked)} /> Office space</label>
-										<label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}><input type="checkbox" checked={form.program.is_profitable} onChange={(e) => setProgram('is_profitable', e.target.checked)} /> Profitable</label>
-									</div>
-								</>
-							),
-						},
+						...((isEvent || isProgram) ? [detailsTab] : []),
 						{ key: 'social', label: 'Social', node: <SocialLinks value={form.social} onChange={(v) => set('social', v)} /> },
 						{ key: 'sports', label: 'Sports', hint: form.sport_ids.length, node: <Field label="Sports"><SportsPicker value={form.sport_ids} onChange={(v) => set('sport_ids', v)} /></Field> },
 						{ key: 'links', label: 'Links & cohort', node: isEdit && id
@@ -555,9 +563,7 @@ function LinksCohortPanel({ entityId }: { entityId: string }) {
 			<div>
 				<div className="co-stat-label" style={{ marginBottom: 8 }}>Related entities</div>
 				<div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'flex-start', marginBottom: 10 }}>
-					<select className="search-input" style={{ height: 32, flex: '0 0 auto' }} value={relType} onChange={(e) => setRelType(e.target.value)}>
-						{REL_TYPES.map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
-					</select>
+					<Select value={relType} onChange={setRelType} searchable width={230} options={REL_TYPES.map((t) => ({ value: t, label: t.replace(/_/g, ' ') }))} />
 					<div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
 						<input className="search-input" style={{ width: '100%', height: 32 }} placeholder="Search entity to link…" value={childId ? '' : childQ} onChange={(e) => { setChildQ(e.target.value); setChildId(''); }} />
 						{childId === '' && childQ.length >= 2 && (childSearch.data?.data?.length ?? 0) > 0 && (
@@ -586,7 +592,7 @@ function LinksCohortPanel({ entityId }: { entityId: string }) {
 					<div style={{ flex: '1 1 200px' }}><CompanySelectOne value={pCompanyId} onChange={setPCompanyId} /></div>
 					<input className="search-input" style={{ height: 32, flex: '0 0 110px' }} placeholder="Cohort" value={pCohort} onChange={(e) => setPCohort(e.target.value)} />
 					<div style={{ flex: '0 0 100px' }}><YearSelect value={pYear} onChange={setPYear} placeholder="Year" /></div>
-					<select className="search-input" style={{ height: 32, flex: '0 0 auto' }} value={pStatus} onChange={(e) => setPStatus(e.target.value)}>{PART_STATUS.map((s) => <option key={s} value={s}>{s}</option>)}</select>
+					<div style={{ flex: '0 0 130px' }}><Select value={pStatus} onChange={setPStatus} width="100%" style={{ display: 'block', width: '100%' }} options={PART_STATUS.map((s) => ({ value: s, label: s }))} /></div>
 					<button className="btn" style={{ height: 32 }} onClick={() => void addPart()}>Add</button>
 				</div>
 				{!pCompanyId && (

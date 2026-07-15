@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { Play, Square } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -28,19 +28,16 @@ export function WorkSessionTimer({ queue }: { queue: WorkQueue }) {
 	);
 	const [elapsed, setElapsed] = useState(0);
 	const [busy, setBusy] = useState(false);
-	const anchorRef = useRef<{ base: number; at: number } | null>(null);
 
-	// When an open session is present, anchor the local clock to its persisted
-	// duration + the wall time elapsed since the last server read. The interval
-	// ticks the displayed value off that anchor — all clock reads + setState
-	// happen in callbacks, never during render (keeps it pure + ref-safe).
-	useEffect(() => {
-		anchorRef.current = active ? { base: active.duration_seconds, at: Date.now() } : null;
-	}, [active]);
-
+	// Display wall-clock time since the session STARTED (persisted server-side),
+	// so the clock stays consistent across page navigation / refresh. (The
+	// idle-capped active-time is still accumulated server-side via ping for the
+	// stats — but showing it here made the clock appear to reset on reload.)
 	useEffect(() => {
 		if (!active) return;
-		const sync = () => { const a = anchorRef.current; if (a) setElapsed(a.base + (Date.now() - a.at) / 1000); };
+		const startMs = new Date(active.started_at).getTime();
+		const sync = () => setElapsed(Math.max(0, (Date.now() - startMs) / 1000));
+		sync();
 		const t = setInterval(sync, 1000);
 		const ping = setInterval(() => { void api('POST', '/api/admin/work-sessions/ping', { queue }).then(() => mutate()); }, 45_000);
 		return () => { clearInterval(t); clearInterval(ping); };

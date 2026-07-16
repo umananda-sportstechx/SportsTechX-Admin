@@ -6,6 +6,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import useSWRInfinite from 'swr/infinite';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { Select } from '@/components/select';
 import { Section, PillTabs } from '@/components/atoms';
 
 /** Minimal user shape the manage panel needs. */
@@ -202,10 +203,7 @@ function CreditGrantSection({ profileId }: { profileId: string }) {
 	return (
 		<Section title="Grant credits" meta="non-expiring top-up · used after monthly plan credits">
 			<div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-				<select className="search-input" style={{ height: 32, width: 180 }} value={type} onChange={(e) => setType(e.target.value as 'ai' | 'integration')}>
-					<option value="ai">AI credits</option>
-					<option value="integration">Integration / export credits</option>
-				</select>
+				<Select value={type} onChange={(v) => setType(v as 'ai' | 'integration')} width={180} options={[{ value: 'ai', label: 'AI credits' }, { value: 'integration', label: 'Integration / export credits' }]} />
 				<input className="search-input" type="number" min="1" step="1" style={{ height: 32, width: 140 }} placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
 				<button className="btn" disabled={pending} onClick={() => void grant()}>Grant</button>
 			</div>
@@ -323,9 +321,7 @@ function TierChangeSection({ user }: { user: ManageUser }) {
 	return (
 		<div>
 			<div className="co-stat-label" style={{ marginBottom: 8 }}>Permanent tier</div>
-			<select className="search-input" style={{ width: '100%', marginBottom: 8 }} value={tier} onChange={(e) => setTier(e.target.value)}>
-				{['free', 'growth', 'pro'].map((t) => <option key={t} value={t}>{t}</option>)}
-			</select>
+			<Select value={tier} onChange={setTier} width="100%" style={{ display: 'block', width: '100%', marginBottom: 8 }} options={['free', 'growth', 'pro'].map((t) => ({ value: t, label: t }))} />
 			<button className="btn" disabled={pending || tier === user.user_type} onClick={() => void update()}>
 				{pending ? 'Saving…' : 'Save tier'}
 			</button>
@@ -353,10 +349,7 @@ function GrantAccessSection({ profileId }: { profileId: string }) {
 		<div>
 			<div className="co-stat-label" style={{ marginBottom: 8 }}>Grant time-bounded access</div>
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: 6, marginBottom: 6 }}>
-				<select className="search-input" value={tier} onChange={(e) => setTier(e.target.value as 'growth' | 'pro')}>
-					<option value="growth">Growth</option>
-					<option value="pro">Pro</option>
-				</select>
+				<Select value={tier} onChange={(v) => setTier(v as 'growth' | 'pro')} width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: 'growth', label: 'Growth' }, { value: 'pro', label: 'Pro' }]} />
 				<input className="search-input" type="number" min={1} max={3650} value={days} onChange={(e) => setDays(Math.max(1, Number(e.target.value) || 1))} />
 			</div>
 			<input className="search-input" placeholder="Reason (optional)" style={{ width: '100%', marginBottom: 8 }} value={reason} onChange={(e) => setReason(e.target.value)} />
@@ -425,10 +418,7 @@ function FeatureGrantsSection({ profileId }: { profileId: string }) {
 				</div>
 			)}
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: 6, marginBottom: 6 }}>
-				<select className="search-input" value={slug} onChange={(e) => setSlug(e.target.value)}>
-					<option value="">Select feature…</option>
-					{featureOptions.map((f) => <option key={f.id} value={f.slug}>{f.name}</option>)}
-				</select>
+				<Select value={slug} onChange={setSlug} searchable width="100%" style={{ display: 'block', width: '100%' }} placeholder="Select feature…" options={[{ value: '', label: 'Select feature…' }, ...featureOptions.map((f) => ({ value: f.slug, label: f.name }))]} />
 				<input className="search-input" type="number" min={0} placeholder="days" value={days} onChange={(e) => {
 					const v = e.target.value;
 					if (v === '') { setDays(''); return; }

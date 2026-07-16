@@ -95,6 +95,9 @@ export function TouchpointsBoard({ embedded = false }: { embedded?: boolean }) {
 					value={view}
 					onChange={(v) => setView(v as 'weekly' | 'team')}
 				/>
+				{view === 'weekly' && (
+					<AddButton label="Add product" onAdd={(name) => act(() => api('POST', '/api/admin/touchpoints/products', { name }))} placeholder="Product name" />
+				)}
 				<div style={{ flex: 1 }} />
 				<button className="btn ghost" onClick={() => setAnchor(addDays(anchor, -7))}>← Prev</button>
 				<span style={{ fontWeight: 600, fontSize: 13, minWidth: 170, textAlign: 'center' }}>{weekLabel}</span>
@@ -104,11 +107,7 @@ export function TouchpointsBoard({ embedded = false }: { embedded?: boolean }) {
 
 			<AsyncState loading={isLoading} error={error} empty={!isLoading && products.length === 0} emptyMsg="No products yet — add one to start logging.">
 				{view === 'weekly' ? (
-					<Section
-						title="Log"
-						meta={`week of ${monday}`}
-						action={<AddButton label="Add product" onAdd={(name) => act(() => api('POST', '/api/admin/touchpoints/products', { name }))} placeholder="Product name" />}
-					>
+					<Section title="Log" meta={`week of ${monday}`}>
 						<div className="table-scroll">
 							<table className="data-table">
 								<thead>

@@ -85,21 +85,21 @@ export default function FeaturedListsPage() {
 			<div className="card">
 				<AsyncState loading={isLoading} error={error} empty={lists.length === 0} emptyMsg="No featured lists yet." onRetry={refresh}>
 					<table className="data-table">
-						<thead><tr><th>Name</th><th>Entity</th><th>Mode</th><th>Items</th><th>Period</th><th>Visibility</th><th>Premium</th><th>Share</th><th style={{ textAlign: 'right' }} /></tr></thead>
+						<thead><tr><th>Name</th><th>Entity</th><th>Mode</th><th style={{ textAlign: 'right' }}>Items</th><th>Period</th><th>Visibility</th><th>Premium</th><th>Share</th><th style={{ textAlign: 'right' }} /></tr></thead>
 						<tbody>
 							{lists.map((l) => (
 								<tr key={l.id}>
-									<td><div style={{ fontWeight: 600 }}>{l.name}</div>{l.description && <div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{l.description}</div>}</td>
-									<td>{l.entity_type}</td>
+									<td><div style={{ maxWidth: 420 }}><div style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</div>{l.description && <div title={l.description} style={{ fontSize: 11, color: 'var(--fg-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.description}</div>}</div></td>
+									<td style={{ textTransform: 'capitalize' }}>{l.entity_type}</td>
 									<td>{l.filters ? <Tag>filter</Tag> : <Tag variant="pos">manual</Tag>}</td>
-									<td className="num">{l.item_count ?? 0}</td>
-									<td className="num">{l.year ? `${l.month ? l.month.slice(0, 3) + ' ' : ''}${l.year}` : '—'}</td>
+									<td className="num" style={{ textAlign: 'right' }}>{l.item_count ?? 0}</td>
+									<td className="num" style={{ whiteSpace: 'nowrap' }}>{l.year ? `${l.month ? l.month.slice(0, 3) + ' ' : ''}${l.year}` : '—'}</td>
 									<td>{l.show_in_lists ? <Tag variant="pos">in lists</Tag> : <Tag>hidden</Tag>}</td>
 									<td>{l.is_premium ? <Tag variant="warn">premium</Tag> : '—'}</td>
 									<td><button className="btn ghost" disabled={!l.share_slug} onClick={() => copyLink(l.share_slug)}><Link2 size={12} /> Copy</button></td>
-									<td style={{ textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+									<td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
 										<button className="btn ghost" onClick={() => setEditingId(l.id)}>Edit</button>
-										<button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => void remove(l.id, l.name)}><Trash2 size={12} /></button>
+										<button className="btn ghost" style={{ color: 'var(--accent)', marginLeft: 6 }} onClick={() => void remove(l.id, l.name)}><Trash2 size={12} /></button>
 									</td>
 								</tr>
 							))}

@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Save, Trash2, Banknote, BadgeCheck, Coins, Layers } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Select } from '@/components/select';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
@@ -388,10 +389,7 @@ function InvestorForm({ id, initial, onClose, onSaved, promoteReviewId }: { id: 
 									<Field label="Description"><textarea className="search-input" style={{ minHeight: 70, resize: 'vertical' }} value={form.description} onChange={(e) => set('description', e.target.value)} /></Field>
 									<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>
 										<Field label="Category">
-											<select className="search-input" value={form.category} onChange={(e) => set('category', e.target.value)}>
-												<option value="">—</option>
-												{CATEGORIES.map((c) => <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>)}
-											</select>
+											<Select value={form.category} onChange={(v) => set('category', v)} searchable width="100%" style={{ display: 'block', width: '100%' }} placeholder="—" options={[{ value: '', label: '—' }, ...CATEGORIES.map((c) => ({ value: c, label: c.replace(/_/g, ' ') }))]} />
 										</Field>
 										<Field label="Launched"><YearSelect value={form.year_launched} onChange={(v) => set('year_launched', v)} /></Field>
 									</div>
@@ -445,9 +443,7 @@ function InvestorForm({ id, initial, onClose, onSaved, promoteReviewId }: { id: 
 											const upd = (patch: Partial<GeoScope>) => set('thesis_geo', form.thesis_geo.map((x, j) => (j === i ? { ...x, ...patch } : x)));
 											return (
 												<div key={i} style={{ display: 'grid', gridTemplateColumns: '130px 1fr auto', gap: 8, alignItems: 'center' }}>
-													<select className="search-input" value={g.scope_type} onChange={(e) => upd({ scope_type: e.target.value as GeoScope['scope_type'] })}>
-														{GEO_SCOPES.map((t) => <option key={t} value={t}>{t}</option>)}
-													</select>
+													<Select value={g.scope_type} onChange={(v) => upd({ scope_type: v as GeoScope['scope_type'] })} width={130} options={GEO_SCOPES.map((tp) => ({ value: tp, label: tp }))} />
 													<input className="search-input" placeholder="e.g. United States / Europe" value={g.scope_value} onChange={(e) => upd({ scope_value: e.target.value })} />
 													<button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => set('thesis_geo', form.thesis_geo.filter((_, j) => j !== i))}><Trash2 size={12} /></button>
 												</div>

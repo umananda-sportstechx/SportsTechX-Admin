@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Trash2, Save, Link2, X, Search } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Select } from '@/components/select';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Tag, Loading } from '@/components/atoms';
@@ -187,16 +188,11 @@ function ListForm({ id, initial, onClose, onSaved }: { id: string | null; initia
 							<Field label="Name"><input className="search-input" value={form.name} onChange={(e) => set('name', e.target.value)} /></Field>
 							<Field label="Description"><textarea className="search-input" style={{ minHeight: 60, resize: 'vertical' }} value={form.description} onChange={(e) => set('description', e.target.value)} /></Field>
 							<Field label="Entity type" hint={isEdit ? 'fixed after creation' : undefined}>
-								<select className="search-input" value={form.entity_type} disabled={isEdit} onChange={(e) => set('entity_type', e.target.value as EntityType)}>
-									{ENTITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-								</select>
+								<Select value={form.entity_type} onChange={(v) => set('entity_type', v as EntityType)} disabled={isEdit} width="100%" style={{ display: 'block', width: '100%' }} options={ENTITY_TYPES.map((t) => ({ value: t, label: t }))} />
 							</Field>
 							<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>
 								<Field label="Month (optional)">
-									<select className="search-input" value={form.month} onChange={(e) => set('month', e.target.value)}>
-										<option value="">—</option>
-										{MONTHS.map((m) => <option key={m} value={m}>{m}</option>)}
-									</select>
+									<Select value={form.month} onChange={(v) => set('month', v)} searchable width="100%" style={{ display: 'block', width: '100%' }} placeholder="—" options={[{ value: '', label: '—' }, ...MONTHS.map((m) => ({ value: m, label: m }))]} />
 								</Field>
 								<Field label="Year (optional)"><YearSelect value={form.year} onChange={(v) => set('year', v)} placeholder="—" /></Field>
 							</div>
@@ -349,11 +345,7 @@ function CsvImport({ entityType, onAdd }: { entityType: EntityType; onAdd: (item
 									<tr key={`${r.name}-${idx}`}>
 										<td>{r.name}</td>
 										<td>
-											<select className="search-input" style={{ width: '100%' }} value={r.selected}
-												onChange={(e) => setRows((prev) => prev.map((x, i) => i === idx ? { ...x, selected: e.target.value } : x))}>
-												<option value="">— skip —</option>
-												{r.candidates.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-											</select>
+											<Select value={r.selected} onChange={(v) => setRows((prev) => prev.map((x, i) => i === idx ? { ...x, selected: v } : x))} searchable width="100%" style={{ display: 'block', width: '100%' }} placeholder="— skip —" options={[{ value: '', label: '— skip —' }, ...r.candidates.map((c) => ({ value: c.key, label: c.label }))]} />
 										</td>
 									</tr>
 								))}

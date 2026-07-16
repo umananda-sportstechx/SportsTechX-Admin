@@ -20,7 +20,7 @@ export interface SelectOption { value: string; label: string }
 const MENU_MAX = 320;
 
 export function Select({
-	value, onChange, options, placeholder = 'Select…', ariaLabel, width, height = 32, searchable = false, style,
+	value, onChange, options, placeholder = 'Select…', ariaLabel, width, height = 32, searchable = false, style, disabled = false,
 }: {
 	value: string;
 	onChange: (v: string) => void;
@@ -33,6 +33,8 @@ export function Select({
 	searchable?: boolean;
 	/** Merged into the outer wrapper (e.g. flex: 1). */
 	style?: React.CSSProperties;
+	/** Disable the trigger (can't open, muted). */
+	disabled?: boolean;
 }) {
 	const [open, setOpen] = useState(false);
 	const [active, setActive] = useState(0);
@@ -102,9 +104,10 @@ export function Select({
 				aria-label={ariaLabel}
 				aria-haspopup="listbox"
 				aria-expanded={open}
-				onClick={() => setOpen((o) => !o)}
-				onKeyDown={onKey}
-				style={{ height, minWidth: width ?? 130, width, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', textAlign: 'left' }}
+				disabled={disabled}
+				onClick={() => !disabled && setOpen((o) => !o)}
+				onKeyDown={(e) => { if (!disabled) onKey(e); }}
+				style={{ height, minWidth: width ?? 130, width, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: disabled ? 'not-allowed' : 'pointer', textAlign: 'left', opacity: disabled ? 0.55 : 1 }}
 			>
 				<span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: selected?.value ? 'var(--fg)' : 'var(--fg-muted)' }}>
 					{selected?.label ?? placeholder}

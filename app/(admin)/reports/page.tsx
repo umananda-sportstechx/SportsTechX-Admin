@@ -6,6 +6,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Trash2, FileText, Eye, EyeOff, Pencil, Languages } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Select } from '@/components/select';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState, Loading } from '@/components/atoms';
@@ -120,10 +121,7 @@ export default function ReportsAdminPage() {
 				</div>
 				<input className="search-input" placeholder="URL slug (auto from short title / title)" value={draft.slug} onChange={(e) => setDraft({ ...draft, slug: e.target.value })} onBlur={(e) => setDraft({ ...draft, slug: slugify(e.target.value) })} style={{ marginTop: 8, fontFamily: 'var(--font-mono)', fontSize: 12 }} />
 				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 8 }}>
-					<select className="search-input" value={draft.report_month} onChange={(e) => setDraft({ ...draft, report_month: e.target.value })}>
-						<option value="">Month —</option>
-						{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-					</select>
+					<Select value={draft.report_month} onChange={(v) => setDraft({ ...draft, report_month: v })} width="100%" style={{ display: 'block', width: '100%' }} placeholder="Month —" options={[{ value: '', label: 'Month —' }, ...MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))]} />
 					<YearSelect value={draft.report_year} onChange={(v) => setDraft({ ...draft, report_year: v })} placeholder="Year —" />
 					<label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
 						<input type="checkbox" checked={draft.show_on_dashboard} onChange={(e) => setDraft({ ...draft, show_on_dashboard: e.target.checked })} />
@@ -295,10 +293,7 @@ function EditReportForm({ id, initial, onClose, onSaved }: { id: string; initial
 				</div>
 				<input className="search-input" placeholder="URL slug" value={f.slug} onChange={(e) => set('slug', e.target.value)} onBlur={(e) => set('slug', slugify(e.target.value))} style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }} />
 				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-					<select className="search-input" value={f.report_month} onChange={(e) => set('report_month', e.target.value)}>
-						<option value="">Month —</option>
-						{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-					</select>
+					<Select value={f.report_month} onChange={(v) => set('report_month', v)} width="100%" style={{ display: 'block', width: '100%' }} placeholder="Month —" options={[{ value: '', label: 'Month —' }, ...MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))]} />
 					<YearSelect value={f.report_year} onChange={(v) => set('report_year', v)} placeholder="Year —" />
 					<label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
 						<input type="checkbox" checked={f.show_on_dashboard} onChange={(e) => set('show_on_dashboard', e.target.checked)} /> Featured

@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Trash2, X, Save, Pencil, ArrowUp, ArrowDown } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Select } from '@/components/select';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState } from '@/components/atoms';
@@ -92,10 +93,7 @@ export default function PollsAdminPage() {
 			/>
 
 			<div className="filter-bar" style={{ marginBottom: 12 }}>
-				<select className="search-input" style={{ flex: '0 0 280px' }} value={reportFilter} onChange={(e) => setReportFilter(e.target.value)}>
-					<option value="">All reports</option>
-					{(reports?.data ?? []).map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
-				</select>
+				<Select value={reportFilter} onChange={setReportFilter} searchable width={280} placeholder="All reports" options={[{ value: '', label: 'All reports' }, ...(reports?.data ?? []).map((r) => ({ value: r.id, label: r.title }))]} />
 				<div style={{ flex: 1 }} />
 				<button className="btn" onClick={() => setCreating(true)} disabled={(reports?.data ?? []).length === 0}>
 					<Plus size={12} /> New poll
@@ -244,9 +242,7 @@ function NewPollModal({ reports, onClose, onSaved }: { reports: Report[]; onClos
 			<div style={{ display: 'grid', gap: 12 }}>
 				<div>
 					<div className="co-stat-label" style={{ marginBottom: 6 }}>Report</div>
-					<select className="search-input" style={{ width: '100%' }} value={reportId} onChange={(e) => setReportId(e.target.value)}>
-						{reports.map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}
-					</select>
+					<Select value={reportId} onChange={setReportId} searchable width="100%" style={{ display: 'block', width: '100%' }} options={reports.map((r) => ({ value: r.id, label: r.title }))} />
 				</div>
 				<div>
 					<div className="co-stat-label" style={{ marginBottom: 6 }}>Question</div>

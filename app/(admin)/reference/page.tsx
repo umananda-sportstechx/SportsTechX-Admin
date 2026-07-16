@@ -7,7 +7,7 @@ import { Plus, Trash2, Save, Search } from 'lucide-react';
 import { Modal } from '@/components/modal';
 import { api } from '@/lib/api';
 import { useConfirm } from '@/components/confirm';
-import { PageHeader } from '@/components/atoms';
+import { PageHeader, PillTabs } from '@/components/atoms';
 import { Select } from '@/components/select';
 
 type Kind = 'sectors' | 'sports' | 'tech-tags' | 'round-types';
@@ -88,19 +88,14 @@ export default function ReferenceAdminPage() {
 		<div>
 			<PageHeader kicker="Reference · taxonomy" title="Reference data" subtitle="Sectors, sports, tech tags, round types. Public read endpoints cache 1h — changes propagate on the next cache miss." />
 
+			<div style={{ marginBottom: 'var(--space-4)' }}>
+				<PillTabs tabs={TABS.map((t) => ({ key: t.key, label: t.label }))} value={kind} onChange={(k) => { setKind(k); setEditing(null); setCreating(false); setQ(''); }} />
+			</div>
+
 			<div className="filter-bar" style={{ marginBottom: 12 }}>
-				{TABS.map((t) => (
-					<button
-						key={t.key}
-						className={`chip ${kind === t.key ? 'on' : ''}`}
-						onClick={() => { setKind(t.key); setEditing(null); setCreating(false); }}
-					>
-						{t.label}
-					</button>
-				))}
 				<div style={{ position: 'relative' }}>
 					<Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--fg-muted)' }} />
-					<input className="search-input" style={{ height: 30, paddingLeft: 26, width: 200 }} placeholder="Filter…" value={q} onChange={(e) => setQ(e.target.value)} />
+					<input className="search-input" style={{ height: 30, paddingLeft: 26, width: 220 }} placeholder="Filter…" value={q} onChange={(e) => setQ(e.target.value)} />
 				</div>
 				<div style={{ flex: 1 }} />
 				<span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{tree.length} {tree.length === 1 ? 'entry' : 'entries'}</span>
@@ -135,7 +130,7 @@ export default function ReferenceAdminPage() {
 							const parent = r.parent_id ? rows.find((x) => x.id === r.parent_id) : null;
 							return (
 								<tr key={r.id}>
-									<td style={{ fontWeight: r.depth === 0 ? 700 : 500, paddingLeft: 12 + r.depth * 22, color: r.depth === 0 ? undefined : 'var(--fg-2)' }}>{r.name}</td>
+									<td style={{ paddingLeft: 14 + r.depth * 24 }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{r.depth > 0 && <span style={{ color: 'var(--fg-muted)', fontSize: 12 }}>↳</span>}<span style={{ fontWeight: r.depth === 0 ? 700 : 600, fontSize: r.depth === 0 ? 14 : 13, color: r.depth === 0 ? 'var(--fg)' : r.depth === 1 ? 'var(--fg-2)' : 'var(--fg-muted)' }}>{r.name}</span>{kind === 'sectors' && <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '1px 6px', borderRadius: 999, color: r.depth === 0 ? 'var(--accent)' : 'var(--fg-muted)', background: r.depth === 0 ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : 'var(--bg-3)' }}>{['Sector', 'Sub-sector', 'Sub-sub'][Math.min(r.depth, 2)]}</span>}</span></td>
 									<td style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{r.slug}</td>
 									{showParent && <td style={{ color: 'var(--fg-muted)' }}>{parent?.name ?? '—'}</td>}
 									{showSortOrder && <td>{r.sort_order ?? '—'}</td>}

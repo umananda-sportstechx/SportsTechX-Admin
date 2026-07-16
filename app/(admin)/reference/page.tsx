@@ -3,10 +3,12 @@
 import { useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { Plus, Trash2, Save } from 'lucide-react';
+import { Plus, Trash2, Save, Search } from 'lucide-react';
 import { Modal } from '@/components/modal';
 import { api } from '@/lib/api';
 import { useConfirm } from '@/components/confirm';
+import { PageHeader } from '@/components/atoms';
+import { Select } from '@/components/select';
 
 type Kind = 'sectors' | 'sports' | 'tech-tags' | 'round-types';
 
@@ -61,6 +63,7 @@ export default function ReferenceAdminPage() {
 	const [kind, setKind] = useState<Kind>('sectors');
 	const [editing, setEditing] = useState<RefRow | null>(null);
 	const [creating, setCreating] = useState(false);
+	const [q, setQ] = useState('');
 
 	const { data } = useSWR<RefResponse>([`/api/admin/reference/${kind}`]);
 
@@ -78,16 +81,12 @@ export default function ReferenceAdminPage() {
 	const rows = data?.data ?? [];
 	const showParent = kind !== 'round-types';
 	const showSortOrder = kind === 'sectors' || kind === 'round-types';
+	const filtered = q.trim() ? rows.filter((r) => `${r.name} ${r.slug}`.toLowerCase().includes(q.trim().toLowerCase())) : null;
+	const tree = filtered ? filtered.map((r) => ({ ...r, depth: 0 })) : orderTree(rows);
 
 	return (
 		<div>
-			<div style={{ marginBottom: 'var(--space-5)' }}>
-				<div className="co-stat-label" style={{ marginBottom: 6 }}>Taxonomy</div>
-				<h1 style={{ fontFamily: 'var(--font-display)', fontSize: 38, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1, margin: 0 }}>Reference data</h1>
-				<p style={{ fontSize: 14, color: 'var(--fg-2)', marginTop: 6 }}>
-					Sectors, sports, tech tags, round types. Public read endpoints cache for 1h — changes propagate on the next cache miss.
-				</p>
-			</div>
+			<PageHeader kicker="Reference · taxonomy" title="Reference data" subtitle="Sectors, sports, tech tags, round types. Public read endpoints cache 1h — changes propagate on the next cache miss." />
 
 			<div className="filter-bar" style={{ marginBottom: 12 }}>
 				{TABS.map((t) => (
@@ -99,7 +98,12 @@ export default function ReferenceAdminPage() {
 						{t.label}
 					</button>
 				))}
+				<div style={{ position: 'relative' }}>
+					<Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--fg-muted)' }} />
+					<input className="search-input" style={{ height: 30, paddingLeft: 26, width: 200 }} placeholder="Filter…" value={q} onChange={(e) => setQ(e.target.value)} />
+				</div>
 				<div style={{ flex: 1 }} />
+				<span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{tree.length} {tree.length === 1 ? 'entry' : 'entries'}</span>
 				<button className="btn" onClick={() => setCreating(true)}><Plus size={12} /> Add</button>
 			</div>
 
@@ -125,9 +129,9 @@ export default function ReferenceAdminPage() {
 						</tr>
 					</thead>
 					<tbody>
-						{rows.length === 0 ? (
-							<tr><td colSpan={5} style={{ textAlign: 'center', padding: 24, color: 'var(--fg-muted)' }}>No entries.</td></tr>
-						) : orderTree(rows).map((r) => {
+						{tree.length === 0 ? (
+							<tr><td colSpan={5} style={{ textAlign: 'center', padding: 24, color: 'var(--fg-muted)' }}>{q.trim() ? 'No matches.' : 'No entries.'}</td></tr>
+						) : tree.map((r) => {
 							const parent = r.parent_id ? rows.find((x) => x.id === r.parent_id) : null;
 							return (
 								<tr key={r.id}>
@@ -135,9 +139,9 @@ export default function ReferenceAdminPage() {
 									<td style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{r.slug}</td>
 									{showParent && <td style={{ color: 'var(--fg-muted)' }}>{parent?.name ?? '—'}</td>}
 									{showSortOrder && <td>{r.sort_order ?? '—'}</td>}
-									<td style={{ textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+									<td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
 										<button className="btn ghost" onClick={() => setEditing(r)}>Edit</button>
-										<button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => void remove(r.id)}><Trash2 size={12} /></button>
+										<button className="btn ghost" style={{ color: 'var(--accent)', marginLeft: 6 }} onClick={() => void remove(r.id)}><Trash2 size={12} /></button>
 									</td>
 								</tr>
 							);
@@ -196,10 +200,7 @@ function RefModal({ kind, initial, parents, onClose, onSaved }: { kind: Kind; in
 				<Field label="Slug (optional — auto from name)"><input className="search-input" style={{ fontFamily: 'var(--font-mono)' }} value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} disabled={!!initial} /></Field>
 				{showParent && (
 					<Field label="Parent (optional)">
-						<select className="search-input" value={parentId} onChange={(e) => setParentId(e.target.value)}>
-							<option value="">— top level —</option>
-							{parents.filter((p) => p.id !== initial?.id).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-						</select>
+						<Select value={parentId} onChange={setParentId} searchable width="100%" style={{ display: 'block', width: '100%' }} placeholder="— top level —" options={[{ value: '', label: '— top level —' }, ...parents.filter((p) => p.id !== initial?.id).map((p) => ({ value: p.id, label: p.name }))]} />
 					</Field>
 				)}
 				{showDescription && <Field label="Description"><textarea className="search-input" style={{ minHeight: 60 }} value={description} onChange={(e) => setDescription(e.target.value)} /></Field>}

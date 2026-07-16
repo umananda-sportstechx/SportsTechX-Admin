@@ -6,12 +6,17 @@ import { toast } from 'sonner';
 import { ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader, Section, AsyncState } from '@/components/atoms';
+import { SegToggle } from '@/components/charts';
 import { useConfirm } from '@/components/confirm';
 
 /**
  * Weekly Touchpoints — a single shared sales-outreach board. Product → Channel
  * (weekly target) → Person → daily count. Monday-start week, Mon–Fri display.
  * Aggregation is client-side; edits hit /api/admin/touchpoints/* then revalidate.
+ *
+ * Weekly Log ↔ Team View is an internal toggle (mirrors the legacy STX-WebApp
+ * Touchpoints tab). Pass `embedded` to drop the standalone PageHeader when it's
+ * rendered inside the Sales tab shell.
  */
 
 interface Product { id: string; name: string; sort_order: number }
@@ -37,7 +42,8 @@ function addDays(d: Date, n: number): Date { const x = new Date(d); x.setDate(d.
 function pct(actual: number, target: number): number { return target > 0 ? Math.round((actual / target) * 100) : 0; }
 function pctColor(p: number): string { return p >= 100 ? 'var(--pos)' : p >= 60 ? 'var(--warn)' : 'var(--neg)'; }
 
-export function TouchpointsBoard({ view }: { view: 'weekly' | 'team' }) {
+export function TouchpointsBoard({ embedded = false }: { embedded?: boolean }) {
+	const [view, setView] = useState<'weekly' | 'team'>('weekly');
 	const [anchor, setAnchor] = useState(() => mondayOf(new Date()));
 	const monday = toIso(anchor);
 	const weekDates = useMemo(() => DAYS.map((_, i) => toIso(addDays(anchor, i))), [anchor]);
@@ -75,13 +81,20 @@ export function TouchpointsBoard({ view }: { view: 'weekly' | 'team' }) {
 
 	return (
 		<div>
-			<PageHeader
-				kicker="Weekly touchpoints"
-				title={view === 'weekly' ? 'Weekly log' : 'Team view'}
-				subtitle="Shared outreach board — log daily touchpoints per person and track weekly progress against per-channel targets."
-			/>
+			{!embedded && (
+				<PageHeader
+					kicker="Weekly touchpoints"
+					title="Touchpoints"
+					subtitle="Shared outreach board — log daily touchpoints per person and track weekly progress against per-channel targets."
+				/>
+			)}
 
 			<div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 'var(--space-4)', flexWrap: 'wrap' }}>
+				<SegToggle
+					options={[{ value: 'weekly', label: 'Weekly log' }, { value: 'team', label: 'Team view' }]}
+					value={view}
+					onChange={(v) => setView(v as 'weekly' | 'team')}
+				/>
 				<div style={{ flex: 1 }} />
 				<button className="btn ghost" onClick={() => setAnchor(addDays(anchor, -7))}>← Prev</button>
 				<span style={{ fontWeight: 600, fontSize: 13, minWidth: 170, textAlign: 'center' }}>{weekLabel}</span>
@@ -419,5 +432,3 @@ function AddButton({ label, placeholder, extra, onAdd, small }: { label: string;
 		</span>
 	);
 }
-
-export default function TouchpointsPage() { return <TouchpointsBoard view="weekly" />; }

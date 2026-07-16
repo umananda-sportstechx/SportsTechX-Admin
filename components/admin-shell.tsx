@@ -7,7 +7,7 @@ import {
 	LayoutDashboard, Briefcase, Users, FilePlus, FileText, Layers,
 	Activity, ShoppingCart, LogOut, CreditCard, ToggleLeft,
 	Banknote, Sparkles, Tag, BookOpen, Menu, BarChart3, Gauge,
-	Receipt, Package, Handshake, Download, Coins, Target, ChevronDown, Sun, Moon,
+	Receipt, Package, Handshake, Download, Coins, ChevronDown, Sun, Moon,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthSession } from '@/hooks/use-auth-session';
@@ -55,18 +55,9 @@ const DATA_NAV: NavItem[] = [
 ];
 
 const SALES_NAV: NavItem[] = [
-	{
-		label: 'Sales', Icon: ShoppingCart, children: [
-			{ href: '/sales', label: 'Analytics' },
-			{ href: '/sales/records', label: 'Records' },
-		],
-	},
-	{
-		label: 'Weekly touchpoints', Icon: Target, children: [
-			{ href: '/touchpoints', label: 'Weekly log' },
-			{ href: '/touchpoints/team', label: 'Team view' },
-		],
-	},
+	// One Sales entry with in-page sub-tabs (Sales Tracker / Sales Entry /
+	// Touchpoints / Stripe) — mirrors the legacy STX-WebApp Sales tab.
+	{ label: 'Sales', href: '/sales', Icon: ShoppingCart },
 	{ label: 'Billing', href: '/billing', Icon: CreditCard },
 	{ label: 'Plans', href: '/subscription-plans', Icon: Tag },
 	{ label: 'Credit packs', href: '/credit-packs', Icon: Package },

@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { ChevronDown, ChevronRight, ExternalLink, Mail, MailCheck } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Select } from '@/components/select';
 import { PageHeader, AsyncState, StatCard, StatsPanel, Section } from '@/components/atoms';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useInitialQuery } from '@/hooks/use-initial-query';
@@ -193,11 +194,7 @@ export function ClaimsView({ embedded = false, lockType }: { embedded?: boolean;
 						<div style={{ padding: '0 4px 10px', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
 							{cl.status === 'pending' && <button className="btn ghost" disabled={pendingId === cl.id} onClick={() => void pickup(cl.id)}>Pick up</button>}
 							{(cl.status === 'pending' || cl.status === 'picked_up') && admins.length > 0 && (
-								<select className="search-input" style={{ height: 30, maxWidth: 160 }} value="" disabled={pendingId === cl.id}
-									onChange={(e) => { if (e.target.value) void assign(cl.id, e.target.value); }} aria-label="Assign claim to admin">
-									<option value="">Assign to…</option>
-									{admins.map((a) => <option key={a.id} value={a.id}>{a.full_name || a.display_name || a.email}</option>)}
-								</select>
+								<Select value="" onChange={(v) => { if (v) void assign(cl.id, v); }} disabled={pendingId === cl.id} searchable width={160} ariaLabel="Assign claim to admin" placeholder="Assign to…" options={[{ value: '', label: 'Assign to…' }, ...admins.map((a) => ({ value: a.id, label: a.full_name || a.display_name || a.email }))]} />
 							)}
 							{cl.status !== 'rejected' && <button className="btn ghost" style={{ color: 'var(--accent)' }} disabled={pendingId === cl.id} onClick={() => reject(cl.id)}>Reject</button>}
 							{cl.status === 'rejected' && <button className="btn ghost" disabled={pendingId === cl.id} onClick={() => void reopen(cl.id)}>Re-open</button>}
@@ -248,9 +245,7 @@ export function ClaimsView({ embedded = false, lockType }: { embedded?: boolean;
 			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)', alignItems: 'center' }}>
 				<input className="search-input" style={{ flex: '0 0 260px', height: 32 }} placeholder="Search company / claimant…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
 				{!lockType && (
-					<select className="search-input" style={{ height: 32, width: 150 }} value={claimType} onChange={(e) => { setClaimType(e.target.value); setPage(1); }}>
-						{TYPE_FILTERS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
-					</select>
+					<Select value={claimType} onChange={(v) => { setClaimType(v); setPage(1); }} width={150} options={TYPE_FILTERS.map((tf) => ({ value: tf.key, label: tf.label }))} />
 				)}
 				<div style={{ flex: 1 }} />
 				<label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--fg-2)' }}>
@@ -473,21 +468,13 @@ function CreateEntityPanel({ claim, onDone }: { claim: Claim; onDone: () => void
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
 				{kind === 'company' && L('Sector', <SectorCascade value={sectorId} onChange={setSectorId} />)}
 				{kind === 'company' && L('Business model', (
-					<select className="search-input" value={businessModel} onChange={(e) => setBusinessModel(e.target.value)}>
-						<option value="">—</option>
-						{BUSINESS_MODELS.map((m) => <option key={m} value={m}>{m.toUpperCase()}</option>)}
-					</select>
+					<Select value={businessModel} onChange={setBusinessModel} width="100%" style={{ display: 'block', width: '100%' }} placeholder="—" options={[{ value: '', label: '—' }, ...BUSINESS_MODELS.map((m) => ({ value: m, label: m.toUpperCase() }))]} />
 				))}
 				{kind === 'investor' && L('Category', (
-					<select className="search-input" value={category} onChange={(e) => setCategory(e.target.value)}>
-						<option value="">—</option>
-						{INVESTOR_CATEGORIES.map((c) => <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>)}
-					</select>
+					<Select value={category} onChange={setCategory} width="100%" style={{ display: 'block', width: '100%' }} placeholder="—" options={[{ value: '', label: '—' }, ...INVESTOR_CATEGORIES.map((c) => ({ value: c, label: c.replace(/_/g, ' ') }))]} />
 				))}
 				{kind === 'ecosystem_entity' && L('Type', (
-					<select className="search-input" value={entityType} onChange={(e) => setEntityType(e.target.value)}>
-						{ECOSYSTEM_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-					</select>
+					<Select value={entityType} onChange={setEntityType} width="100%" style={{ display: 'block', width: '100%' }} options={ECOSYSTEM_TYPES.map((t) => ({ value: t, label: t }))} />
 				))}
 				{kind === 'ecosystem_entity' && L('Category', <input className="search-input" value={category} onChange={(e) => setCategory(e.target.value)} />)}
 				{L(kind === 'investor' ? 'Year launched' : 'Founded year', <YearSelect value={year} onChange={setYear} />)}

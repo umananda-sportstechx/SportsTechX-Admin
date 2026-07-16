@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Save } from 'lucide-react';
 import { api } from '@/lib/api';
+import { Select } from '@/components/select';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
 import { PageHeader, AsyncState } from '@/components/atoms';
@@ -261,17 +262,10 @@ function CreateModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 				<Field label="Description"><textarea className="search-input" style={{ minHeight: 60 }} value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
 				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 					<Field label="Tier">
-						<select className="search-input" value={tier} onChange={(e) => setTier(e.target.value as 'free' | 'growth' | 'pro')}>
-							<option value="free">free</option>
-							<option value="growth">growth</option>
-							<option value="pro">pro</option>
-						</select>
+						<Select value={tier} onChange={(v) => setTier(v as 'free' | 'growth' | 'pro')} width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: 'free', label: 'free' }, { value: 'growth', label: 'growth' }, { value: 'pro', label: 'pro' }]} />
 					</Field>
 					<Field label="Billing interval">
-						<select className="search-input" value={billingInterval} onChange={(e) => setBillingInterval(e.target.value as 'monthly' | 'yearly')}>
-							<option value="monthly">monthly</option>
-							<option value="yearly">yearly</option>
-						</select>
+						<Select value={billingInterval} onChange={(v) => setBillingInterval(v as 'monthly' | 'yearly')} width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: 'monthly', label: 'monthly' }, { value: 'yearly', label: 'yearly' }]} />
 					</Field>
 				</div>
 				<div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px', gap: 12 }}>

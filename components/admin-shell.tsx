@@ -12,6 +12,7 @@ import {
 import { useTheme } from 'next-themes';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useIsAdmin, useUserProfile } from '@/hooks/use-user-profile';
+import { useAdminRealtime } from '@/hooks/use-admin-realtime';
 import { Tooltip } from '@/components/tooltip';
 
 /** Light/dark toggle — the old admin ships both themes; default is dark. */
@@ -162,6 +163,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const [navOpen, setNavOpen] = useState(false);
+	useAdminRealtime(); // live SSE → SWR invalidation (e.g. Attio pipeline sync)
 
 	useEffect(() => {
 		if (authLoading) return;

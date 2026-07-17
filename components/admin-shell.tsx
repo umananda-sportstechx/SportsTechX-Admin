@@ -7,7 +7,7 @@ import {
 	LayoutDashboard, Briefcase, Users, FilePlus, FileText, Layers,
 	Activity, ShoppingCart, LogOut, CreditCard, ToggleLeft,
 	Banknote, Sparkles, Tag, BookOpen, Menu, BarChart3, Gauge,
-	Receipt, Package, Handshake, Download, Coins, ChevronDown, Sun, Moon,
+	Receipt, Package, Handshake, Download, Coins, Wallet, ChevronDown, Sun, Moon,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthSession } from '@/hooks/use-auth-session';
@@ -61,6 +61,7 @@ const SALES_NAV: NavItem[] = [
 	{ label: 'Billing', href: '/billing', Icon: CreditCard },
 	{ label: 'Plans', href: '/subscription-plans', Icon: Tag },
 	{ label: 'Credit packs', href: '/credit-packs', Icon: Package },
+	{ label: 'Finance', href: '/finance', Icon: Wallet },
 ];
 
 const PERFORMANCE_NAV: NavItem[] = [

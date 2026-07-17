@@ -33,6 +33,7 @@ interface TrackerData {
 	targets: Target[];
 	touchpointsBySlug: Record<string, number>;
 	pipeline: { deals: Deal[]; globalWonCount: number; globalOpenWeighted: number };
+	lastPipelineSync: string | null;
 }
 
 const fmtEur = (n: number) => '€' + Math.round(n || 0).toLocaleString('de-DE');
@@ -75,6 +76,17 @@ export function RevenueTracker() {
 	);
 
 	const yearElapsed = year < todayYear ? 1 : year > todayYear ? 0 : getYearElapsed();
+
+	const [syncing, setSyncing] = useState(false);
+	const syncAttio = async () => {
+		setSyncing(true);
+		try {
+			const r = await api<{ ok: boolean; synced?: number; unavailable?: boolean; error?: string }>('POST', '/api/admin/revenue-tracker/sync');
+			if (r.ok) { toast.success(`Synced ${r.synced} deals from Attio`); await mutate(); }
+			else if (r.unavailable) toast.message('Attio isn’t configured on the server');
+			else toast.error(r.error || 'Sync failed');
+		} catch (e) { toast.error((e as Error).message); } finally { setSyncing(false); }
+	};
 
 	const saveTarget = async (scope: Target['scope'], product_id: string | null, field: string, value: number) => {
 		try {
@@ -148,7 +160,7 @@ export function RevenueTracker() {
 			</div>
 
 			<RevenueMix data={data} products={products} />
-			<PipelineSection data={data} products={products} onRefresh={() => void mutate()} loading={isLoading} />
+			<PipelineSection data={data} products={products} onSync={syncAttio} syncing={syncing} lastSync={data?.lastPipelineSync ?? null} />
 		</div>
 	);
 }
@@ -334,7 +346,16 @@ const STAGE_COLOR: Record<string, string> = {
 };
 const stageKey = (d: Deal) => d.is_won ? 'Closed Won' : d.is_lost ? 'Closed Lost' : (d.stage || 'Unstaged');
 
-function PipelineSection({ data, products, onRefresh, loading }: { data?: TrackerData; products: Product[]; onRefresh: () => void; loading: boolean }) {
+function relTime(iso: string | null): string {
+	if (!iso) return 'never';
+	const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+	if (s < 90) return 'just now';
+	if (s < 3600) return `${Math.round(s / 60)}m ago`;
+	if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+	return `${Math.round(s / 86400)}d ago`;
+}
+
+function PipelineSection({ data, products, onSync, syncing, lastSync }: { data?: TrackerData; products: Product[]; onSync: () => void; syncing: boolean; lastSync: string | null }) {
 	const [view, setView] = useState<'product' | 'stage'>('product');
 	const [open, setOpen] = useState<Set<string>>(new Set());
 	const deals = data?.pipeline.deals ?? [];
@@ -356,13 +377,13 @@ function PipelineSection({ data, products, onRefresh, loading }: { data?: Tracke
 	return (
 		<div className="card" style={{ padding: 'var(--space-4)' }}>
 			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
-				<div><div style={{ fontWeight: 700 }}>Pipeline</div><div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Attio-synced snapshot · read-only</div></div>
-				<div style={{ display: 'flex', gap: 8 }}>
+				<div><div style={{ fontWeight: 700 }}>Pipeline</div><div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>From Attio · synced {relTime(lastSync)}</div></div>
+				<div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
 					<div style={{ display: 'inline-flex', gap: 4 }}>
 						<button className={`chip ${view === 'product' ? 'on' : ''}`} onClick={() => setView('product')}>By product</button>
 						<button className={`chip ${view === 'stage' ? 'on' : ''}`} onClick={() => setView('stage')}>By stage</button>
 					</div>
-					<button className="btn ghost" onClick={onRefresh} disabled={loading}><RefreshCw size={14} /></button>
+					<button className="btn ghost" onClick={onSync} disabled={syncing} title="Pull latest deals from Attio"><RefreshCw size={14} /> {syncing ? 'Syncing…' : 'Sync from Attio'}</button>
 				</div>
 			</div>
 			<div className="grid-2" style={{ gap: 'var(--space-3)', marginBottom: 12 }}>

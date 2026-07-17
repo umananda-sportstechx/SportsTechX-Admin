@@ -356,7 +356,9 @@ function relTime(iso: string | null): string {
 }
 
 function PipelineSection({ data, products, onSync, syncing, lastSync }: { data?: TrackerData; products: Product[]; onSync: () => void; syncing: boolean; lastSync: string | null }) {
-	const [view, setView] = useState<'product' | 'stage'>('product');
+	// Default to the compact stage-wise view (509 deals in the by-product view
+	// forces a lot of scrolling).
+	const [view, setView] = useState<'product' | 'stage'>('stage');
 	const [open, setOpen] = useState<Set<string>>(new Set());
 	const deals = data?.pipeline.deals ?? [];
 	const openDeals = deals.filter((d) => !d.is_won && !d.is_lost);
@@ -392,23 +394,26 @@ function PipelineSection({ data, products, onSync, syncing, lastSync }: { data?:
 			</div>
 
 			{view === 'stage' ? (
-				<div className="table-scroll">
-					<table className="data-table">
-						<thead><tr><th>Stage</th><th style={{ textAlign: 'right' }}>Deals</th><th style={{ textAlign: 'right' }}>Total value</th></tr></thead>
-						<tbody>
-							{stageAgg.map((r) => (
-								<tr key={r.name}>
-									<td><span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><span style={{ width: 9, height: 9, borderRadius: '50%', background: STAGE_COLOR[r.name] ?? 'var(--fg-muted)' }} />{r.name}</span></td>
-									<td className="num" style={{ textAlign: 'right' }}>{r.count}</td>
-									<td className="num" style={{ textAlign: 'right' }}>{r.expected > 0 ? fmtEur(r.expected) : '—'}</td>
-								</tr>
-							))}
-							<tr style={{ background: 'var(--bg-2)', fontWeight: 700 }}>
-								<td>Total</td><td className="num" style={{ textAlign: 'right' }}>{stageAgg.reduce((s, r) => s + r.count, 0)}</td>
-								<td className="num" style={{ textAlign: 'right' }}>{fmtEur(stageAgg.reduce((s, r) => s + r.expected, 0))}</td>
-							</tr>
-						</tbody>
-					</table>
+				<div>
+					{(() => {
+						const maxV = Math.max(1, ...stageAgg.map((r) => r.expected));
+						return stageAgg.map((r) => (
+							<div key={r.name} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+								<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginBottom: 5 }}>
+									<span style={{ display: 'inline-flex', gap: 7, alignItems: 'center', fontSize: 13, fontWeight: 500 }}>
+										<span style={{ width: 9, height: 9, borderRadius: '50%', background: STAGE_COLOR[r.name] ?? 'var(--fg-muted)', flexShrink: 0 }} />
+										{r.name}<span style={{ color: 'var(--fg-muted)', fontWeight: 400 }}>· {r.count} deal{r.count === 1 ? '' : 's'}</span>
+									</span>
+									<span className="num" style={{ fontWeight: 700, fontSize: 13 }}>{r.expected > 0 ? fmtEur(r.expected) : '—'}</span>
+								</div>
+								<div className="hb-bar" style={{ height: 6 }}><div className="hb-bar-fill" style={{ width: `${(r.expected / maxV) * 100}%`, background: STAGE_COLOR[r.name] ?? 'var(--fg-muted)' }} /></div>
+							</div>
+						));
+					})()}
+					<div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border)', fontWeight: 800 }}>
+						<span>Total · {stageAgg.reduce((s, r) => s + r.count, 0)} deals</span>
+						<span className="num">{fmtEur(stageAgg.reduce((s, r) => s + r.expected, 0))}</span>
+					</div>
 				</div>
 			) : (
 				<div>

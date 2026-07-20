@@ -9,9 +9,11 @@ import { Select } from '@/components/select';
 import { PieDonut, PieLegend, type PieSegment } from '@/components/charts';
 
 /**
- * Revenue Tracker (Sales ▸ Sales Tracker) — targets-vs-realized dashboard ported
- * from the STX-WebApp /admin/revenue-tracker page, styled in the admin's own
- * design language. Reads /api/admin/revenue-tracker; edits targets inline.
+ * Revenue Tracker (Sales ▸ Sales Tracker) — port of the STX-WebApp
+ * /admin/revenue-tracker page: a left "Data Input" sidebar (period filter,
+ * per-product realized + editable targets, revenue by audience) beside the
+ * main pane (headline cards, overall + per-product progress, per-product sales
+ * tracker, revenue mix, pipeline).
  */
 
 interface Product { id: string; name: string; slug: string; sort_order: number }
@@ -76,6 +78,7 @@ export function RevenueTracker() {
 	);
 
 	const yearElapsed = year < todayYear ? 1 : year > todayYear ? 0 : getYearElapsed();
+	const yearElapsedPct = Math.round(yearElapsed * 100);
 
 	const [syncing, setSyncing] = useState(false);
 	const syncAttio = async () => {
@@ -103,68 +106,139 @@ export function RevenueTracker() {
 	const totalRealized = data?.totalRealized ?? 0;
 
 	return (
-		<div style={{ display: 'grid', gap: 'var(--space-4)' }}>
-			{/* Filter + refresh */}
-			<div className="filter-bar" style={{ margin: 0 }}>
-				<Select value={String(year)} onChange={(v) => setYear(Number(v))} width={110} ariaLabel="Year"
-					options={Array.from({ length: 5 }, (_, i) => todayYear - 2 + i).map((y) => ({ value: String(y), label: String(y) }))} />
-				<Select value={String(month)} onChange={(v) => setMonth(Number(v))} width={140} ariaLabel="Month"
-					options={[{ value: '0', label: 'All year' }, ...MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))]} />
-				<div style={{ flex: 1 }} />
-				<button className="btn ghost" onClick={() => void mutate()} disabled={isLoading}><RefreshCw size={14} /> Refresh</button>
-			</div>
+		<div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+			{/* ── Sidebar: Data Input ─────────────────────────────────────────── */}
+			<aside className="card" style={{ flex: '0 0 236px', minWidth: 220, padding: 0, position: 'sticky', top: 8 }}>
+				<div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 6 }}>
+					<span style={{ color: 'var(--accent)' }}>◆</span>
+					<span style={{ fontWeight: 700, fontSize: 13 }}>Data input</span>
+				</div>
+				<div style={{ padding: 12, display: 'grid', gap: 18 }}>
+					<div>
+						<SideLabel>Filter period</SideLabel>
+						<div style={{ display: 'grid', gap: 6 }}>
+							<Select value={String(year)} onChange={(v) => setYear(Number(v))} width="100%" style={{ display: 'block', width: '100%' }} ariaLabel="Year"
+								options={Array.from({ length: 5 }, (_, i) => todayYear - 2 + i).map((y) => ({ value: String(y), label: String(y) }))} />
+							<Select value={String(month)} onChange={(v) => setMonth(Number(v))} width="100%" style={{ display: 'block', width: '100%' }} ariaLabel="Month"
+								options={[{ value: '0', label: 'All year' }, ...MONTHS.map((m, i) => ({ value: String(i + 1), label: m }))]} />
+						</div>
+					</div>
 
-			{/* Headline cards */}
-			<div className="grid-4" style={{ gap: 'var(--space-3)' }}>
-				<Headline label="Total realized" value={fmtEur(totalRealized)} sub={`${companyMin > 0 ? Math.round((totalRealized / companyMin) * 100) : 0}% of min target`} tone="var(--accent)" />
-				<Headline label="Combined target" value={fmtEur(companyFull)} sub={`${fmtEur(Math.max(0, companyFull - totalRealized))} to full`} />
-				<Headline label="Min overall target" value={fmtEur(companyMin)} sub={`${fmtEur(Math.max(0, companyMin - totalRealized))} to min`} />
-				<Headline label="Year elapsed" value={`${Math.round(yearElapsed * 100)}%`} sub={month > 0 ? `${MONTHS[month - 1]}` : `${new Date().getMonth() + 1} of 12 months`} />
-			</div>
-
-			<LastPaidSub data={lastSub.data} loading={lastSub.isLoading} onRefresh={() => void lastSub.mutate()} />
-
-			{/* Overall progress */}
-			<OverallProgress totalRealized={totalRealized} companyMin={companyMin} companyFull={companyFull} yearElapsed={yearElapsed}
-				onSaveMin={(v) => saveTarget('company_min', null, 'annual_target_eur', v)}
-				onSaveFull={(v) => saveTarget('company_full', null, 'annual_target_eur', v)} />
-
-			{/* Per-product progress + tracker */}
-			<div className="card" style={{ padding: 'var(--space-4)' }}>
-				<div style={{ fontWeight: 700, marginBottom: 12 }}>Per-product progress</div>
-				<div style={{ display: 'grid', gap: 10 }}>
-					{products.map((p) => {
-						const realized = data?.realizedByProductId[p.id] ?? 0;
-						const target = Number(targetFor('product', p.id)?.annual_target_eur ?? 0);
-						const pct = target > 0 ? Math.round((realized / target) * 100) : 0;
-						const st = status(pct, Math.round(yearElapsed * 100));
-						return (
-							<div key={p.id}>
-								<div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4, gap: 8, flexWrap: 'wrap' }}>
-									<span style={{ fontWeight: 600 }}>{p.name}</span>
-									<span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
-										<span style={{ color: 'var(--fg-muted)' }}>{fmtEur(realized)} / </span>
-										<EditableAmount value={target} onSave={(v) => saveTarget('product', p.id, 'annual_target_eur', v)} />
-										<span style={{ fontWeight: 700, color: statusColor(st) }}>{target > 0 ? `${pct}%` : '—'}</span>
-										<span className="tag" style={{ color: statusColor(st), borderColor: statusColor(st) }}>{st}</span>
-									</span>
-								</div>
-								<ProgressBar pct={target > 0 ? Math.min((realized / target) * 100, 100) : 0} cursorPct={yearElapsed * 100} color={PRODUCT_COLORS[p.slug] ?? 'var(--accent)'} />
+					<div>
+						<SideLabel>Revenue &amp; targets by product</SideLabel>
+						{isLoading ? <div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Loading…</div> : (
+							<div style={{ display: 'grid', gap: 12 }}>
+								{products.map((p) => (
+									<div key={p.id}>
+										<div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--fg-2)', marginBottom: 4 }}>{p.name}</div>
+										<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+											<div>
+												<div style={{ fontSize: 9.5, color: 'var(--fg-muted)' }}>Realized (€)</div>
+												<div className="num" style={{ padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg-2)', fontSize: 11, marginTop: 2 }}>
+													€ {Math.round(data?.realizedByProductId[p.id] ?? 0).toLocaleString('de-DE')}
+												</div>
+											</div>
+											<div>
+												<div style={{ fontSize: 9.5, color: 'var(--fg-muted)' }}>Target (€)</div>
+												<div style={{ marginTop: 2 }}>
+													<EditableAmount value={Number(targetFor('product', p.id)?.annual_target_eur ?? 0)} onSave={(v) => saveTarget('product', p.id, 'annual_target_eur', v)} full />
+												</div>
+											</div>
+										</div>
+									</div>
+								))}
 							</div>
-						);
-					})}
-				</div>
-				<div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
-					<SalesTracker data={data} yearElapsed={yearElapsed} onSaveField={(pid, field, v) => saveTarget('product', pid, field, v)} />
-				</div>
-			</div>
+						)}
+					</div>
 
-			<RevenueMix data={data} products={products} />
-			<PipelineSection data={data} products={products} onSync={syncAttio} syncing={syncing} lastSync={data?.lastPipelineSync ?? null} />
+					<div>
+						<SideLabel>Revenue by audience</SideLabel>
+						{Object.entries(data?.realizedByAudience ?? {}).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).map(([seg, v]) => (
+							<div key={seg} style={{ marginBottom: 8 }}>
+								<div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--fg-2)', marginBottom: 3 }}>
+									{AUDIENCE.find((a) => a.value === seg)?.label ?? seg}
+								</div>
+								<div className="num" style={{ padding: '3px 6px', border: '1px solid var(--border)', borderRadius: 4, background: 'var(--bg-2)', fontSize: 11 }}>
+									€ {Math.round(v).toLocaleString('de-DE')}
+								</div>
+							</div>
+						))}
+						{Object.keys(data?.realizedByAudience ?? {}).length === 0 && <div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>No revenue yet.</div>}
+					</div>
+				</div>
+			</aside>
+
+			{/* ── Main pane ───────────────────────────────────────────────────── */}
+			<div style={{ flex: '1 1 560px', minWidth: 0, display: 'grid', gap: 'var(--space-4)' }}>
+				<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+					<div style={{ fontWeight: 700, fontSize: 15 }}>
+						Revenue tracker — {month > 0 ? `${MONTHS[month - 1]} ${year}` : year}
+						{month > 0 && <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--fg-muted)', marginLeft: 8 }}>annual targets are full-year</span>}
+					</div>
+					<button className="btn ghost" onClick={() => void mutate()} disabled={isLoading}><RefreshCw size={14} /> Refresh</button>
+				</div>
+
+				<div className="grid-4" style={{ gap: 'var(--space-3)' }}>
+					<Headline label="Total realized" value={fmtEur(totalRealized)} sub={`${companyMin > 0 ? Math.round((totalRealized / companyMin) * 100) : 0}% of min target`} tone="var(--accent)" />
+					<Headline label="Combined target" value={fmtEurShort(companyFull)} sub={`Gap: ${fmtEur(Math.max(0, companyFull - totalRealized))}`} />
+					<Headline label="Min overall target" value={fmtEurShort(companyMin)} sub={`Gap: ${fmtEur(Math.max(0, companyMin - totalRealized))}`} />
+					<Headline label="Year elapsed" value={`${yearElapsedPct}%`} sub={`Month ${new Date().getMonth() + 1} of 12`} />
+				</div>
+
+				<LastPaidSub data={lastSub.data} loading={lastSub.isLoading} onRefresh={() => void lastSub.mutate()} />
+
+				<OverallProgress totalRealized={totalRealized} companyMin={companyMin} companyFull={companyFull} yearElapsed={yearElapsed}
+					onSaveMin={(v) => saveTarget('company_min', null, 'annual_target_eur', v)}
+					onSaveFull={(v) => saveTarget('company_full', null, 'annual_target_eur', v)} />
+
+				<div className="card" style={{ padding: 'var(--space-4)' }}>
+					<div style={{ fontWeight: 700 }}>Per-product progress</div>
+					<div style={{ fontSize: 11, color: 'var(--fg-muted)', marginBottom: 12 }}>Each bar scaled to its annual target · cursor = {yearElapsedPct}% year elapsed.</div>
+					<div style={{ display: 'grid', gap: 12 }}>
+						{products.map((p) => {
+							const realized = data?.realizedByProductId[p.id] ?? 0;
+							const target = Number(targetFor('product', p.id)?.annual_target_eur ?? 0);
+							const pct = target > 0 ? Math.round((realized / target) * 100) : 0;
+							const st = status(pct, yearElapsedPct);
+							return (
+								<div key={p.id}>
+									<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
+										<span style={{ fontWeight: 600, fontSize: 13 }}>{p.name}</span>
+										<span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', fontSize: 12 }}>
+											<span className="num" style={{ color: 'var(--fg-muted)' }}>{fmtEur(realized)} / {fmtEur(target)}</span>
+											<span className="tag" style={{ color: statusColor(st), borderColor: statusColor(st) }}>{pct}%</span>
+											<span className="tag" style={{ color: statusColor(st), borderColor: statusColor(st) }}>{st}</span>
+										</span>
+									</div>
+									<ProgressBar pct={target > 0 ? Math.min((realized / target) * 100, 100) : 0} cursorPct={yearElapsed * 100} color={statusColor(st)} label={fmtEur(realized)} />
+								</div>
+							);
+						})}
+					</div>
+					<div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 11, color: 'var(--fg-muted)', marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+						<Legend color="var(--pos)">On track</Legend>
+						<Legend color="var(--warn)">Close (≤15% off)</Legend>
+						<Legend color="var(--neg)">Behind</Legend>
+						<Legend color="var(--accent)">Time cursor</Legend>
+					</div>
+					<div style={{ marginTop: 16, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+						<SalesTracker data={data} yearElapsed={yearElapsed} onSaveField={(pid, field, v) => saveTarget('product', pid, field, v)} />
+					</div>
+				</div>
+
+				<RevenueMix data={data} products={products} />
+				<PipelineSection data={data} products={products} onSync={syncAttio} syncing={syncing} lastSync={data?.lastPipelineSync ?? null} />
+			</div>
 		</div>
 	);
 }
 
+function SideLabel({ children }: { children: React.ReactNode }) {
+	return <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.09em', color: 'var(--fg-muted)', marginBottom: 8 }}>{children}</div>;
+}
+function Legend({ color, children }: { color: string; children: React.ReactNode }) {
+	return <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}><span style={{ width: 12, height: 7, borderRadius: 2, background: color }} />{children}</span>;
+}
 function Headline({ label, value, sub, tone }: { label: string; value: string; sub: string; tone?: string }) {
 	return (
 		<div className="card" style={{ padding: 'var(--space-4)', borderTop: tone ? `2px solid ${tone}` : undefined }}>
@@ -175,21 +249,25 @@ function Headline({ label, value, sub, tone }: { label: string; value: string; s
 	);
 }
 
-function ProgressBar({ pct, cursorPct, color, height = 32 }: { pct: number; cursorPct: number; color: string; height?: number }) {
+/** Horizontal bar with a full-length visible track + optional in-bar label + time cursor. */
+function ProgressBar({ pct, cursorPct, color, height = 30, label }: { pct: number; cursorPct: number; color: string; height?: number; label?: string }) {
 	return (
-		<div style={{ position: 'relative', height, borderRadius: 6, background: 'var(--bg-2)', overflow: 'visible' }}>
-			<div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${Math.min(pct, 100)}%`, background: color, borderRadius: 6, minWidth: pct > 0 ? 2 : 0 }} />
-			<div style={{ position: 'absolute', top: 0, height: '100%', left: `${Math.min(cursorPct, 100)}%`, width: 2, background: 'var(--accent)', zIndex: 2 }} title={`${Math.round(cursorPct)}% year elapsed`} />
+		<div style={{ position: 'relative', height, borderRadius: 6, background: 'var(--bg-2)', border: '1px solid var(--border)', overflow: 'visible' }}>
+			<div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${Math.min(pct, 100)}%`, background: color, borderRadius: 5, minWidth: pct > 0 ? 3 : 0, display: 'flex', alignItems: 'center' }}>
+				{label && pct > 14 && <span style={{ padding: '0 8px', color: '#fff', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>{label}</span>}
+			</div>
+			<div style={{ position: 'absolute', top: -2, bottom: -2, left: `${Math.min(cursorPct, 100)}%`, width: 2, background: 'var(--accent)', zIndex: 2 }} title={`${Math.round(cursorPct)}% year elapsed`} />
 		</div>
 	);
 }
 
-function EditableAmount({ value, onSave, prefix = '€' }: { value: number; onSave: (v: number) => void; prefix?: string }) {
+function EditableAmount({ value, onSave, prefix = '€', full }: { value: number; onSave: (v: number) => void; prefix?: string; full?: boolean }) {
 	const [editing, setEditing] = useState(false);
 	const [draft, setDraft] = useState(String(Math.round(value)));
+	const w = full ? { width: '100%' } : {};
 	if (!editing) {
 		return (
-			<button className="search-input" style={{ height: 26, padding: '0 8px', fontFamily: 'var(--font-mono)', fontSize: 12, cursor: 'text', minWidth: 70 }}
+			<button className="search-input" style={{ height: 24, padding: '0 6px', fontFamily: 'var(--font-mono)', fontSize: 11, cursor: 'text', minWidth: 60, ...w }}
 				onClick={() => { setDraft(String(Math.round(value))); setEditing(true); }}>
 				{prefix ? `${prefix} ` : ''}{Math.round(value).toLocaleString('de-DE')}
 			</button>
@@ -197,7 +275,7 @@ function EditableAmount({ value, onSave, prefix = '€' }: { value: number; onSa
 	}
 	const commit = () => { const n = parseFloat(draft.replace(/[^\d.]/g, '')); if (!isNaN(n) && n >= 0) onSave(n); setEditing(false); };
 	return (
-		<input className="search-input num" style={{ height: 26, width: 90, fontFamily: 'var(--font-mono)', fontSize: 12 }} value={draft} autoFocus
+		<input className="search-input num" style={{ height: 24, fontFamily: 'var(--font-mono)', fontSize: 11, width: full ? '100%' : 88 }} value={draft} autoFocus
 			onChange={(e) => setDraft(e.target.value)} onBlur={commit}
 			onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }} />
 	);
@@ -219,7 +297,7 @@ function OverallProgress({ totalRealized, companyMin, companyFull, yearElapsed, 
 				<div>
 					<div style={{ fontWeight: 700 }}>Overall revenue progress</div>
 					<div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 2 }}>
-						Bar 0 → {fmtEurShort(companyFull)}. Marker = Min ({fmtEurShort(companyMin)}). Cursor = {Math.round(yearElapsed * 100)}% elapsed.
+						Bar 0 → {fmtEurShort(companyFull)}. Marker = min ({fmtEurShort(companyMin)}). Cursor = {Math.round(yearElapsed * 100)}% elapsed.
 					</div>
 				</div>
 				<span className="tag" style={{ color: statusColor(st), borderColor: statusColor(st) }}>{st}</span>
@@ -228,12 +306,12 @@ function OverallProgress({ totalRealized, companyMin, companyFull, yearElapsed, 
 				<span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>Min: <EditableAmount value={companyMin} onSave={onSaveMin} /></span>
 				<span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>Full: <EditableAmount value={companyFull} onSave={onSaveFull} /></span>
 			</div>
-			<div style={{ position: 'relative', height: 40, borderRadius: 6, background: 'var(--bg-2)', overflow: 'visible', marginBottom: 10 }}>
-				<div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${barPct}%`, background: 'var(--warn)', borderRadius: 6, display: 'flex', alignItems: 'center' }}>
+			<div style={{ position: 'relative', height: 38, borderRadius: 6, background: 'var(--bg-2)', border: '1px solid var(--border)', marginBottom: 10 }}>
+				<div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${barPct}%`, background: 'var(--warn)', borderRadius: 5, display: 'flex', alignItems: 'center' }}>
 					{barPct > 8 && <span style={{ padding: '0 10px', color: '#fff', fontSize: 13, fontWeight: 700 }}>{fmtEur(totalRealized)}</span>}
 				</div>
-				{minMarkerPct > 0 && <div style={{ position: 'absolute', top: 0, height: '100%', left: `${minMarkerPct}%`, width: 2, background: 'var(--fg)' }} />}
-				<div style={{ position: 'absolute', top: 0, height: '100%', left: `${Math.min(yearElapsed * 100, 100)}%`, width: 2, background: 'var(--accent)', zIndex: 3 }} />
+				{minMarkerPct > 0 && <div style={{ position: 'absolute', top: -2, bottom: -2, left: `${minMarkerPct}%`, width: 2, background: 'var(--fg)' }} title={`Min ${fmtEurShort(companyMin)}`} />}
+				<div style={{ position: 'absolute', top: -2, bottom: -2, left: `${Math.min(yearElapsed * 100, 100)}%`, width: 2, background: 'var(--accent)', zIndex: 3 }} />
 			</div>
 			<div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 12, color: 'var(--fg-muted)' }}>
 				<span><strong style={{ color: 'var(--fg)' }}>{towardMin}%</strong> toward min</span>
@@ -265,10 +343,9 @@ function SalesTracker({ data, yearElapsed, onSaveField }: {
 	if (!product) return null;
 	return (
 		<div>
-			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8 }}>
+			<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
 				<div style={{ fontWeight: 700, fontSize: 13 }}>{product.name} — sales tracker</div>
-				<Select value={slug} onChange={setSlug} width={180} ariaLabel="Product"
-					options={products.map((p) => ({ value: p.slug, label: p.name }))} />
+				<Select value={slug} onChange={setSlug} width={190} ariaLabel="Product" options={products.map((p) => ({ value: p.slug, label: p.name }))} />
 			</div>
 			<div className="grid-3" style={{ gap: 'var(--space-3)', marginBottom: 12 }}>
 				<MiniCard label="Annual units target"><EditableAmount value={unitsTarget} prefix="" onSave={(v) => onSaveField(product.id, 'annual_units_target', v)} /></MiniCard>
@@ -284,11 +361,11 @@ function SalesTracker({ data, yearElapsed, onSaveField }: {
 			<div style={{ display: 'grid', gap: 10, marginBottom: 10 }}>
 				<div>
 					<div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}><span style={{ fontWeight: 600 }}>Units sold</span><span>{unitsSold} / {unitsTarget > 0 ? unitsTarget : '—'}</span></div>
-					<ProgressBar pct={unitsTarget > 0 ? Math.min((unitsSold / unitsTarget) * 100, 100) : 0} cursorPct={cursorPct} color="var(--pos)" height={28} />
+					<ProgressBar pct={unitsTarget > 0 ? Math.min((unitsSold / unitsTarget) * 100, 100) : 0} cursorPct={cursorPct} color="var(--pos)" height={26} label={`${unitsSold} units`} />
 				</div>
 				<div>
 					<div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}><span style={{ fontWeight: 600 }}>Sales touchpoints (YTD)</span><span>{tpYtd} / {tpTarget > 0 ? tpTarget : '—'}</span></div>
-					<ProgressBar pct={tpTarget > 0 ? Math.min((tpYtd / tpTarget) * 100, 100) : 0} cursorPct={cursorPct} color="oklch(55% 0.18 250)" height={28} />
+					<ProgressBar pct={tpTarget > 0 ? Math.min((tpYtd / tpTarget) * 100, 100) : 0} cursorPct={cursorPct} color="oklch(55% 0.18 250)" height={26} label={`${tpYtd} TPs`} />
 				</div>
 			</div>
 			<div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--fg-muted)' }}>
@@ -345,6 +422,7 @@ const STAGE_COLOR: Record<string, string> = {
 	'Interested / Nurturing': 'oklch(60% 0.12 190)', 'Invited / Decision Pending': 'oklch(55% 0.20 300)', 'Unstaged': 'oklch(70% 0.02 250)',
 };
 const stageKey = (d: Deal) => d.is_won ? 'Closed Won' : d.is_lost ? 'Closed Lost' : (d.stage || 'Unstaged');
+const byWeight = (a: string, b: string) => (STAGE_WEIGHT[b] ?? -1) - (STAGE_WEIGHT[a] ?? -1);
 
 function relTime(iso: string | null): string {
 	if (!iso) return 'never';
@@ -356,10 +434,10 @@ function relTime(iso: string | null): string {
 }
 
 function PipelineSection({ data, products, onSync, syncing, lastSync }: { data?: TrackerData; products: Product[]; onSync: () => void; syncing: boolean; lastSync: string | null }) {
-	// Default to the compact stage-wise view (509 deals in the by-product view
-	// forces a lot of scrolling).
 	const [view, setView] = useState<'product' | 'stage'>('stage');
 	const [open, setOpen] = useState<Set<string>>(new Set());
+	// Per-product drill-down: which stage's deals are being shown.
+	const [pickedStage, setPickedStage] = useState<Record<string, string | null>>({});
 	const deals = data?.pipeline.deals ?? [];
 	const openDeals = deals.filter((d) => !d.is_won && !d.is_lost);
 
@@ -371,10 +449,10 @@ function PipelineSection({ data, products, onSync, syncing, lastSync }: { data?:
 			const e = m.get(k) ?? { count: 0, expected: 0 };
 			e.count++; e.expected += Number(d.expected_revenue_eur || 0); m.set(k, e);
 		}
-		return Array.from(m.entries()).map(([name, v]) => ({ name, ...v })).sort((a, b) => (STAGE_WEIGHT[b.name] ?? -1) - (STAGE_WEIGHT[a.name] ?? -1));
+		return Array.from(m.entries()).map(([name, v]) => ({ name, ...v })).sort((a, b) => byWeight(a.name, b.name));
 	}, [deals]);
 
-	const toggle = (id: string) => setOpen((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+	const toggle = (id: string) => setOpen((p) => { const n = new Set(p); if (n.has(id)) { n.delete(id); setPickedStage((s) => ({ ...s, [id]: null })); } else n.add(id); return n; });
 
 	return (
 		<div className="card" style={{ padding: 'var(--space-4)' }}>
@@ -406,7 +484,10 @@ function PipelineSection({ data, products, onSync, syncing, lastSync }: { data?:
 									</span>
 									<span className="num" style={{ fontWeight: 700, fontSize: 13 }}>{r.expected > 0 ? fmtEur(r.expected) : '—'}</span>
 								</div>
-								<div className="hb-bar" style={{ height: 6 }}><div className="hb-bar-fill" style={{ width: `${(r.expected / maxV) * 100}%`, background: STAGE_COLOR[r.name] ?? 'var(--fg-muted)' }} /></div>
+								{/* full-length track so the bar reads as a proportion */}
+								<div style={{ height: 8, borderRadius: 4, background: 'var(--bg-2)', border: '1px solid var(--border)', overflow: 'hidden' }}>
+									<div style={{ height: '100%', width: `${(r.expected / maxV) * 100}%`, background: STAGE_COLOR[r.name] ?? 'var(--fg-muted)' }} />
+								</div>
 							</div>
 						));
 					})()}
@@ -419,38 +500,83 @@ function PipelineSection({ data, products, onSync, syncing, lastSync }: { data?:
 				<div>
 					{products.map((p) => {
 						const pOpen = openDeals.filter((d) => d.product_id === p.id);
-						const allDeals = deals.filter((d) => d.product_id === p.id).sort((a, b) => b.expected_revenue_eur - a.expected_revenue_eur);
+						const allDeals = deals.filter((d) => d.product_id === p.id);
 						const weighted = pOpen.reduce((s, d) => s + Number(d.expected_revenue_eur), 0);
 						const tps = pOpen.reduce((s, d) => s + Number(d.touchpoint_count || 0), 0);
 						const isOpen = open.has(p.id);
+						const maxWeighted = Math.max(1, ...products.map((x) => openDeals.filter((d) => d.product_id === x.id).reduce((s, d) => s + Number(d.expected_revenue_eur), 0)));
+						// Stage breakdown for this product (includes won/lost).
+						const stages = (() => {
+							const m = new Map<string, { count: number; expected: number }>();
+							for (const d of allDeals) { const k = stageKey(d); const e = m.get(k) ?? { count: 0, expected: 0 }; e.count++; e.expected += Number(d.expected_revenue_eur || 0); m.set(k, e); }
+							return Array.from(m.entries()).map(([name, v]) => ({ name, ...v })).sort((a, b) => byWeight(a.name, b.name));
+						})();
+						const picked = pickedStage[p.id] ?? null;
+						const stageDeals = picked ? allDeals.filter((d) => stageKey(d) === picked).sort((a, b) => b.expected_revenue_eur - a.expected_revenue_eur) : [];
+						const segs: PieSegment[] = stages.map((s) => ({ name: s.name, v: s.count, color: STAGE_COLOR[s.name] ?? 'var(--fg-muted)', label: `${s.count} deal${s.count === 1 ? '' : 's'}` }));
+
 						return (
 							<div key={p.id} style={{ borderTop: '1px solid var(--border)' }}>
-								<button onClick={() => allDeals.length && toggle(p.id)} style={{ width: '100%', textAlign: 'left', background: 'none', border: 0, cursor: allDeals.length ? 'pointer' : 'default', padding: '10px 2px', display: 'flex', alignItems: 'center', gap: 10, font: 'inherit' }}>
+								<button onClick={() => allDeals.length && toggle(p.id)} style={{ width: '100%', textAlign: 'left', background: 'none', border: 0, cursor: allDeals.length ? 'pointer' : 'default', padding: '10px 2px', display: 'flex', alignItems: 'center', gap: 10, font: 'inherit', flexWrap: 'wrap' }}>
 									<ChevronRight size={14} style={{ color: 'var(--fg-muted)', transform: isOpen ? 'rotate(90deg)' : 'none', transition: 'transform .15s', opacity: allDeals.length ? 1 : 0.2 }} />
-									<span style={{ fontWeight: 600, fontSize: 13, width: 180 }}>{p.name}</span>
-									<span style={{ fontSize: 12, width: 70, color: 'var(--fg-muted)' }}>{pOpen.length ? `${pOpen.length} open` : '—'}</span>
-									<span className="num" style={{ fontSize: 12, width: 90, color: 'var(--fg-muted)' }}>{weighted > 0 ? fmtEur(weighted) : '—'}</span>
-									<span style={{ fontSize: 12, width: 70, color: tps ? 'oklch(55% 0.18 250)' : 'var(--fg-muted)' }}>{tps ? `${tps} TPs` : '—'}</span>
+									<span style={{ fontWeight: 600, fontSize: 13, width: 170 }}>{p.name}</span>
+									<span style={{ fontSize: 12, width: 66, color: 'var(--fg-muted)' }}>{pOpen.length ? `${pOpen.length} open` : '—'}</span>
+									<span className="num" style={{ fontSize: 12, width: 86, color: 'var(--fg-muted)' }}>{weighted > 0 ? fmtEur(weighted) : '—'}</span>
+									<span style={{ fontSize: 12, width: 62, color: tps ? 'oklch(55% 0.18 250)' : 'var(--fg-muted)' }}>{tps ? `${tps} TPs` : '—'}</span>
+									<span style={{ flex: 1, minWidth: 80, height: 8, borderRadius: 4, background: 'var(--bg-2)', border: '1px solid var(--border)', overflow: 'hidden' }}>
+										<span style={{ display: 'block', height: '100%', width: `${(weighted / maxWeighted) * 100}%`, background: PRODUCT_COLORS[p.slug] ?? 'var(--accent)' }} />
+									</span>
 								</button>
+
 								{isOpen && allDeals.length > 0 && (
-									<div style={{ paddingLeft: 28, paddingBottom: 10 }}>
-										<div className="table-scroll">
-											<table className="data-table">
-												<thead><tr><th>Prospect</th><th>Stage</th><th style={{ textAlign: 'right' }}>Deal value</th><th style={{ textAlign: 'right' }}>Expected</th></tr></thead>
-												<tbody>
-													{allDeals.map((d) => (
-														<tr key={d.id}>
-															<td>{d.attio_company_id
-																? <a href={`https://app.attio.com/sportstechx/company/${d.attio_company_id}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', display: 'inline-flex', gap: 3, alignItems: 'center' }}>{d.prospect_name || 'Unnamed'}<ExternalLink size={10} /></a>
-																: (d.prospect_name || '—')}</td>
-															<td><span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: STAGE_COLOR[stageKey(d)] ?? 'var(--fg-muted)' }} />{stageKey(d)}</span></td>
-															<td className="num" style={{ textAlign: 'right' }}>{d.deal_value_net_eur > 0 ? fmtEur(d.deal_value_net_eur) : '—'}</td>
-															<td className="num" style={{ textAlign: 'right', fontWeight: 600 }}>{fmtEur(d.expected_revenue_eur)}</td>
-														</tr>
-													))}
-												</tbody>
-											</table>
-										</div>
+									<div style={{ paddingLeft: 26, paddingBottom: 12 }}>
+										{picked === null ? (
+											// Stage breakdown: donut + clickable legend
+											<div className="card" style={{ padding: 'var(--space-3)' }}>
+												<div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
+													<PieDonut segments={segs} size={130} mode="donut" />
+													<div style={{ flex: 1, minWidth: 240 }}>
+														<div style={{ fontSize: 11, color: 'var(--fg-muted)', marginBottom: 6 }}>Click a stage to view its deals</div>
+														{stages.map((s) => (
+															<button key={s.name} onClick={() => setPickedStage((prev) => ({ ...prev, [p.id]: s.name }))}
+																className="btn ghost" style={{ width: '100%', justifyContent: 'space-between', height: 26, padding: '0 6px', fontSize: 12 }}>
+																<span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+																	<span style={{ width: 9, height: 9, borderRadius: 2, background: STAGE_COLOR[s.name] ?? 'var(--fg-muted)' }} />{s.name}
+																</span>
+																<span style={{ display: 'inline-flex', gap: 10 }}>
+																	<span className="num" style={{ fontWeight: 600 }}>{s.count} deals</span>
+																	<span className="num" style={{ color: 'var(--fg-muted)' }}>{fmtEur(s.expected)}</span>
+																</span>
+															</button>
+														))}
+													</div>
+												</div>
+											</div>
+										) : (
+											<div>
+												<div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 6 }}>
+													<button className="btn ghost" style={{ height: 24, fontSize: 12 }} onClick={() => setPickedStage((prev) => ({ ...prev, [p.id]: null }))}>← Back to stages</button>
+													<span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{picked} · {stageDeals.length} deals</span>
+												</div>
+												<div className="table-scroll">
+													<table className="data-table">
+														<thead><tr><th>Prospect</th><th style={{ textAlign: 'right' }}>Touchpoints</th><th style={{ textAlign: 'right' }}>Deal value</th><th style={{ textAlign: 'right' }}>Expected</th></tr></thead>
+														<tbody>
+															{stageDeals.map((d) => (
+																<tr key={d.id}>
+																	<td>{d.attio_company_id
+																		? <a href={`https://app.attio.com/sportstechx/company/${d.attio_company_id}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', display: 'inline-flex', gap: 3, alignItems: 'center' }}>{d.prospect_name || 'Unnamed'}<ExternalLink size={10} /></a>
+																		: (d.prospect_name || '—')}</td>
+																	<td className="num" style={{ textAlign: 'right', color: d.touchpoint_count ? 'oklch(55% 0.18 250)' : 'var(--fg-muted)' }}>{d.touchpoint_count || '—'}</td>
+																	<td className="num" style={{ textAlign: 'right' }}>{d.deal_value_net_eur > 0 ? fmtEur(d.deal_value_net_eur) : '—'}</td>
+																	<td className="num" style={{ textAlign: 'right', fontWeight: 600 }}>{fmtEur(d.expected_revenue_eur)}</td>
+																</tr>
+															))}
+														</tbody>
+													</table>
+												</div>
+											</div>
+										)}
 									</div>
 								)}
 							</div>

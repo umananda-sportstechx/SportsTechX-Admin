@@ -206,10 +206,12 @@ function ProgressBar({ pct, cursorPct, color, height = 30, label }: { pct: numbe
 	);
 }
 
-function EditableAmount({ value, onSave, prefix = '€' }: { value: number; onSave: (v: number) => void; prefix?: string }) {
+function EditableAmount({ value, onSave, prefix = '€', size = 'sm' }: { value: number; onSave: (v: number) => void; prefix?: string; size?: 'sm' | 'lg' }) {
 	const [editing, setEditing] = useState(false);
 	const [hover, setHover] = useState(false);
 	const [draft, setDraft] = useState(String(Math.round(value)));
+	const lg = size === 'lg';
+	const h = lg ? 36 : 24, fs = lg ? 19 : 12, fw = lg ? 800 : 600, w = lg ? 128 : 96;
 	if (!editing) {
 		return (
 			<button
@@ -217,21 +219,21 @@ function EditableAmount({ value, onSave, prefix = '€' }: { value: number; onSa
 				onClick={() => { setDraft(String(Math.round(value))); setEditing(true); }}
 				title="Click to edit"
 				style={{
-					display: 'inline-flex', alignItems: 'center', gap: 5, height: 24, padding: '0 7px',
-					fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 600, cursor: 'text',
+					display: 'inline-flex', alignItems: 'center', gap: lg ? 8 : 5, height: h, padding: lg ? '0 10px' : '0 7px',
+					fontFamily: 'var(--font-mono)', fontSize: fs, fontWeight: fw, cursor: 'text',
 					background: hover ? 'var(--bg-2)' : 'transparent', color: 'var(--fg)',
-					border: `1px solid ${hover ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 5,
+					border: `1px solid ${hover ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 6,
 					transition: 'background .15s, border-color .15s',
 				}}
 			>
 				{prefix ? `${prefix} ` : ''}{Math.round(value).toLocaleString('de-DE')}
-				<Pencil size={10} style={{ opacity: hover ? 0.8 : 0.3, transition: 'opacity .15s' }} />
+				<Pencil size={lg ? 13 : 10} style={{ opacity: hover ? 0.85 : 0.3, transition: 'opacity .15s' }} />
 			</button>
 		);
 	}
 	const commit = () => { const n = parseFloat(draft.replace(/[^\d.]/g, '')); if (!isNaN(n) && n >= 0) onSave(n); setEditing(false); };
 	return (
-		<input className="search-input num" style={{ height: 24, fontFamily: 'var(--font-mono)', fontSize: 12, width: 96 }} value={draft} autoFocus
+		<input className="search-input num" style={{ height: h, fontFamily: 'var(--font-mono)', fontSize: fs, fontWeight: fw, width: w }} value={draft} autoFocus
 			onChange={(e) => setDraft(e.target.value)} onBlur={commit}
 			onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }} />
 	);
@@ -301,12 +303,12 @@ function SalesTracker({ data, yearElapsed, onSaveField }: {
 			action={<Select value={slug} onChange={setSlug} width={200} ariaLabel="Product" options={products.map((p) => ({ value: p.slug, label: p.name }))} />}
 		>
 			<div className="grid-3" style={{ gap: 'var(--space-3)', marginBottom: 14 }}>
-				<MiniCard label="Annual units target"><EditableAmount value={unitsTarget} prefix="" onSave={(v) => onSaveField(product.id, 'annual_units_target', v)} /></MiniCard>
+				<MiniCard label="Annual units target"><EditableAmount size="lg" value={unitsTarget} prefix="" onSave={(v) => onSaveField(product.id, 'annual_units_target', v)} /></MiniCard>
 				<MiniCard label="Sales touchpoints (YTD)">
 					<div style={{ fontSize: 18, fontWeight: 800 }}>{tpYtd.toLocaleString()}</div>
 					<div style={{ fontSize: 10, color: 'var(--fg-muted)' }}>auto-synced from touchpoints</div>
 				</MiniCard>
-				<MiniCard label="Touchpoints target (YTD)"><EditableAmount value={tpTarget} prefix="" onSave={(v) => onSaveField(product.id, 'annual_touchpoints_target', v)} /></MiniCard>
+				<MiniCard label="Touchpoints target (YTD)"><EditableAmount size="lg" value={tpTarget} prefix="" onSave={(v) => onSaveField(product.id, 'annual_touchpoints_target', v)} /></MiniCard>
 			</div>
 			<div className="grid-4" style={{ gap: 'var(--space-3)', marginBottom: 14 }}>
 				<Metric label="Units sold (YTD)" value={String(unitsSold)} sub={`${unitsTarget > 0 ? Math.round((unitsSold / unitsTarget) * 100) : 0}% of target`} tone="var(--pos)" />
@@ -442,7 +444,7 @@ function PipelineSection({ data, products, onSync, syncing, lastSync }: { data?:
 									</span>
 									<span className="num" style={{ fontWeight: 700, fontSize: 13 }}>{r.expected > 0 ? fmtEur(r.expected) : '—'}</span>
 								</div>
-								<div style={{ height: 8, borderRadius: 4, background: 'var(--bg-2)', border: '1px solid var(--border)', overflow: 'hidden' }}>
+								<div style={{ height: 12, borderRadius: 6, background: 'var(--bg-2)', border: '1px solid var(--border)', overflow: 'hidden' }}>
 									<div style={{ height: '100%', width: `${(r.expected / maxV) * 100}%`, background: STAGE_COLOR[r.name] ?? 'var(--fg-muted)', transition: EASE }} />
 								</div>
 							</div>
@@ -486,7 +488,7 @@ function PipelineSection({ data, products, onSync, syncing, lastSync }: { data?:
 									<span style={{ fontSize: 12, width: 66, color: 'var(--fg-muted)' }}>{pOpen.length ? `${pOpen.length} open` : '—'}</span>
 									<span className="num" style={{ fontSize: 12, width: 88, color: 'var(--fg-muted)' }}>{weighted > 0 ? fmtEur(weighted) : '—'}</span>
 									<span style={{ fontSize: 12, width: 62, color: tps ? 'oklch(55% 0.18 250)' : 'var(--fg-muted)' }}>{tps ? `${tps} TPs` : '—'}</span>
-									<span style={{ flex: 1, minWidth: 80, height: 8, borderRadius: 4, background: 'var(--bg-2)', border: '1px solid var(--border)', overflow: 'hidden' }}>
+									<span style={{ flex: 1, minWidth: 90, height: 14, borderRadius: 7, background: 'var(--bg-2)', border: '1px solid var(--border)', overflow: 'hidden' }}>
 										<span style={{ display: 'block', height: '100%', width: `${(weighted / maxWeighted) * 100}%`, background: PRODUCT_COLORS[p.slug] ?? 'var(--accent)', transition: EASE }} />
 									</span>
 								</button>
@@ -494,24 +496,35 @@ function PipelineSection({ data, products, onSync, syncing, lastSync }: { data?:
 								{isOpen && allDeals.length > 0 && (
 									<div style={{ paddingLeft: 28, paddingBottom: 14 }}>
 										{picked === null ? (
-											<div className="card" style={{ padding: 'var(--space-3)', background: 'var(--bg-2)' }}>
-												<div style={{ display: 'flex', gap: 20, alignItems: 'center', flexWrap: 'wrap' }}>
-													<PieDonut segments={segs} size={132} mode="donut" />
-													<div style={{ flex: 1, minWidth: 260 }}>
-														<div style={{ fontSize: 11, color: 'var(--fg-muted)', marginBottom: 6 }}>Click a stage to view its deals</div>
-														<div style={{ display: 'grid', gap: 2 }}>
-															{stages.map((s) => (
-																<button key={s.name} onClick={() => setPickedStage((prev) => ({ ...prev, [p.id]: s.name }))}
-																	className="btn ghost" style={{ width: '100%', justifyContent: 'space-between', height: 28, padding: '0 8px', fontSize: 12 }}>
-																	<span style={{ display: 'inline-flex', gap: 7, alignItems: 'center' }}>
-																		<span style={{ width: 9, height: 9, borderRadius: 2, background: STAGE_COLOR[s.name] ?? 'var(--fg-muted)' }} />{s.name}
-																	</span>
-																	<span style={{ display: 'inline-flex', gap: 12 }}>
-																		<span className="num" style={{ fontWeight: 600 }}>{s.count}</span>
-																		<span className="num" style={{ color: 'var(--fg-muted)', minWidth: 64, textAlign: 'right' }}>{fmtEur(s.expected)}</span>
-																	</span>
-																</button>
-															))}
+											<div className="card" style={{ padding: 'var(--space-4)', background: 'var(--bg-2)' }}>
+												<div style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap' }}>
+													<PieDonut segments={segs} size={150} mode="donut" showLabelOnLargest={false} />
+													<div style={{ flex: 1, minWidth: 280 }}>
+														<div style={{ fontSize: 11, color: 'var(--fg-muted)', marginBottom: 8 }}>Click a stage to view its deals</div>
+														<div style={{ display: 'grid', gap: 3 }}>
+															{(() => {
+																const maxCount = Math.max(1, ...stages.map((x) => x.count));
+																return stages.map((s) => (
+																	<button key={s.name} onClick={() => setPickedStage((prev) => ({ ...prev, [p.id]: s.name }))}
+																		style={{ width: '100%', background: 'none', border: 0, padding: '6px 7px', borderRadius: 6, cursor: 'pointer', font: 'inherit', textAlign: 'left', transition: 'background .15s' }}
+																		onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg)'; }}
+																		onMouseLeave={(e) => { e.currentTarget.style.background = 'none'; }}
+																	>
+																		<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, marginBottom: 5 }}>
+																			<span style={{ display: 'inline-flex', gap: 7, alignItems: 'center', fontSize: 12.5 }}>
+																				<span style={{ width: 9, height: 9, borderRadius: 2, background: STAGE_COLOR[s.name] ?? 'var(--fg-muted)', flexShrink: 0 }} />{s.name}
+																			</span>
+																			<span style={{ display: 'inline-flex', gap: 14, alignItems: 'baseline' }}>
+																				<span className="num" style={{ fontWeight: 700, fontSize: 12.5 }}>{s.count}</span>
+																				<span className="num" style={{ color: 'var(--fg-muted)', fontSize: 12, minWidth: 68, textAlign: 'right' }}>{fmtEur(s.expected)}</span>
+																			</span>
+																		</div>
+																		<div style={{ height: 9, borderRadius: 5, background: 'var(--bg)', border: '1px solid var(--border)', overflow: 'hidden' }}>
+																			<div style={{ height: '100%', width: `${(s.count / maxCount) * 100}%`, background: STAGE_COLOR[s.name] ?? 'var(--fg-muted)', transition: EASE }} />
+																		</div>
+																	</button>
+																));
+															})()}
 														</div>
 													</div>
 												</div>
@@ -532,7 +545,7 @@ function PipelineSection({ data, products, onSync, syncing, lastSync }: { data?:
 															{stageDeals.map((d) => (
 																<tr key={d.id}>
 																	<td>{d.attio_company_id
-																		? <a href={`https://app.attio.com/sportstechx/company/${d.attio_company_id}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)', display: 'inline-flex', gap: 3, alignItems: 'center' }}>{d.prospect_name || 'Unnamed'}<ExternalLink size={10} /></a>
+																		? <a href={`https://app.attio.com/sportstechx/company/${d.attio_company_id}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--fg)', textDecoration: 'none', display: 'inline-flex', gap: 4, alignItems: 'center' }}>{d.prospect_name || 'Unnamed'}<ExternalLink size={10} style={{ opacity: 0.45 }} /></a>
 																		: (d.prospect_name || '—')}</td>
 																	<td className="num" style={{ textAlign: 'right', color: d.touchpoint_count ? 'oklch(55% 0.18 250)' : 'var(--fg-muted)' }}>{d.touchpoint_count || '—'}</td>
 																	<td className="num" style={{ textAlign: 'right' }}>{d.deal_value_net_eur > 0 ? fmtEur(d.deal_value_net_eur) : '—'}</td>

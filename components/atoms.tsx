@@ -150,6 +150,7 @@ export function StatCard({
 	urgent,
 	delta,
 	tone,
+	sub,
 }: {
 	label: string;
 	value: React.ReactNode;
@@ -160,6 +161,8 @@ export function StatCard({
 	delta?: number | null;
 	/** Accent tone (STAT_TONES key or CSS color) — colors the value + top stripe. */
 	tone?: StatTone;
+	/** Optional caption under the value (e.g. "Gap €12,000"). */
+	sub?: React.ReactNode;
 }) {
 	const c = tone ? toneColor(tone) : null;
 	// Numbers stay in the default text colour; the tone only tints the top stripe.
@@ -188,6 +191,7 @@ export function StatCard({
 					{delta >= 0 ? '▲' : '▼'} {Math.abs(delta).toFixed(1)}% vs prev
 				</div>
 			)}
+			{sub && <div style={{ fontSize: 11, marginTop: 3, color: 'var(--fg-muted)' }}>{sub}</div>}
 		</>
 	);
 	const style: React.CSSProperties = {

@@ -9,7 +9,7 @@ import { Select } from '@/components/select';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
-import { PageHeader, StatCard, StatsPanel, AsyncState, Tag, Chip, Section } from '@/components/atoms';
+import { PageHeader, StatCard, StatsPanel, AsyncState, Tag, Chip, Section, Pager } from '@/components/atoms';
 import { Funnel } from '@/components/charts';
 import { StatStrip } from '@/components/filters';
 import { DateRangePicker, type RangeValue } from '@/components/date-range-picker';
@@ -22,7 +22,7 @@ interface QueueRow {
 	id: string; name: string; website: string | null; category: string | null; country: string | null;
 	status: string; skip_reason: string | null; assigned_to: string | null; created_at: string;
 }
-interface QueueResponse { data: QueueRow[]; total: number }
+interface QueueResponse { data: QueueRow[]; total: number; totalPages?: number }
 interface PerAdmin { assigned_to: string | null; full_name: string | null; pending: number; completed: number; skipped: number; completion_rate: number }
 interface Stats {
 	counts: { pending: number; completed: number; skipped: number; total: number };
@@ -41,6 +41,7 @@ export default function InvestorReviewPage() {
 	const { mutate } = useSWRConfig();
 	const ask = useConfirm();
 	const [status, setStatus] = useState<string>('pending');
+	const [page, setPage] = useState(1);
 	const [assigned, setAssigned] = useState<string>('');
 	const [search, setSearch] = useState('');
 	const debouncedSearch = useDebouncedValue(search);
@@ -55,7 +56,7 @@ export default function InvestorReviewPage() {
 	const [statsRange, setStatsRange] = useState<RangeValue>({});
 
 	const { data, error, isLoading } = useSWR<QueueResponse>(
-		['/api/admin/investor-review', { status: status || undefined, assigned_to: assigned || undefined, q: debouncedSearch || undefined, from: from || undefined, to: to || undefined, limit: 50 }],
+		['/api/admin/investor-review', { status: status || undefined, assigned_to: assigned || undefined, q: debouncedSearch || undefined, from: from || undefined, to: to || undefined, page, limit: 50 }],
 		{ dedupingInterval: 15_000 },
 	);
 	const { data: stats } = useSWR<Stats>(['/api/admin/investor-review/stats', { from: statsRange.from, to: statsRange.to }], { dedupingInterval: 15_000 });
@@ -150,7 +151,7 @@ export default function InvestorReviewPage() {
 				<Chip active={status === ''} onClick={() => setStatus('')}>All</Chip>
 				{STATUSES.map((s) => <Chip key={s} active={status === s} onClick={() => setStatus(s)}>{s}</Chip>)}
 				<Select value={assigned} onChange={setAssigned} searchable width={200} options={[{ value: '', label: 'Any assignee' }, { value: 'unassigned', label: 'Unassigned' }, ...admins.map((a) => ({ value: a.id, label: a.full_name || a.display_name || a.email }))]} />
-				<input className="search-input" style={{ flex: '0 0 200px', height: 30 }} placeholder="Search name…" value={search} onChange={(e) => setSearch(e.target.value)} />
+				<input className="search-input" style={{ flex: '0 0 200px', height: 30 }} placeholder="Search name…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
 				<input className="search-input" type="date" style={{ height: 30 }} value={from} onChange={(e) => setFrom(e.target.value)} title="Added from" />
 				<input className="search-input" type="date" style={{ height: 30 }} value={to} onChange={(e) => setTo(e.target.value)} title="Added to" />
 				<div style={{ flex: 1 }} />
@@ -212,6 +213,7 @@ export default function InvestorReviewPage() {
 						</tbody>
 					</table>
 				</AsyncState>
+			<Pager page={page} totalPages={data?.totalPages} onPage={setPage} />
 			</div>
 		</div>
 	);

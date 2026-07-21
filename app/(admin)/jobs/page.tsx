@@ -99,6 +99,8 @@ export default function JobsPage() {
 	const byQueue = history.data?.by_queue ?? [];
 	const openCount = byStatus.filter((b) => b.status !== 'completed').reduce((n, b) => n + b.count, 0);
 	const total = byStatus.reduce((n, b) => n + b.count, 0);
+	const lastActivity = byQueue.reduce<string | null>(
+		(max, q) => (q.last_run && (!max || q.last_run > max) ? q.last_run : max), null);
 
 	const run = async (endpoint: typeof ENDPOINTS[number]) => {
 		setRunningKey(endpoint.key);
@@ -132,8 +134,10 @@ export default function JobsPage() {
 				<StatCard label="Not completed" loading={history.isLoading} value={openCount.toLocaleString()}
 					urgent={openCount > 0} sub="pending, running or stuck" />
 				<StatCard label="Queues seen" loading={history.isLoading} value={byQueue.length.toLocaleString()} />
+				{/* From the unfiltered per-queue rollup — rows[] is status-filtered, so
+				    using it made this KPI jump when a status chip was clicked. */}
 				<StatCard label="Last activity" loading={history.isLoading}
-					value={rows[0] ? new Date(rows[0].created_at).toLocaleDateString() : '—'} />
+					value={lastActivity ? new Date(lastActivity).toLocaleDateString() : '—'} />
 			</StatStrip>
 
 			<div className="grid-2">

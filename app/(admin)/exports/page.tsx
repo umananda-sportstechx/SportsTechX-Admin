@@ -5,6 +5,7 @@ import useSWR from 'swr';
 import { toast } from 'sonner';
 import { Download, RefreshCw, Save } from 'lucide-react';
 import { api } from '@/lib/api';
+import { PageHeader } from '@/components/atoms';
 
 /**
  * Export field configuration.
@@ -29,20 +30,14 @@ export default function ExportsConfigPage() {
 
 	return (
 		<div>
-			<div style={{ marginBottom: 'var(--space-5)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-				<div>
-					<div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
-						<Download size={11} style={{ verticalAlign: '-1px' }} /> Data export
-					</div>
-					<h1 style={{ fontFamily: 'var(--font-display)', fontSize: 38, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1, margin: 0 }}>
-						Export columns
-					</h1>
-					<p style={{ fontSize: 14, color: 'var(--fg-2)', maxWidth: 760, margin: '6px 0 0' }}>
-						Choose which columns users can export to CSV/XLSX or map to their CRM, and set each
-						column&apos;s per-row <b>credit cost</b> (default 0.5). An export costs
-						<b> ceil(sum of selected column costs × rows)</b> from the export-credit pool.
-					</p>
-				</div>
+			<PageHeader
+				kicker="Data export"
+				title="Export columns"
+				subtitle="Choose which columns users can export to CSV/XLSX or map to their CRM, and set each column's per-row credit cost (default 0.5). An export costs ceil(sum of selected column costs × rows) from the export-credit pool."
+			/>
+
+			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)' }}>
+				<div style={{ flex: 1 }} />
 				<button className="btn ghost" onClick={() => void mutate()}><RefreshCw size={12} /> Refresh</button>
 			</div>
 

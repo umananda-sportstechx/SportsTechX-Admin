@@ -10,9 +10,17 @@ import { HBarDrilldown, ComboBarLine, type HBarRow } from '@/components/charts';
 const QUEUE_COLORS = ['#79CABD', '#6CA8FF', '#FFB36C', '#D99CFF', '#FF9CA8', '#9CE0C0', '#C0F4DE'];
 
 // ── HTTP request metrics ──
-interface HttpSummary { total: number; avg_ms: number; p95_ms: number; max_ms: number; errors: number }
-interface ByRoute { route: string; method: string; total: number; avg_ms: number; p95_ms: number; max_ms: number; errors: number }
-interface HttpResponse { summary: HttpSummary; byRoute: ByRoute[]; timeline: Array<{ label: string; total: number; errors: number }>; range: string }
+interface HttpSummary { total: number; avg_ms: number; p95_ms: number; p99_ms: number; max_ms: number; errors: number; client_errors: number }
+interface ByRoute { route: string; method: string; total: number; avg_ms: number; p95_ms: number; p99_ms: number; max_ms: number; errors: number; client_errors: number }
+interface TimelinePoint { label: string; total: number; errors: number; avg_ms: number; p95_ms: number }
+interface HttpResponse { summary: HttpSummary; byRoute: ByRoute[]; timeline: TimelinePoint[]; range: string }
+
+// Endpoint table sort keys. Sorting client-side keeps every route in one table
+// rather than needing a separate "slowest endpoints" view like the legacy page.
+type SortKey = 'total' | 'avg_ms' | 'p95_ms' | 'p99_ms' | 'max_ms' | 'errors';
+const SORT_LABELS: Record<SortKey, string> = {
+	total: 'Requests', avg_ms: 'Avg', p95_ms: 'p95', p99_ms: 'p99', max_ms: 'Max', errors: 'Errors',
+};
 interface ErrorRow { method: string; route: string; status_code: number; error_message: string | null; created_at: string }
 
 // ── Background job metrics (existing) ──
@@ -40,6 +48,8 @@ function latColor(n: number, warn: number, crit: number): string | undefined {
 export default function PerformancePage() {
 	const [range, setRange] = useState<Range>('24h');
 	const [errRoute, setErrRoute] = useState<string | 'all' | null>(null);
+	const [routeQ, setRouteQ] = useState('');
+	const [sortKey, setSortKey] = useState<SortKey>('total');
 
 	const http = useSWR<HttpResponse>(['/api/admin/performance/http', { range }], { dedupingInterval: 15_000, refreshInterval: 30_000 });
 	const { data, error, isLoading, mutate } = useSWR<PerfResponse>(['/api/admin/performance', { range }], { dedupingInterval: 15_000, refreshInterval: 30_000 });
@@ -47,6 +57,16 @@ export default function PerformancePage() {
 	const h = http.data?.summary;
 	const httpErrRate = h && h.total > 0 ? (h.errors / h.total) * 100 : 0;
 	const timelineChart = (http.data?.timeline ?? []).map((t) => ({ label: t.label, amt: t.total, deals: t.errors }));
+	// Latency over time — bars are the average, the line traces p95 so a spike in
+	// tail latency is visible even when the average stays flat.
+	const latencyChart = (http.data?.timeline ?? []).map((t) => ({ label: t.label, amt: t.avg_ms, deals: t.p95_ms }));
+
+	// Search + sort every route client-side; the API now returns all of them.
+	const allRoutes = http.data?.byRoute ?? [];
+	const routes = allRoutes
+		.filter((r) => !routeQ || r.route.toLowerCase().includes(routeQ.toLowerCase()) || r.method.toLowerCase() === routeQ.toLowerCase())
+		.slice()
+		.sort((a, b) => b[sortKey] - a[sortKey]);
 
 	const summary = data?.summary ?? [];
 	const slowest = data?.slowest ?? [];
@@ -73,10 +93,13 @@ export default function PerformancePage() {
 			{/* ── HTTP requests ── */}
 			<StatsPanel title="HTTP requests">
 				<div className="grid-4">
-					<StatCard label="Total requests" loading={http.isLoading} value={(h?.total ?? 0).toLocaleString()} />
-					<StatCard label="Error rate (5xx)" loading={http.isLoading} value={`${httpErrRate.toFixed(2)}%`} urgent={httpErrRate > 1} />
-					<StatCard label="Avg latency" loading={http.isLoading} value={ms(h?.avg_ms ?? 0)} />
-					<StatCard label="p95 latency" loading={http.isLoading} value={ms(h?.p95_ms ?? 0)} />
+					<StatCard label="Total requests" loading={http.isLoading} value={(h?.total ?? 0).toLocaleString()}
+						sub={`${allRoutes.length} distinct endpoints`} />
+					<StatCard label="Error rate (5xx)" loading={http.isLoading} value={`${httpErrRate.toFixed(2)}%`} urgent={httpErrRate > 1}
+						sub={`${(h?.errors ?? 0).toLocaleString()} server · ${(h?.client_errors ?? 0).toLocaleString()} client (4xx)`} />
+					<StatCard label="Avg latency" loading={http.isLoading} value={ms(h?.avg_ms ?? 0)} sub="target under 300ms" />
+					<StatCard label="p95 / p99 latency" loading={http.isLoading} value={ms(h?.p95_ms ?? 0)}
+						sub={`p99 ${ms(h?.p99_ms ?? 0)} · max ${ms(h?.max_ms ?? 0)}`} />
 				</div>
 			</StatsPanel>
 
@@ -86,23 +109,46 @@ export default function PerformancePage() {
 				</AsyncState>
 			</Section>
 
+			{/* The legacy page selected avg latency per bucket but never plotted it —
+			    a spike in tail latency was invisible unless it also caused errors. */}
+			<div style={{ marginTop: 'var(--space-4)' }}>
+				<Section title="Latency over time" meta={`bars = average · line = p95 · last ${range}`}>
+					<AsyncState loading={http.isLoading} error={http.error} empty={latencyChart.length === 0} emptyMsg="No requests recorded in this range." onRetry={() => void http.mutate()}>
+						<ComboBarLine data={latencyChart} height={200} valueFormatter={(v) => ms(v)} lineFormatter={(v) => ms(v)} barLabel="Avg latency" lineLabel="p95" />
+					</AsyncState>
+				</Section>
+			</div>
+
 			<div className="card" style={{ marginTop: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
 				<div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--border)', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-					<span>Endpoints <span style={{ fontWeight: 400, color: 'var(--fg-muted)', fontSize: 12 }}>· by traffic · green/amber/red = latency health</span></span>
+					<span>Endpoints <span style={{ fontWeight: 400, color: 'var(--fg-muted)', fontSize: 12 }}>
+						· {routes.length} of {allRoutes.length} · sorted by {SORT_LABELS[sortKey].toLowerCase()} · green/amber/red = latency health</span></span>
 					{(h?.errors ?? 0) > 0 && <button className="btn ghost" onClick={() => setErrRoute('all')}>View {h!.errors} errors</button>}
 				</div>
-				<AsyncState loading={http.isLoading} error={http.error} empty={(http.data?.byRoute.length ?? 0) === 0} emptyMsg="No requests in this range." onRetry={() => void http.mutate()}>
+				{/* Sorting by p95/p99 replaces the legacy "slowest endpoints" table: slow
+				    low-traffic routes were invisible when this was capped at the top 50 by volume. */}
+				<div style={{ padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+					<input className="search-input" style={{ flex: '0 0 260px', height: 30 }} placeholder="Filter by route or method…"
+						value={routeQ} onChange={(e) => setRouteQ(e.target.value)} />
+					<span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>Sort</span>
+					{(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
+						<button key={k} className={`chip ${sortKey === k ? 'on' : ''}`} onClick={() => setSortKey(k)}>{SORT_LABELS[k]}</button>
+					))}
+				</div>
+				<AsyncState loading={http.isLoading} error={http.error} empty={routes.length === 0} emptyMsg={routeQ ? 'No endpoints match that filter.' : 'No requests in this range.'} onRetry={() => void http.mutate()}>
 					<table className="data-table">
-						<thead><tr><th>Method</th><th>Route</th><th>Requests</th><th>Avg</th><th>p95</th><th>Max</th><th>Errors</th></tr></thead>
+						<thead><tr><th>Method</th><th>Route</th><th>Requests</th><th>Avg</th><th>p95</th><th>p99</th><th>Max</th><th>4xx</th><th>Errors</th></tr></thead>
 						<tbody>
-							{(http.data?.byRoute ?? []).map((r) => (
+							{routes.map((r) => (
 								<tr key={`${r.method}-${r.route}`}>
 									<td><span className="tag">{r.method}</span></td>
 									<td style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{r.route}</td>
 									<td className="num">{r.total.toLocaleString()}</td>
 									<td className="num" style={{ color: latColor(r.avg_ms, 300, 800) }}>{ms(r.avg_ms)}</td>
 									<td className="num" style={{ color: latColor(r.p95_ms, 800, 2000) }}>{ms(r.p95_ms)}</td>
+									<td className="num" style={{ color: latColor(r.p99_ms, 1500, 3000) }}>{ms(r.p99_ms)}</td>
 									<td className="num">{ms(r.max_ms)}</td>
+									<td className="num" style={{ color: 'var(--fg-muted)' }}>{r.client_errors > 0 ? r.client_errors.toLocaleString() : '—'}</td>
 									<td className="num">{r.errors > 0 ? <button className="tag neg" style={{ border: 'none', cursor: 'pointer' }} onClick={() => setErrRoute(r.route)}>{r.errors}</button> : '—'}</td>
 								</tr>
 							))}

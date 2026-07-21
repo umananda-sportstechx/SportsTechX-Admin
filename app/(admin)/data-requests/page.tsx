@@ -5,7 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
-import { PageHeader, AsyncState, StatCard, StatsPanel, Section } from '@/components/atoms';
+import { PageHeader, AsyncState, StatCard, StatsPanel, Section, Pager } from '@/components/atoms';
 import { Funnel } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
@@ -260,6 +260,7 @@ export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: 
 				</table>
 				</AsyncState>
 			</div>
+			<Pager page={page} totalPages={data?.totalPages} onPage={setPage} />
 		</div>
 	);
 }

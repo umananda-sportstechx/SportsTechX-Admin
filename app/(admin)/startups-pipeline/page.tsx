@@ -9,7 +9,7 @@ import { Select } from '@/components/select';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, StatCard, StatsPanel, Section, Tag } from '@/components/atoms';
+import { PageHeader, AsyncState, StatCard, StatsPanel, Section, Tag, Pager } from '@/components/atoms';
 import { Funnel } from '@/components/charts';
 import { StatStrip } from '@/components/filters';
 import { DateRangePicker, type RangeValue } from '@/components/date-range-picker';
@@ -35,7 +35,7 @@ interface Entry {
 	status: Status; hq_country: string | null; hq_city: string | null;
 	assigned_to: string | null; company_id: string | null; created_at: string;
 }
-interface Response { data: Entry[]; total: number }
+interface Response { data: Entry[]; total: number; totalPages?: number }
 interface DedupeMatch { id: string; name: string; website: string | null; slug: string | null; status: string | null }
 interface Preview { matches: DedupeMatch[]; prefill: { name: string; website: string; description: string; hq_country: string; hq_city: string } }
 
@@ -48,6 +48,7 @@ export default function StartupsPipelinePage() {
 	const { mutate } = useSWRConfig();
 	const ask = useConfirm();
 	const [status, setStatus] = useState<Status | ''>('new');
+	const [page, setPage] = useState(1);
 	const [assigned, setAssigned] = useState('');
 	const [search, setSearch] = useState('');
 	const debouncedSearch = useDebouncedValue(search);
@@ -60,7 +61,7 @@ export default function StartupsPipelinePage() {
 	const [promoting, setPromoting] = useState<Entry | null>(null);
 
 	const { data, error, isLoading } = useSWR<Response>(
-		['/api/admin/startups-pipeline', { status: status || undefined, assigned_to: assigned || undefined, q: debouncedSearch || undefined, from: from || undefined, to: to || undefined, limit: 50 }],
+		['/api/admin/startups-pipeline', { status: status || undefined, assigned_to: assigned || undefined, q: debouncedSearch || undefined, from: from || undefined, to: to || undefined, page, limit: 50 }],
 		{ dedupingInterval: 15_000 },
 	);
 	const [statsRange, setStatsRange] = useState<RangeValue>({});
@@ -149,7 +150,7 @@ export default function StartupsPipelinePage() {
 			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)', gap: 8, flexWrap: 'wrap' }}>
 				{TABS.map((t) => <button key={t.key} className={`chip ${status === t.key ? 'on' : ''}`} onClick={() => setStatus(t.key)}>{t.label}</button>)}
 				<Select value={assigned} onChange={setAssigned} searchable width={190} options={[{ value: '', label: 'Any assignee' }, { value: 'unassigned', label: 'Unassigned' }, ...admins.map((a) => ({ value: a.id, label: a.full_name || a.display_name || a.email }))]} />
-				<input className="search-input" style={{ flex: '0 0 200px', height: 30 }} placeholder="Search name / site…" value={search} onChange={(e) => setSearch(e.target.value)} />
+				<input className="search-input" style={{ flex: '0 0 200px', height: 30 }} placeholder="Search name / site…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
 				<input className="search-input" type="date" style={{ height: 30 }} value={from} onChange={(e) => setFrom(e.target.value)} title="Added from" />
 				<input className="search-input" type="date" style={{ height: 30 }} value={to} onChange={(e) => setTo(e.target.value)} title="Added to" />
 				<div style={{ flex: 1 }} />
@@ -208,6 +209,7 @@ export default function StartupsPipelinePage() {
 						</tbody>
 					</table>
 				</AsyncState>
+			<Pager page={page} totalPages={data?.totalPages} onPage={setPage} />
 			</div>
 		</div>
 	);

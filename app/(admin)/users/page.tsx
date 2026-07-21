@@ -24,7 +24,7 @@ interface UserAnalytics {
 	conversion: { total: number; trials: number; paid: number; paid_from_trial?: number; paid_direct?: number; free_to_trial_pct: number; trial_to_paid_pct: number };
 	churn: { churned: number; active: number; churn_rate_pct: number; avg_lifetime_days: number | null };
 	login_recency: Bucket[]; signup_recency: Bucket[]; login_frequency: Bucket[];
-	report_downloads: { total: number; unique_users: number; last_30d: number; in_range?: number; unique_users_in_range?: number; top_reports: Bucket[]; daily_trend: Bucket[]; weekly_trend?: Bucket[]; by_day_of_week?: Bucket[] };
+	report_downloads: { total: number; unique_users: number; last_30d: number; in_range?: number; unique_users_in_range?: number; top_reports: Bucket[]; daily_trend: Bucket[]; by_day_of_week?: Bucket[] };
 }
 const FREQ_BUCKETS: Record<string, 'never' | 'once' | '2-5' | '6+'> = { 'never (0)': 'never', once: 'once', '2-5': '2-5', '6+': '6+' };
 const TIERS = ['free', 'growth', 'pro'] as const;
@@ -504,7 +504,7 @@ interface SignupAnalytics {
 	total: number; first_signup: string | null;
 	avg_per_week: number; avg_per_month: number;
 	new_by_plan: Array<{ label: string; plan: string; value: number }>;
-	paying: { trialed_ever: number; trialing_now: number; paid_now: number; paid_ever: number };
+	paying: { trialed_ever: number; trialing_now: number; paid_now: number; paid_ever: number; paid_from_trial: number };
 }
 const SIGNUP_RANGES = [
 	{ key: '7d', label: 'Last 7 days' }, { key: '30d', label: 'Last 30 days' },
@@ -580,9 +580,12 @@ function SignupBehaviour() {
 					sub={`${(d?.paying.trialed_ever ?? 0).toLocaleString()} have ever trialed`} />
 				<StatCard label="Paying now" loading={isLoading} value={(d?.paying.paid_now ?? 0).toLocaleString()} tone="pos"
 					sub={`${(d?.paying.paid_ever ?? 0).toLocaleString()} paid ever (incl. churned)`} />
+				{/* Numerator must be payers who actually trialed. Dividing ALL payers by
+				    trialers read 165% here while the Engagement tab, using the fixed
+				    server value, showed 51.9% — the same page contradicting itself. */}
 				<StatCard label="Trial → paid" loading={isLoading}
-					value={`${d?.paying.trialed_ever ? (((d.paying.paid_now) / d.paying.trialed_ever) * 100).toFixed(1) : '0.0'}%`}
-					sub="of everyone who trialed" />
+					value={`${d?.paying.trialed_ever ? (((d.paying.paid_from_trial ?? 0) / d.paying.trialed_ever) * 100).toFixed(1) : '0.0'}%`}
+					sub={`${((d?.paying.paid_now ?? 0) - (d?.paying.paid_from_trial ?? 0)).toLocaleString()} more bought without trialing`} />
 				<StatCard label="Signup → trial" loading={isLoading}
 					value={`${d?.total ? (((d.paying.trialed_ever) / d.total) * 100).toFixed(1) : '0.0'}%`}
 					sub={`of ${(d?.total ?? 0).toLocaleString()} accounts`} />
@@ -654,7 +657,10 @@ function ReportsAnalytics() {
 	const topSeg = toSegments(dl?.top_reports ?? []);
 	const dowSeg = toSegments(dl?.by_day_of_week ?? []);
 	const monthly = (rs.data?.monthly_trend ?? []).map((b) => ({ label: b.label.slice(2), amt: b.value, deals: b.value }));
-	const daily = (dl?.daily_trend ?? []).map((b) => ({ label: b.label, amt: b.value, deals: b.value }));
+	const daily = (dl?.daily_trend ?? []).map((b) => ({
+		label: new Date(b.label).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+		amt: b.value, deals: b.value,
+	}));
 
 	return (
 		<>
@@ -717,7 +723,7 @@ function ReportsAnalytics() {
 			</div>
 
 			<div style={{ marginBottom: 'var(--space-5)' }}>
-				<Section title="By day of week" meta="last 90 days">
+				<Section title="By day of week" meta="in the selected window">
 					<AsyncState loading={an.isLoading} error={an.error} empty={dowSeg.length === 0} emptyMsg="No data" onRetry={() => void an.mutate()}>
 						<PieDonut segments={dowSeg} mode="bar" />
 					</AsyncState>

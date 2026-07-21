@@ -36,7 +36,7 @@ const secs = (n: number | null): string => {
 };
 const when = (v: string | null): string => (v ? new Date(v).toLocaleString() : '—');
 
-type EndpointKey = 'apolloBatch' | 'attioSync' | 'recommendations' | 'apolloEnrich' | 'digestEmail' | 'sweepStuck';
+type EndpointKey = 'apolloBatch' | 'attioSync' | 'recommendations' | 'apolloEnrich' | 'digestEmail' | 'sweepStuck' | 'embedReports';
 
 const ENDPOINTS: Array<{ key: EndpointKey; label: string; desc: string; path: string; needsId?: boolean }> = [
 	{
@@ -71,6 +71,13 @@ const ENDPOINTS: Array<{ key: EndpointKey; label: string; desc: string; path: st
 		path: '/api/admin/jobs/digest-email',
 	},
 	{
+		// POST /api/admin/embeddings/backfill-reports had no UI anywhere in the panel.
+		key: 'embedReports',
+		label: 'Backfill report embeddings',
+		desc: 'Re-embed every published report so semantic search and chat can find them.',
+		path: '/api/admin/embeddings/backfill-reports',
+	},
+	{
 		key: 'sweepStuck',
 		label: 'Sweep stuck jobs',
 		desc: 'Re-queue jobs stuck past their timeout (otherwise every 5 min).',
@@ -92,13 +99,20 @@ export default function JobsPage() {
 	const byQueue = history.data?.by_queue ?? [];
 	const openCount = byStatus.filter((b) => b.status !== 'completed').reduce((n, b) => n + b.count, 0);
 	const total = byStatus.reduce((n, b) => n + b.count, 0);
+	const lastActivity = byQueue.reduce<string | null>(
+		(max, q) => (q.last_run && (!max || q.last_run > max) ? q.last_run : max), null);
 
 	const run = async (endpoint: typeof ENDPOINTS[number]) => {
 		setRunningKey(endpoint.key);
 		try {
 			const path = endpoint.needsId ? `${endpoint.path}/${enrichId}` : endpoint.path;
-			const res = await api<{ jobLogId: string; bullJobId: string | null }>('POST', path);
-			toast.success(`Queued ${endpoint.label}: job ${res.jobLogId.slice(0, 8)}`);
+			// Not every job endpoint returns a job-log id — the embeddings backfill
+			// reports a count instead, and blind .slice() on it would throw.
+			const res = await api<{ jobLogId?: string; bullJobId?: string | null; enqueued?: number }>('POST', path);
+			const detail = res.jobLogId ? `job ${res.jobLogId.slice(0, 8)}`
+				: res.enqueued != null ? `${res.enqueued} queued`
+				: 'queued';
+			toast.success(`${endpoint.label}: ${detail}`);
 			void history.mutate();
 		} catch (e) {
 			toast.error((e as Error).message);
@@ -120,8 +134,10 @@ export default function JobsPage() {
 				<StatCard label="Not completed" loading={history.isLoading} value={openCount.toLocaleString()}
 					urgent={openCount > 0} sub="pending, running or stuck" />
 				<StatCard label="Queues seen" loading={history.isLoading} value={byQueue.length.toLocaleString()} />
+				{/* From the unfiltered per-queue rollup — rows[] is status-filtered, so
+				    using it made this KPI jump when a status chip was clicked. */}
 				<StatCard label="Last activity" loading={history.isLoading}
-					value={rows[0] ? new Date(rows[0].created_at).toLocaleDateString() : '—'} />
+					value={lastActivity ? new Date(lastActivity).toLocaleDateString() : '—'} />
 			</StatStrip>
 
 			<div className="grid-2">

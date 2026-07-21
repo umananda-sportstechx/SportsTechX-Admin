@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState, StatCard, StatsPanel, Section } from '@/components/atoms';
+import { PageHeader, PillTabs, AsyncState, StatCard, StatsPanel, Section } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, Funnel, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 
@@ -134,8 +134,6 @@ export function UsersView({ view }: { view: 'directory' | 'stats' | 'charts' }) 
 	const users = data?.data ?? [];
 	return (
 		<div>
-			<PageHeader kicker={`Identity · ${(stats.data?.total ?? data?.total ?? 0).toLocaleString()} total`} title="Users" />
-
 			{view === 'stats' && (<>
 			<StatsPanel>
 				<StatStrip cols={4}>
@@ -514,4 +512,65 @@ function ReportUsersModal({ onClose }: { onClose: () => void }) {
 }
 
 
-export default function UsersAdminPage() { return <UsersView view="directory" />; }
+// ─── Mixpanel embed ──────────────────────────────────────────────────────────
+// NOTE: the embed URL carries a passcode, so it ships in the client bundle.
+// Move it to NEXT_PUBLIC_MIXPANEL_EMBED (or proxy it) if that's a concern.
+const MIXPANEL_EMBED = process.env.NEXT_PUBLIC_MIXPANEL_EMBED
+	?? 'https://eu.mixpanel.com/p/7MkWY37CUE2uzv89QtV1YT?embed=true&passcode=Sportstechx%4012345';
+
+function MixpanelEmbed() {
+	return (
+		<div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+			<iframe src={MIXPANEL_EMBED} title="Mixpanel Dashboard" style={{ width: '100%', height: '78vh', border: 0, display: 'block' }} />
+		</div>
+	);
+}
+
+// ─── Tabbed shell ────────────────────────────────────────────────────────────
+const TABS = [
+	{ key: 'directory', label: 'Directory' },
+	{ key: 'signups', label: 'Signups & subscription' },
+	{ key: 'engagement', label: 'Engagement' },
+	{ key: 'mixpanel', label: 'Mixpanel' },
+] as const;
+type TabKey = (typeof TABS)[number]['key'];
+
+const SUBTITLES: Record<TabKey, string> = {
+	directory: 'Search, filter and manage every account — roles, tiers, trials and access.',
+	signups: 'Signup volume, tier mix and the analytics window.',
+	engagement: 'Auth activity, conversion, churn, recency/frequency and report downloads.',
+	mixpanel: 'Live product analytics from Mixpanel.',
+};
+
+export default function UsersAdminPage() {
+	const [tab, setTab] = useState<TabKey>('directory');
+	const stats = useSWR<UserStats>(['/api/admin/stats/users'], { dedupingInterval: 60_000 });
+
+	useEffect(() => {
+		const t = new URLSearchParams(window.location.search).get('tab');
+		if (t && TABS.some((x) => x.key === t)) setTab(t as TabKey);
+	}, []);
+	const onTab = (t: TabKey) => {
+		setTab(t);
+		const url = new URL(window.location.href);
+		url.searchParams.set('tab', t);
+		window.history.replaceState(null, '', url.toString());
+	};
+
+	return (
+		<div>
+			<PageHeader
+				kicker={`Identity · ${(stats.data?.total ?? 0).toLocaleString()} users`}
+				title="User analytics"
+				subtitle={SUBTITLES[tab]}
+			/>
+			<PillTabs tabs={TABS.map((t) => ({ key: t.key, label: t.label }))} value={tab} onChange={onTab} />
+			<div style={{ marginTop: 'var(--space-4)' }}>
+				{tab === 'directory' && <UsersView view="directory" />}
+				{tab === 'signups' && <UsersView view="stats" />}
+				{tab === 'engagement' && <UsersView view="charts" />}
+				{tab === 'mixpanel' && <MixpanelEmbed />}
+			</div>
+		</div>
+	);
+}

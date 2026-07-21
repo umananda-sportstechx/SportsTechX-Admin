@@ -310,6 +310,10 @@ export function ComboBarLine({
 	const maxDeals = Math.max(1, ...data.map((d) => d.deals)) * 1.15;
 
 	const bw = Math.min(54, (innerW / Math.max(data.length, 1)) * 0.55);
+	// Render at most one label per ~46px of canvas; with a year of daily points every
+	// label would otherwise overlap into an unreadable smear.
+	const labelStep = Math.max(1, Math.ceil(data.length / Math.max(1, innerW / 46)));
+	const showLabel = (i: number) => i % labelStep === 0 || i === data.length - 1;
 	const xFor = (i: number) => PAD_L + (i + 0.5) * (innerW / Math.max(data.length, 1));
 	const yBar = (v: number) => PAD_T + innerH - (v / maxAmt) * innerH;
 	const yLine = (v: number) => PAD_T + innerH - (v / maxDeals) * innerH;
@@ -324,7 +328,7 @@ export function ComboBarLine({
 	};
 
 	return (
-		<div className="cbl-wrap" ref={wrapRef} style={scrolls ? { overflowX: 'auto' } : undefined}>
+		<div className="cbl-wrap" ref={wrapRef} style={scrolls ? { overflowX: 'auto', maxWidth: '100%' } : undefined}>
 			<svg viewBox={`0 0 ${W} ${H}`} width={scrolls ? W : '100%'} height={scrolls ? H : undefined} style={{ display: 'block' }} preserveAspectRatio="xMidYMid meet">
 				{/* Grid */}
 				{[0, 0.25, 0.5, 0.75, 1].map((t) => (
@@ -378,6 +382,7 @@ export function ComboBarLine({
 								fill="var(--fg)"
 								fontFamily="var(--font-mono)"
 								pointerEvents="none"
+								opacity={showLabel(i) ? 1 : 0}
 							>
 								{fmtAmt(d.amt)}
 							</text>
@@ -389,7 +394,7 @@ export function ComboBarLine({
 								fontFamily="var(--font-mono)"
 								fill="var(--fg-muted)"
 							>
-								{d.year ?? d.label}
+								{showLabel(i) ? (d.year ?? d.label) : ''}
 							</text>
 						</g>
 					);

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
-import { Section, StatCard, StatsPanel, AsyncState, Tag } from '@/components/atoms';
+import { PageHeader, Section, StatCard, StatsPanel, AsyncState, Tag } from '@/components/atoms';
 
 /**
  * Admin-wide credit usage — everyone's spend rolled up over the last 30 days
@@ -65,12 +65,11 @@ export default function CreditUsagePage() {
 
 	return (
 		<div style={{ display: 'grid', gap: 'var(--space-4)' }}>
-			<div>
-				<h1 style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em', margin: 0 }}>Credit usage</h1>
-				<p style={{ fontSize: 13, color: 'var(--fg-muted)', margin: '4px 0 0' }}>
-					Everyone&apos;s credit spend over the last 30 days — AI features, direct exports and CRM syncs.
-				</p>
-			</div>
+			<PageHeader
+				kicker="Billing · last 30 days"
+				title="Credit usage"
+				subtitle="Everyone's credit spend over the last 30 days — AI features, direct exports and CRM syncs."
+			/>
 
 			<StatsPanel>
 				<div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--space-4)' }}>

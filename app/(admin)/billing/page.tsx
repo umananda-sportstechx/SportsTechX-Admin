@@ -226,7 +226,10 @@ export default function BillingAdminPage() {
 }
 
 interface Funnel {
-	overall: { total: number; ever_trialed: number; paid: number; free_to_trial_pct: number; trial_to_paid_pct: number };
+	overall: { total: number; ever_trialed: number; paid: number; free_to_trial_pct: number; trial_to_paid_pct: number
+	paid_from_trial?: number;
+	paid_direct?: number;
+};
 	by_plan: Array<{ tier: string | null; trialing: number; paid: number }>;
 }
 

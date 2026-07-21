@@ -37,6 +37,12 @@ interface Plan {
 
 interface PlansResponse { data: Plan[] }
 
+/** price_amount is stored in minor units (cents). */
+const money = (cents: number, currency: string): string => {
+	try { return new Intl.NumberFormat(undefined, { style: 'currency', currency: (currency || 'EUR').toUpperCase() }).format((cents ?? 0) / 100); }
+	catch { return `${((cents ?? 0) / 100).toFixed(2)} ${currency}`; }
+};
+
 export default function PlansEditorialPage() {
 	const { mutate } = useSWRConfig();
 	const ask = useConfirm();
@@ -64,35 +70,56 @@ export default function PlansEditorialPage() {
 			{creating && <CreateModal onClose={() => setCreating(false)} onSaved={() => { setCreating(false); void refresh(); }} />}
 			{editing && <EditModal plan={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void refresh(); }} />}
 
-			<AsyncState loading={isLoading} error={error} empty={rows.length === 0} emptyMsg="No plans yet — create one or run the Stripe sync." onRetry={() => void refresh()}>
+			<AsyncState loading={isLoading} error={error} empty={rows.length === 0} emptyMsg="No plans yet — create one to provision a Stripe product + price." onRetry={() => void refresh()}>
 			<div style={{ display: 'grid', gap: 12 }}>
 				{rows.map((p) => (
-					<div key={p.id} className="card" style={{ padding: 'var(--space-4)' }}>
-						<div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 8 }}>
-							<div>
-								<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+					<div key={p.id} className="card" style={{ padding: 'var(--space-4)', opacity: p.is_active ? 1 : 0.62, borderLeft: `3px solid ${p.is_active ? 'var(--pos)' : 'var(--border)'}` }}>
+						<div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 8, flexWrap: 'wrap' }}>
+							<div style={{ minWidth: 0 }}>
+								<div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
 									<div style={{ fontWeight: 700, fontSize: 16 }}>{p.name}</div>
 									<span className="chip">{p.tier}</span>
-									<span className="chip">{p.billing_interval}</span>
-									{!p.is_active && <span className="chip" style={{ color: 'var(--accent)' }}>inactive</span>}
+									{p.billing_interval && <span className="chip">{p.billing_interval}</span>}
+									{!p.is_active && <span className="chip" style={{ color: 'var(--accent)' }}>archived</span>}
 								</div>
 								{p.tagline && <div style={{ fontSize: 13, color: 'var(--fg-2)', marginTop: 4 }}>{p.tagline}</div>}
 							</div>
-							<div style={{ display: 'flex', gap: 6 }}>
-							<button className="btn" onClick={() => setEditing(p)}>Edit editorial</button>
-							{p.is_active !== false && <button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => void archive(p)}>Archive</button>}
+							<div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+								<button className="btn" onClick={() => setEditing(p)}>Edit editorial</button>
+								{p.is_active !== false && <button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => void archive(p)}>Archive</button>}
+							</div>
 						</div>
+
+						<div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '10px 0 14px' }}>
+							<span style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 800, letterSpacing: '-0.02em' }}>{money(p.price_amount, p.currency_code)}</span>
+							{p.billing_interval && <span style={{ fontSize: 13, color: 'var(--fg-muted)' }}>/ {p.billing_interval === 'yearly' ? 'year' : 'month'}</span>}
+							{p.trial_days > 0 && <span className="tag" style={{ marginLeft: 4 }}>{p.trial_days}-day trial</span>}
 						</div>
-						<div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginTop: 12, fontSize: 12 }}>
-							<Stat label="Price" value={`${(p.price_amount / 100).toFixed(2)} ${p.currency_code}`} />
-							<Stat label="AI credits / mo" value={p.ai_credits_monthly} />
-							<Stat label="Integration credits / mo" value={p.integration_credits_monthly} />
-							<Stat label="Stripe price" value={<span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{p.stripe_price_id ? `${p.stripe_price_id.slice(0, 14)}…` : '—'}</span>} />
+
+						<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, fontSize: 12 }}>
+							<Stat label="AI credits / mo" value={p.ai_credits_monthly.toLocaleString()} />
+							<Stat label="Integration credits / mo" value={p.integration_credits_monthly.toLocaleString()} />
+							<Stat label="Sort order" value={p.sort_order} />
+							<Stat
+								label="Stripe"
+								value={p.stripe_price_id
+									? <span title={p.stripe_price_id} style={{ color: 'var(--pos)' }}>● Linked</span>
+									: <span style={{ color: 'var(--fg-muted)' }}>Not linked</span>}
+							/>
 						</div>
+
+						{p.allows_overage_billing && (
+							<div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)', display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 12 }}>
+								<span className="co-stat-label">Overage billing</span>
+								<span>AI <strong>{p.ai_overage_price_cents != null ? `${(p.ai_overage_price_cents / 100).toFixed(2)} ${p.currency_code}` : '—'}</strong> / credit</span>
+								<span>Integration <strong>{p.integration_overage_price_cents != null ? `${(p.integration_overage_price_cents / 100).toFixed(2)} ${p.currency_code}` : '—'}</strong> / credit</span>
+							</div>
+						)}
+
 						{p.feature_highlights && p.feature_highlights.length > 0 && (
 							<div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
-								<div className="co-stat-label" style={{ marginBottom: 4 }}>Feature highlights</div>
-								<ul style={{ paddingLeft: 20, margin: 0, fontSize: 13 }}>
+								<div className="co-stat-label" style={{ marginBottom: 6 }}>Feature highlights</div>
+								<ul style={{ paddingLeft: 18, margin: 0, fontSize: 13, display: 'grid', gap: 3 }}>
 									{p.feature_highlights.map((f, i) => <li key={i}>{f}</li>)}
 								</ul>
 							</div>

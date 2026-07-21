@@ -65,14 +65,8 @@ const SALES_NAV: NavItem[] = [
 ];
 
 const PERFORMANCE_NAV: NavItem[] = [
-	{
-		label: 'User analytics', Icon: BarChart3, children: [
-			{ href: '/users', label: 'Directory' },
-			{ href: '/users/subscription', label: 'Signups & subscription' },
-			{ href: '/users/engagement', label: 'Engagement' },
-			{ href: '/users/mixpanel', label: 'Mixpanel' },
-		],
-	},
+	// One entry with in-page sub-tabs (Directory / Signups / Engagement / Mixpanel).
+	{ label: 'User analytics', href: '/users', Icon: BarChart3 },
 	{ label: 'Performance', href: '/performance', Icon: Gauge },
 	{ label: 'Activity analytics', href: '/analytics', Icon: Activity },
 	{ label: 'AI usage & cost', href: '/ai-usage', Icon: Receipt },

@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Receipt, RefreshCw, Save, Plus } from 'lucide-react';
 import { api } from '@/lib/api';
-import { StatsPanel } from '@/components/atoms';
+import { PageHeader, StatCard, StatsPanel, Section, AsyncState } from '@/components/atoms';
+import { ComboBarLine } from '@/components/charts';
 
 /**
  * AI usage & cost ledger.
@@ -35,7 +36,25 @@ interface FeatureRow {
 	tokens: string;
 }
 interface DayRow { day: string; usd: string }
-interface Summary { totals: Totals; byFeature: FeatureRow[]; byDay: DayRow[] }
+interface ModelRow { provider: string; model: string; calls: number; usd: string; tokens: string }
+interface UserRow {
+	profile_id: string | null; profile_name: string | null; profile_email: string | null;
+	profile_tier: string | null; profile_is_admin: boolean | null;
+	calls: number; usd: string; credited_usd: string; uncredited_usd: string; credits_charged: string;
+}
+interface Summary {
+	totals: Totals; byFeature: FeatureRow[]; byDay: DayRow[];
+	byModel: ModelRow[]; byUser: UserRow[];
+}
+
+// The summary endpoint has always accepted from/to; the page just never sent them.
+const RANGES = [
+	{ key: '7d', label: '7 days', days: 7 },
+	{ key: '30d', label: '30 days', days: 30 },
+	{ key: '90d', label: '90 days', days: 90 },
+	{ key: 'all', label: 'All time', days: 3650 },
+] as const;
+type RangeKey = (typeof RANGES)[number]['key'];
 
 interface LedgerRow {
 	id: string;
@@ -65,8 +84,11 @@ const num = (v: string | number | undefined) => Number(v ?? 0).toLocaleString();
 
 export default function AiUsagePage() {
 	const router = useRouter();
-	const { data: summary, mutate: mutateSummary, isLoading } = useSWR<Summary>(
-		['/api/admin/ai-usage/summary'],
+	const [range, setRange] = useState<RangeKey>('30d');
+	const days = RANGES.find((r) => r.key === range)?.days ?? 30;
+	const from = new Date(Date.now() - days * 86_400_000).toISOString();
+	const { data: summary, mutate: mutateSummary, isLoading, error } = useSWR<Summary>(
+		['/api/admin/ai-usage/summary', { from }],
 		{ dedupingInterval: 30_000 },
 	);
 	const { data: recent, mutate: mutateRecent } = useSWR<LedgerRow[]>(
@@ -75,24 +97,27 @@ export default function AiUsagePage() {
 	);
 
 	const t = summary?.totals;
+	const spendChart = (summary?.byDay ?? []).map((d) => {
+		const v = Number(d.usd);
+		return { label: new Date(d.day).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), amt: v, deals: v };
+	});
+	const byModel = summary?.byModel ?? [];
+	const byUser = summary?.byUser ?? [];
 	const refresh = () => { void mutateSummary(); void mutateRecent(); };
 
 	return (
 		<div>
-			<div style={{ marginBottom: 'var(--space-5)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-				<div>
-					<div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>
-						<Receipt size={11} style={{ verticalAlign: '-1px' }} /> AI usage · last 30 days
-					</div>
-					<h1 style={{ fontFamily: 'var(--font-display)', fontSize: 38, fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1, margin: 0 }}>
-						AI usage & cost ledger
-					</h1>
-					<p style={{ fontSize: 14, color: 'var(--fg-2)', maxWidth: 720, margin: '6px 0 0' }}>
-						Token spend across every Anthropic + Voyage call. <b>Credited</b> = charged to the
-						user&apos;s credits; <b>uncredited</b> = company-borne (embeddings, report generation,
-						background jobs). Edit model pricing and the credit conversion rate below.
-					</p>
-				</div>
+			<PageHeader
+				kicker={`Operations · last ${RANGES.find((r) => r.key === range)?.label.toLowerCase()}`}
+				title="AI usage & cost ledger"
+				subtitle="Token spend across every Anthropic + Voyage call. Credited = charged to the user's credits; uncredited = company-borne (embeddings, report generation, background jobs). Edit model pricing and the credit conversion rate below."
+			/>
+
+			<div className="filter-bar" style={{ marginBottom: 'var(--space-4)' }}>
+				{RANGES.map((r) => (
+					<button key={r.key} className={`chip ${range === r.key ? 'on' : ''}`} onClick={() => setRange(r.key)}>{r.label}</button>
+				))}
+				<div style={{ flex: 1 }} />
 				<button className="btn ghost" onClick={refresh}><RefreshCw size={12} /> Refresh</button>
 			</div>
 
@@ -101,7 +126,8 @@ export default function AiUsagePage() {
 				<div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 'var(--space-3)' }}>
 					<StatCard label="Total spend" value={usd(t?.total_usd)} loading={isLoading} />
 					<StatCard label="Credited (user-paid)" value={usd(t?.credited_usd)} loading={isLoading} />
-					<StatCard label="Uncredited (company)" value={usd(t?.uncredited_usd)} accent loading={isLoading} />
+					<StatCard label="Uncredited (company)" value={usd(t?.uncredited_usd)} urgent loading={isLoading}
+						sub={t ? `${((Number(t.uncredited_usd) / Math.max(Number(t.total_usd), 1e-9)) * 100).toFixed(0)}% of spend not recovered` : undefined} />
 					<StatCard label="AI calls" value={num(t?.calls)} loading={isLoading} />
 					<StatCard label="Credits charged" value={num(t?.credits_charged)} loading={isLoading} />
 				</div>
@@ -109,6 +135,19 @@ export default function AiUsagePage() {
 
 			{/* Cost configuration */}
 			<PricingConfig />
+
+			{/* byDay was already computed server-side and shipped to the client on every
+			    load; nothing rendered it, so the cost trend was invisible. */}
+			<div style={{ marginBottom: 'var(--space-4)' }}>
+				<Section title="Spend over time" meta="USD per day">
+					<AsyncState loading={isLoading} error={error} empty={spendChart.length === 0}
+						emptyMsg="No AI spend recorded in this range." onRetry={() => void mutateSummary()}>
+						<ComboBarLine data={spendChart} height={200} minBand={spendChart.length > 45 ? 14 : 0}
+							valueFormatter={(v) => usd(v)} lineFormatter={(v) => usd(v)}
+							barLabel="Spend" lineLabel="spend" />
+					</AsyncState>
+				</Section>
+			</div>
 
 			{/* By feature */}
 			<div className="card" style={{ padding: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
@@ -130,6 +169,62 @@ export default function AiUsagePage() {
 						)}
 					</tbody>
 				</table>
+			</div>
+
+			{/* Model pricing is editable above, but nothing showed what each model
+			    actually costs — nor which users drive the uncredited majority. */}
+			<div className="grid-2" style={{ marginBottom: 'var(--space-4)' }}>
+				<Section title="Spend by model" meta="rates editable above" padded={false}>
+					<AsyncState loading={isLoading} error={error} empty={byModel.length === 0} emptyMsg="No AI usage in this range." onRetry={() => void mutateSummary()}>
+						<table className="data-table">
+							<thead><tr><th>Model</th><th style={{ textAlign: 'right' }}>Calls</th><th style={{ textAlign: 'right' }}>Tokens</th><th style={{ textAlign: 'right' }}>Cost</th></tr></thead>
+							<tbody>
+								{byModel.map((m) => (
+									<tr key={`${m.provider}:${m.model}`}>
+										<td>
+											<div style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{m.model}</div>
+											<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{m.provider}</div>
+										</td>
+										<td className="num" style={{ textAlign: 'right' }}>{num(m.calls)}</td>
+										<td className="num" style={{ textAlign: 'right', color: 'var(--fg-muted)' }}>{num(m.tokens)}</td>
+										<td className="num" style={{ textAlign: 'right', fontWeight: 600 }}>{usd(m.usd)}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</AsyncState>
+				</Section>
+
+				<Section title="Spend by user" meta="top 50 · who drives the cost" padded={false}>
+					<AsyncState loading={isLoading} error={error} empty={byUser.length === 0} emptyMsg="No AI usage in this range." onRetry={() => void mutateSummary()}>
+						<div className="table-scroll">
+							<table className="data-table">
+								<thead><tr><th>User</th><th style={{ textAlign: 'right' }}>Calls</th><th style={{ textAlign: 'right' }}>Cost</th><th style={{ textAlign: 'right' }}>Unrecovered</th></tr></thead>
+								<tbody>
+									{byUser.map((u) => (
+										<tr key={u.profile_id ?? 'system'}>
+											<td>
+												{u.profile_id ? (
+													<>
+														<div>{u.profile_name || u.profile_email || u.profile_id.slice(0, 8)}</div>
+														<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>
+															{u.profile_is_admin ? 'Admin' : (u.profile_tier ?? 'free')}
+														</div>
+													</>
+												) : <span style={{ color: 'var(--fg-muted)' }}>system / background</span>}
+											</td>
+											<td className="num" style={{ textAlign: 'right' }}>{num(u.calls)}</td>
+											<td className="num" style={{ textAlign: 'right', fontWeight: 600 }}>{usd(u.usd)}</td>
+											<td className="num" style={{ textAlign: 'right', color: Number(u.uncredited_usd) > 0 ? 'var(--accent)' : 'var(--fg-muted)' }}>
+												{usd(u.uncredited_usd)}
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					</AsyncState>
+				</Section>
 			</div>
 
 			{/* Recent rows */}
@@ -326,13 +421,3 @@ function ModelRow({ initial, isNew, onSaved }: { initial: PricingModel; isNew?: 
 	);
 }
 
-function StatCard({ label, value, accent, loading }: { label: string; value: string; accent?: boolean; loading?: boolean }) {
-	return (
-		<div className="card" style={{ padding: 'var(--space-4)' }}>
-			<div className="co-stat-label">{label}</div>
-			<div style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.01em', color: accent ? 'var(--accent)' : undefined }}>
-				{loading ? '…' : value}
-			</div>
-		</div>
-	);
-}

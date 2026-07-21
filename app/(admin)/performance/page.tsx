@@ -32,6 +32,29 @@ const RANGES = ['1h', '6h', '24h', '7d', '30d'] as const;
 type Range = (typeof RANGES)[number];
 const OBSERVABILITY_URL = 'https://supabase.com/dashboard/project/lipxxbmiusdluagossxa/advisors/performance';
 
+type Health = { tone: 'ok' | 'warn' | 'crit'; label: string; detail: string };
+const HEALTH_TONE: Record<Health['tone'], { color: string; text: string }> = {
+	ok: { color: 'var(--pos)', text: 'Healthy' },
+	warn: { color: 'var(--warn)', text: 'Degraded' },
+	crit: { color: 'var(--neg)', text: 'Unhealthy' },
+};
+/** Roll error rate + tail latency into one verdict against the stated targets. */
+function health(errRate: number, p95: number, total: number): Health {
+	if (!total) return { tone: 'ok', label: 'No traffic', detail: 'Nothing recorded in this range yet.' };
+	if (errRate > 1 || p95 > 2000) {
+		return { tone: 'crit', label: 'Unhealthy', detail: errRate > 1 ? `5xx rate ${errRate.toFixed(2)}% is over the 1% ceiling` : `p95 ${Math.round(p95)}ms is over the 2s ceiling` };
+	}
+	if (errRate > 0.1 || p95 > 800) {
+		return { tone: 'warn', label: 'Degraded', detail: errRate > 0.1 ? `5xx rate ${errRate.toFixed(2)}% is above the 0.1% target` : `p95 ${Math.round(p95)}ms is above the 800ms target` };
+	}
+	return { tone: 'ok', label: 'Healthy', detail: `5xx rate ${errRate.toFixed(2)}% and p95 ${Math.round(p95)}ms are both within target` };
+}
+
+// Method colours mirror common API-tool conventions so the verb reads at a glance.
+const METHOD_TONE: Record<string, string> = {
+	GET: 'var(--pos)', POST: '#6CA8FF', PATCH: 'var(--warn)', PUT: 'var(--warn)', DELETE: 'var(--neg)',
+};
+
 function ms(v: string | number | null): string {
 	const n = typeof v === 'string' ? Number(v) : v;
 	if (n == null || Number.isNaN(n)) return '—';
@@ -56,6 +79,7 @@ export default function PerformancePage() {
 
 	const h = http.data?.summary;
 	const httpErrRate = h && h.total > 0 ? (h.errors / h.total) * 100 : 0;
+	const hp = health(httpErrRate, h?.p95_ms ?? 0, h?.total ?? 0);
 	const timelineChart = (http.data?.timeline ?? []).map((t) => ({ label: t.label, amt: t.total, deals: t.errors }));
 	// Latency over time — bars are the average, the line traces p95 so a spike in
 	// tail latency is visible even when the average stays flat.
@@ -63,10 +87,12 @@ export default function PerformancePage() {
 
 	// Search + sort every route client-side; the API now returns all of them.
 	const allRoutes = http.data?.byRoute ?? [];
+	// Scale the inline latency bars against the slowest route currently shown.
 	const routes = allRoutes
 		.filter((r) => !routeQ || r.route.toLowerCase().includes(routeQ.toLowerCase()) || r.method.toLowerCase() === routeQ.toLowerCase())
 		.slice()
 		.sort((a, b) => b[sortKey] - a[sortKey]);
+	const worstP95 = routes.reduce((m, r) => Math.max(m, r.p95_ms), 0);
 
 	const summary = data?.summary ?? [];
 	const slowest = data?.slowest ?? [];
@@ -90,6 +116,25 @@ export default function PerformancePage() {
 				<a className="btn ghost" href={OBSERVABILITY_URL} target="_blank" rel="noopener noreferrer"><ExternalLink size={12} /> Supabase observability</a>
 			</div>
 
+			{/* One-line verdict so the page answers "is anything wrong?" before the
+			    reader has to compare four numbers against remembered thresholds. */}
+			<div className="card" style={{
+				marginBottom: 'var(--space-4)', padding: 'var(--space-4)',
+				display: 'flex', alignItems: 'center', gap: 14,
+				borderLeft: `3px solid ${HEALTH_TONE[hp.tone].color}`,
+			}}>
+				<span style={{ width: 10, height: 10, borderRadius: '50%', background: HEALTH_TONE[hp.tone].color, flex: '0 0 auto' }} />
+				<div style={{ minWidth: 0 }}>
+					<div style={{ fontWeight: 700, color: HEALTH_TONE[hp.tone].color }}>{hp.label}</div>
+					<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{hp.detail}</div>
+				</div>
+				<div style={{ flex: 1 }} />
+				<div style={{ fontSize: 11, color: 'var(--fg-muted)', textAlign: 'right', lineHeight: 1.6 }}>
+					Targets · avg &lt;300ms · p95 &lt;800ms · 5xx &lt;0.1%<br />
+					Health probes and streaming routes excluded
+				</div>
+			</div>
+
 			{/* ── HTTP requests ── */}
 			<StatsPanel title="HTTP requests">
 				<div className="grid-4">
@@ -103,18 +148,17 @@ export default function PerformancePage() {
 				</div>
 			</StatsPanel>
 
-			<Section title="Request volume & errors" meta={`bars = requests · line = 5xx · last ${range}`}>
-				<AsyncState loading={http.isLoading} error={http.error} empty={timelineChart.length === 0} emptyMsg="No requests recorded yet (instrumentation just deployed)." onRetry={() => void http.mutate()}>
-					<ComboBarLine data={timelineChart} height={220} valueFormatter={(v) => String(Math.round(v))} barLabel="Requests" lineLabel="errors" />
-				</AsyncState>
-			</Section>
-
-			{/* The legacy page selected avg latency per bucket but never plotted it —
-			    a spike in tail latency was invisible unless it also caused errors. */}
-			<div style={{ marginTop: 'var(--space-4)' }}>
-				<Section title="Latency over time" meta={`bars = average · line = p95 · last ${range}`}>
+{/* Side by side so a traffic spike and the latency spike it caused line up.
+			    The legacy page selected avg latency per bucket but never plotted it. */}
+			<div className="grid-2" style={{ marginBottom: 'var(--space-5)' }}>
+				<Section title="Request volume & errors" meta={`bars = requests · line = 5xx`}>
+					<AsyncState loading={http.isLoading} error={http.error} empty={timelineChart.length === 0} emptyMsg="No requests recorded in this range." onRetry={() => void http.mutate()}>
+						<ComboBarLine data={timelineChart} height={210} valueFormatter={(v) => String(Math.round(v))} barLabel="Requests" lineLabel="errors" />
+					</AsyncState>
+				</Section>
+				<Section title="Latency over time" meta={`bars = average · line = p95`}>
 					<AsyncState loading={http.isLoading} error={http.error} empty={latencyChart.length === 0} emptyMsg="No requests recorded in this range." onRetry={() => void http.mutate()}>
-						<ComboBarLine data={latencyChart} height={200} valueFormatter={(v) => ms(v)} lineFormatter={(v) => ms(v)} barLabel="Avg latency" lineLabel="p95" />
+						<ComboBarLine data={latencyChart} height={210} valueFormatter={(v) => ms(v)} lineFormatter={(v) => ms(v)} barLabel="Avg latency" lineLabel="p95" />
 					</AsyncState>
 				</Section>
 			</div>
@@ -141,8 +185,20 @@ export default function PerformancePage() {
 						<tbody>
 							{routes.map((r) => (
 								<tr key={`${r.method}-${r.route}`}>
-									<td><span className="tag">{r.method}</span></td>
-									<td style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{r.route}</td>
+									<td><span className="tag" style={{ color: METHOD_TONE[r.method] ?? 'var(--fg-muted)', borderColor: 'currentColor' }}>{r.method}</span></td>
+									<td style={{ fontFamily: 'var(--font-mono)', fontSize: 12, minWidth: 220 }}>
+										<div>{r.route}</div>
+										{/* p95 relative to the slowest route in view — turns the table
+										    into a ranking you can scan without reading numbers. */}
+										<div style={{ height: 3, borderRadius: 2, marginTop: 4, background: 'var(--grid-line)' }}>
+											<div style={{
+												width: `${Math.max(2, Math.min(100, (r.p95_ms / Math.max(1, worstP95)) * 100))}%`,
+												height: '100%', borderRadius: 2,
+												background: latColor(r.p95_ms, 800, 2000) ?? 'var(--pos)',
+												transition: 'width .3s ease',
+											}} />
+										</div>
+									</td>
 									<td className="num">{r.total.toLocaleString()}</td>
 									<td className="num" style={{ color: latColor(r.avg_ms, 300, 800) }}>{ms(r.avg_ms)}</td>
 									<td className="num" style={{ color: latColor(r.p95_ms, 800, 2000) }}>{ms(r.p95_ms)}</td>
@@ -170,22 +226,16 @@ export default function PerformancePage() {
 			</StatsPanel>
 
 			<div className="grid-2" style={{ marginBottom: 'var(--space-5)' }}>
-				<div className="card">
-					<div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--border)', fontWeight: 700 }}>Throughput by queue</div>
-					<div style={{ padding: 'var(--space-4)' }}>
-						<AsyncState loading={isLoading} error={error} empty={reqRows.length === 0} emptyMsg="No jobs in this range" onRetry={() => void mutate()}><HBarDrilldown rows={reqRows} /></AsyncState>
-					</div>
-				</div>
-				<div className="card">
-					<div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--border)', fontWeight: 700 }}>p95 latency by queue</div>
-					<div style={{ padding: 'var(--space-4)' }}>
-						<AsyncState loading={isLoading} error={error} empty={p95Rows.length === 0} emptyMsg="No jobs in this range" onRetry={() => void mutate()}><HBarDrilldown rows={p95Rows} /></AsyncState>
-					</div>
-				</div>
+				<Section title="Throughput by queue" meta="jobs processed">
+					<AsyncState loading={isLoading} error={error} empty={reqRows.length === 0} emptyMsg="No jobs in this range" onRetry={() => void mutate()}><HBarDrilldown rows={reqRows} /></AsyncState>
+				</Section>
+				<Section title="p95 latency by queue" meta="slowest queues first">
+					<AsyncState loading={isLoading} error={error} empty={p95Rows.length === 0} emptyMsg="No jobs in this range" onRetry={() => void mutate()}><HBarDrilldown rows={p95Rows} /></AsyncState>
+				</Section>
 			</div>
 
-			<div className="card" style={{ marginBottom: 'var(--space-4)' }}>
-				<div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--border)', fontWeight: 700 }}>Job queues</div>
+			<div style={{ marginBottom: 'var(--space-4)' }}>
+			<Section title="Job queues" meta={`${summary.length} active · last ${range}`} padded={false}>
 				<AsyncState loading={isLoading} error={error} empty={summary.length === 0} emptyMsg="No jobs in this range" onRetry={() => void mutate()}>
 					<table className="data-table">
 						<thead><tr><th>Queue</th><th>Total</th><th>Succeeded</th><th>Errored</th><th>Avg</th><th>p95</th><th>Max</th></tr></thead>
@@ -207,10 +257,10 @@ export default function PerformancePage() {
 						</tbody>
 					</table>
 				</AsyncState>
+			</Section>
 			</div>
 
-			<div className="card">
-				<div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--border)', fontWeight: 700 }}>Slowest jobs</div>
+			<Section title="Slowest jobs" meta="longest single runs" padded={false}>
 				<AsyncState loading={isLoading} error={error} empty={slowest.length === 0} emptyMsg="No completed jobs in this range" onRetry={() => void mutate()}>
 					<table className="data-table">
 						<thead><tr><th>Queue</th><th>Entity</th><th>Duration</th><th>Completed</th></tr></thead>
@@ -226,7 +276,7 @@ export default function PerformancePage() {
 						</tbody>
 					</table>
 				</AsyncState>
-			</div>
+			</Section>
 		</div>
 	);
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -86,7 +86,13 @@ export default function AiUsagePage() {
 	const router = useRouter();
 	const [range, setRange] = useState<RangeKey>('30d');
 	const days = RANGES.find((r) => r.key === range)?.days ?? 30;
-	const from = new Date(Date.now() - days * 86_400_000).toISOString();
+	// Must be memoised on the range: Date.now() changes every render, so an inline
+	// value makes a fresh SWR key each time and the request never settles.
+	// Snapped to the hour so a remount inside the same hour still hits the cache.
+	const from = useMemo(
+		() => new Date(Math.floor(Date.now() / 3_600_000) * 3_600_000 - days * 86_400_000).toISOString(),
+		[days],
+	);
 	const { data: summary, mutate: mutateSummary, isLoading, error } = useSWR<Summary>(
 		['/api/admin/ai-usage/summary', { from }],
 		{ dedupingInterval: 30_000 },

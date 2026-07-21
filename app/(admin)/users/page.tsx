@@ -635,6 +635,8 @@ function ReportsAnalytics() {
 	const [q, setQ] = useState('');
 	const [sort, setSort] = useState<'downloads' | 'unique_users' | 'title'>('downloads');
 	const [usersOpen, setUsersOpen] = useState(false);
+	// Pixels per day on the daily chart; 0 = fit the whole window into the card.
+	const [dailyBand, setDailyBand] = useState(0);
 	const dq = useDebouncedValue(q);
 	const range = { from: from || undefined, to: to || undefined };
 
@@ -691,14 +693,30 @@ function ReportsAnalytics() {
 				</Section>
 			</div>
 
-			<div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-				<Section title="Daily downloads" meta={`in the selected window${daily.length > 60 ? ' · scroll sideways' : ''}`}>
+			{/* Daily downloads gets its own full-width row: as a grid item its huge
+			    intrinsic width stretched the track and pushed the card off-screen. */}
+			<div style={{ minWidth: 0, marginBottom: 'var(--space-5)' }}>
+				<Section title="Daily downloads" meta={`in the selected window · ${daily.length} days`}>
 					<AsyncState loading={an.isLoading} error={an.error} empty={daily.length === 0} emptyMsg="No downloads in this window" onRetry={() => void an.mutate()}>
-						{/* A 12-month window is ~365 points; at fit-to-width each bar is ~1px.
-						    minBand gives every day room and lets the container scroll. */}
-						<ComboBarLine data={daily} height={200} minBand={14} valueFormatter={(v) => String(Math.round(v))} barLabel="Downloads" lineLabel="downloads" />
+						{/* Zoom sets pixels-per-day: at "Fit" the whole window is squeezed into
+						    the card, and widening it spreads the x-axis out and scrolls instead. */}
+						<div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+							<span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>Zoom</span>
+							<button className="btn ghost" aria-label="Zoom out" disabled={dailyBand === 0}
+								onClick={() => setDailyBand((b) => (b <= 8 ? 0 : b - 8))}>−</button>
+							<button className="btn ghost" aria-label="Zoom in" disabled={dailyBand >= 64}
+								onClick={() => setDailyBand((b) => Math.min(64, (b || 8) + 8))}>+</button>
+							<button className={`chip ${dailyBand === 0 ? 'on' : ''}`} onClick={() => setDailyBand(0)}>Fit</button>
+							<span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>
+								{dailyBand === 0 ? 'whole window in view' : `${dailyBand}px per day · scroll sideways`}
+							</span>
+						</div>
+						<ComboBarLine data={daily} height={220} minBand={dailyBand} valueFormatter={(v) => String(Math.round(v))} barLabel="Downloads" lineLabel="downloads" />
 					</AsyncState>
 				</Section>
+			</div>
+
+			<div style={{ marginBottom: 'var(--space-5)' }}>
 				<Section title="By day of week" meta="last 90 days">
 					<AsyncState loading={an.isLoading} error={an.error} empty={dowSeg.length === 0} emptyMsg="No data" onRetry={() => void an.mutate()}>
 						<PieDonut segments={dowSeg} mode="bar" />

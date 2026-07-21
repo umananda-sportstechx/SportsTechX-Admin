@@ -11,6 +11,7 @@ import { Modal } from '@/components/modal';
 import { PageHeader, PillTabs, AsyncState, StatCard, StatsPanel, Section } from '@/components/atoms';
 import { ComboBarLine, PieDonut, PieLegend, Funnel, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
+import { Select } from '@/components/select';
 
 interface UserStats { total: number; admins: number; by_tier: Bucket[]; by_role: Bucket[]; signups_by_month: Bucket[] }
 interface AuthRow { email: string | null; created_at?: string | null; last_sign_in_at?: string | null; provider?: string | null }
@@ -23,7 +24,7 @@ interface UserAnalytics {
 	conversion: { total: number; trials: number; paid: number; free_to_trial_pct: number; trial_to_paid_pct: number };
 	churn: { churned: number; active: number; churn_rate_pct: number; avg_lifetime_days: number | null };
 	login_recency: Bucket[]; signup_recency: Bucket[]; login_frequency: Bucket[];
-	report_downloads: { total: number; unique_users: number; last_30d: number; in_range?: number; top_reports: Bucket[]; daily_trend: Bucket[]; weekly_trend?: Bucket[]; by_day_of_week?: Bucket[] };
+	report_downloads: { total: number; unique_users: number; last_30d: number; in_range?: number; unique_users_in_range?: number; top_reports: Bucket[]; daily_trend: Bucket[]; weekly_trend?: Bucket[]; by_day_of_week?: Bucket[] };
 }
 const FREQ_BUCKETS: Record<string, 'never' | 'once' | '2-5' | '6+'> = { 'never (0)': 'never', once: 'once', '2-5': '2-5', '6+': '6+' };
 const TIERS = ['free', 'growth', 'pro'] as const;
@@ -524,13 +525,19 @@ function SignupBehaviour() {
 	// Month labels are YYYY-MM, weeks/days are already short — trim the century.
 	const series = (d?.series ?? []).map((b) => ({ label: b.label.replace(/^20/, ''), amt: b.value, deals: b.value }));
 	const dowSeg = toSegments(d?.by_day_of_week ?? []);
-	// New paid subscriptions per month, stacked by plan (legacy "New Subscribers by Plan").
-	const planMonths = Array.from(new Set((d?.new_by_plan ?? []).map((r) => r.label))).sort();
-	const planTotals = planMonths.map((m) => ({
-		label: m.slice(2),
-		amt: (d?.new_by_plan ?? []).filter((r) => r.label === m).reduce((s, r) => s + r.value, 0),
-		deals: 0,
-	})).map((r) => ({ ...r, deals: r.amt }));
+	// New paid subscriptions per month. ComboBarLine has no stacking, so the chart
+	// shows monthly totals and the plan split is surfaced in the table beside it
+	// (legacy "New Subscribers by Plan" used a stacked bar).
+	const byPlanRows = d?.new_by_plan ?? [];
+	const planMonths = Array.from(new Set(byPlanRows.map((r) => r.label))).sort();
+	const planTotals = planMonths.map((m) => {
+		const amt = byPlanRows.filter((r) => r.label === m).reduce((s, r) => s + r.value, 0);
+		return { label: m.slice(2), amt, deals: amt };
+	});
+	// Plan totals across the whole 6-month window, biggest first.
+	const planSplit = Object.entries(
+		byPlanRows.reduce<Record<string, number>>((acc, r) => ({ ...acc, [r.plan]: (acc[r.plan] ?? 0) + r.value }), {}),
+	).sort((a, b) => b[1] - a[1]);
 
 	return (
 		<>
@@ -584,11 +591,28 @@ function SignupBehaviour() {
 					sub={`of ${(d?.total ?? 0).toLocaleString()} accounts`} />
 			</StatStrip>
 
-			<Section title="New paid subscriptions by month" meta="last 6 months · excludes trials">
-				<AsyncState loading={isLoading} error={error} empty={planTotals.length === 0} emptyMsg="No new paid subscriptions in this period" onRetry={() => void mutate()}>
-					<ComboBarLine data={planTotals} height={200} valueFormatter={(v) => String(Math.round(v))} barLabel="New subs" lineLabel="new subs" />
-				</AsyncState>
-			</Section>
+			<div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
+				<Section title="New paid subscriptions by month" meta="last 6 months · excludes trials">
+					<AsyncState loading={isLoading} error={error} empty={planTotals.length === 0} emptyMsg="No new paid subscriptions in this period" onRetry={() => void mutate()}>
+						<ComboBarLine data={planTotals} height={200} valueFormatter={(v) => String(Math.round(v))} barLabel="New subs" lineLabel="new subs" />
+					</AsyncState>
+				</Section>
+				<Section title="By plan" meta="same 6 months" padded={false}>
+					<AsyncState loading={isLoading} error={error} empty={planSplit.length === 0} emptyMsg="No new paid subscriptions" onRetry={() => void mutate()}>
+						<table className="data-table">
+							<thead><tr><th>Plan</th><th style={{ textAlign: 'right' }}>New subs</th></tr></thead>
+							<tbody>
+								{planSplit.map(([plan, n]) => (
+									<tr key={plan}>
+										<td>{prettyDetail(plan)}</td>
+										<td className="num" style={{ textAlign: 'right', fontWeight: 600 }}>{n.toLocaleString()}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</AsyncState>
+				</Section>
+			</div>
 		</>
 	);
 }
@@ -618,14 +642,16 @@ function ReportsAnalytics() {
 	const range = { from: from || undefined, to: to || undefined };
 
 	const an = useSWR<UserAnalytics>(['/api/admin/users/analytics', range], { dedupingInterval: 60_000 });
-	const rs = useSWR<{ reports: ReportStat[]; monthly_trend: Bucket[] }>(
+	const rs = useSWR<{ reports: ReportStat[]; monthly_trend: Bucket[]; total_reports: number }>(
 		['/api/admin/users/analytics/report-stats', { ...range, q: dq || undefined, sort }], { dedupingInterval: 30_000 },
 	);
 	const dl = an.data?.report_downloads;
 	const reports = rs.data?.reports ?? [];
-	// The window drives the headline numbers; `in_range` is the windowed count.
-	const windowed = from || to ? (dl?.in_range ?? 0) : (dl?.total ?? 0);
-	const avgPerUser = dl?.unique_users ? (dl.total / dl.unique_users) : 0;
+	// Every headline number must respect the window, otherwise a narrow range shows
+	// "3 downloads" beside an all-time "1,058 unique users".
+	const windowed = dl?.in_range ?? 0;
+	const uniqueWindowed = dl?.unique_users_in_range ?? 0;
+	const avgPerUser = uniqueWindowed ? windowed / uniqueWindowed : 0;
 	const topSeg = toSegments(dl?.top_reports ?? []);
 	const dowSeg = toSegments(dl?.by_day_of_week ?? []);
 	const monthly = (rs.data?.monthly_trend ?? []).map((b) => ({ label: b.label.slice(2), amt: b.value, deals: b.value }));
@@ -647,11 +673,12 @@ function ReportsAnalytics() {
 			</div>
 
 			<StatStrip cols={4}>
-				<StatCard label={from || to ? 'Downloads in window' : 'Total downloads'} loading={an.isLoading} value={windowed.toLocaleString()}
-					sub={from || to ? `${(dl?.total ?? 0).toLocaleString()} all time` : `${(dl?.last_30d ?? 0).toLocaleString()} in last 30d`} />
-				<StatCard label="Unique users" loading={an.isLoading} value={(dl?.unique_users ?? 0).toLocaleString()} sub="downloaded at least once" />
-				<StatCard label="Reports downloaded" loading={rs.isLoading} value={reports.length.toLocaleString()} sub="distinct reports in window" />
-				<StatCard label="Avg / user" loading={an.isLoading} value={avgPerUser.toFixed(1)} sub="downloads per downloading user" />
+				<StatCard label="Downloads in window" loading={an.isLoading} value={windowed.toLocaleString()}
+					sub={`${(dl?.total ?? 0).toLocaleString()} all time`} />
+				<StatCard label="Unique users" loading={an.isLoading} value={uniqueWindowed.toLocaleString()}
+					sub={`${(dl?.unique_users ?? 0).toLocaleString()} all time`} />
+				<StatCard label="Reports downloaded" loading={rs.isLoading} value={(rs.data?.total_reports ?? 0).toLocaleString()} sub="distinct reports in window" />
+				<StatCard label="Avg / user" loading={an.isLoading} value={avgPerUser.toFixed(1)} sub="downloads per downloading user, in window" />
 			</StatStrip>
 
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
@@ -683,8 +710,10 @@ function ReportsAnalytics() {
 			<Section title="Report statistics" meta={`${reports.length} reports in window`}>
 				<div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
 					<input className="search-input" style={{ flex: '0 0 260px', height: 32 }} placeholder="Search reports…" value={q} onChange={(e) => setQ(e.target.value)} />
-					<FilterSelect ariaLabel="Sort by" value={sort} onChange={(v) => setSort((v || 'downloads') as typeof sort)}
-						options={REPORT_SORTS.map((s) => ({ value: s.key, label: s.label }))} allLabel="Total downloads" />
+					{/* Plain Select, not FilterSelect — the latter prepends an "all" option,
+					    which would duplicate "Total downloads" and means nothing for a sort. */}
+					<Select ariaLabel="Sort by" value={sort} onChange={(v) => setSort(v as typeof sort)}
+						options={REPORT_SORTS.map((s) => ({ value: s.key, label: s.label }))} />
 				</div>
 				<AsyncState loading={rs.isLoading} error={rs.error} empty={reports.length === 0} emptyMsg={q ? 'No reports match.' : 'No downloads in this window.'} onRetry={() => void rs.mutate()}>
 					<div className="table-scroll">

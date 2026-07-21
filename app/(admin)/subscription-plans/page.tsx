@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 import { Select } from '@/components/select';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState } from '@/components/atoms';
+import { PageHeader, AsyncState, StatCard } from '@/components/atoms';
 
 interface Plan {
 	id: string;
@@ -97,10 +97,10 @@ export default function PlansEditorialPage() {
 						</div>
 
 						<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, fontSize: 12 }}>
-							<Stat label="AI credits / mo" value={p.ai_credits_monthly.toLocaleString()} />
-							<Stat label="Integration credits / mo" value={p.integration_credits_monthly.toLocaleString()} />
-							<Stat label="Sort order" value={p.sort_order} />
-							<Stat
+							<StatCard label="AI credits / mo" value={p.ai_credits_monthly.toLocaleString()} />
+							<StatCard label="Integration credits / mo" value={p.integration_credits_monthly.toLocaleString()} />
+							<StatCard label="Sort order" value={p.sort_order} />
+							<StatCard
 								label="Stripe"
 								value={p.stripe_price_id
 									? <span title={p.stripe_price_id} style={{ color: 'var(--pos)' }}>● Linked</span>
@@ -132,14 +132,6 @@ export default function PlansEditorialPage() {
 	);
 }
 
-function Stat({ label, value }: { label: string; value: React.ReactNode }) {
-	return (
-		<div>
-			<div className="co-stat-label">{label}</div>
-			<div style={{ fontWeight: 700, fontSize: 13 }}>{value}</div>
-		</div>
-	);
-}
 
 function EditModal({ plan, onClose, onSaved }: { plan: Plan; onClose: () => void; onSaved: () => void }) {
 	const [name, setName] = useState(plan.name);

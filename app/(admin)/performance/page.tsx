@@ -85,7 +85,7 @@ export default function PerformancePage() {
 	// tail latency is visible even when the average stays flat.
 	const latencyChart = (http.data?.timeline ?? []).map((t) => ({ label: t.label, amt: t.avg_ms, deals: t.p95_ms }));
 
-	// Search + sort every route client-side; the API now returns all of them.
+	// Search + sort client-side over the routes the API returns (top 300 by volume).
 	const allRoutes = http.data?.byRoute ?? [];
 	// Scale the inline latency bars against the slowest route currently shown.
 	const routes = allRoutes
@@ -139,7 +139,7 @@ export default function PerformancePage() {
 			<StatsPanel title="HTTP requests">
 				<div className="grid-4">
 					<StatCard label="Total requests" loading={http.isLoading} value={(h?.total ?? 0).toLocaleString()}
-						sub={`${allRoutes.length} distinct endpoints`} />
+						sub={`${allRoutes.length}${allRoutes.length >= 300 ? '+' : ''} distinct endpoints`} />
 					<StatCard label="Error rate (5xx)" loading={http.isLoading} value={`${httpErrRate.toFixed(2)}%`} urgent={httpErrRate > 1}
 						sub={`${(h?.errors ?? 0).toLocaleString()} server · ${(h?.client_errors ?? 0).toLocaleString()} client (4xx)`} />
 					<StatCard label="Avg latency" loading={http.isLoading} value={ms(h?.avg_ms ?? 0)} sub="target under 300ms" />

@@ -278,16 +278,26 @@ interface ComboBarLineProps {
 	/** Labels under the line ("rounds" by default — pass e.g. "users"). */
 	lineLabel?: string;
 	barLabel?: string;
+	/**
+	 * Minimum horizontal pixels per data point. When the series is long enough that
+	 * the default 980px canvas would squash it (e.g. a year of daily values), the
+	 * chart widens to data.length * minBand and its container scrolls sideways
+	 * instead of shrinking every bar to a sliver. Omit for the fit-to-width default.
+	 */
+	minBand?: number;
 }
 
 export function ComboBarLine({
-	data, height = 280, valueFormatter, lineFormatter, lineLabel = 'rounds', barLabel = 'Funding',
+	data, height = 280, valueFormatter, lineFormatter, lineLabel = 'rounds', barLabel = 'Funding', minBand = 0,
 }: ComboBarLineProps) {
 	const [hover, setHover] = useState<number | null>(null);
 	const wrapRef = useRef<HTMLDivElement | null>(null);
 	const [pos, setPos] = useState({ x: 0, y: 0 });
 
-	const W = 980;
+	// Widen past the default canvas only when the caller opts in via minBand and the
+	// series is actually long enough to need it; the wrapper then scrolls.
+	const W = Math.max(980, minBand ? 36 + 36 + data.length * minBand : 0);
+	const scrolls = W > 980;
 	const H = height;
 	const PAD_L = 36;
 	const PAD_R = 36;
@@ -314,8 +324,8 @@ export function ComboBarLine({
 	};
 
 	return (
-		<div className="cbl-wrap" ref={wrapRef}>
-			<svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: 'block' }} preserveAspectRatio="xMidYMid meet">
+		<div className="cbl-wrap" ref={wrapRef} style={scrolls ? { overflowX: 'auto' } : undefined}>
+			<svg viewBox={`0 0 ${W} ${H}`} width={scrolls ? W : '100%'} height={scrolls ? H : undefined} style={{ display: 'block' }} preserveAspectRatio="xMidYMid meet">
 				{/* Grid */}
 				{[0, 0.25, 0.5, 0.75, 1].map((t) => (
 					<g key={t}>

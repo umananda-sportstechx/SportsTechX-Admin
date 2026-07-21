@@ -21,7 +21,7 @@ interface AuthActivity {
 	recent_signups: AuthRow[]; recent_logins: AuthRow[]; by_provider: Bucket[];
 }
 interface UserAnalytics {
-	conversion: { total: number; trials: number; paid: number; free_to_trial_pct: number; trial_to_paid_pct: number };
+	conversion: { total: number; trials: number; paid: number; paid_from_trial?: number; paid_direct?: number; free_to_trial_pct: number; trial_to_paid_pct: number };
 	churn: { churned: number; active: number; churn_rate_pct: number; avg_lifetime_days: number | null };
 	login_recency: Bucket[]; signup_recency: Bucket[]; login_frequency: Bucket[];
 	report_downloads: { total: number; unique_users: number; last_30d: number; in_range?: number; unique_users_in_range?: number; top_reports: Bucket[]; daily_trend: Bucket[]; weekly_trend?: Bucket[]; by_day_of_week?: Bucket[] };
@@ -222,7 +222,8 @@ export function UsersView({ view }: { view: 'directory' | 'stats' | 'charts' }) 
 			</div>
 			<StatStrip cols={4}>
 				<StatCard label="Free → trial" loading={an.isLoading} value={`${(an.data?.conversion.free_to_trial_pct ?? 0).toFixed(1)}%`} />
-				<StatCard label="Trial → paid" loading={an.isLoading} value={`${(an.data?.conversion.trial_to_paid_pct ?? 0).toFixed(1)}%`} />
+				<StatCard label="Trial → paid" loading={an.isLoading} value={`${(an.data?.conversion.trial_to_paid_pct ?? 0).toFixed(1)}%`}
+					sub={`${(an.data?.conversion.paid_direct ?? 0).toLocaleString()} more bought without trialing`} />
 				<StatCard label="Churn rate" loading={an.isLoading} value={`${(an.data?.churn.churn_rate_pct ?? 0).toFixed(1)}%`} urgent={(an.data?.churn.churn_rate_pct ?? 0) > 0} />
 				<StatCard label="Avg lifetime" loading={an.isLoading} value={an.data?.churn.avg_lifetime_days != null ? `${Math.round(an.data.churn.avg_lifetime_days)}d` : '—'} />
 			</StatStrip>
@@ -235,7 +236,10 @@ export function UsersView({ view }: { view: 'directory' | 'stats' | 'charts' }) 
 						{ label: 'Churned', value: an.data?.churn.churned ?? 0, color: 'var(--neg)' },
 					]} />
 				</Section>
-				<Section title="Login frequency" meta="per user · click to drill in">
+				{/* Counts come from the auth.users trigger (record_login_event) added 21 Jul
+					2026. Pre-existing accounts were seeded with the single login provable from
+					last_sign_in_at, so historical totals are a floor — hence the dated meta. */}
+				<Section title="Login frequency" meta="per user · counted since 21 Jul 2026 · click to drill in">
 					<AsyncState loading={an.isLoading} error={an.error} empty={freqSeg.length === 0} emptyMsg="No data" onRetry={() => void an.mutate()}>
 						<PieDonut segments={freqSeg} mode="bar" />
 						<div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
@@ -243,15 +247,6 @@ export function UsersView({ view }: { view: 'directory' | 'stats' | 'charts' }) 
 								const bucket = FREQ_BUCKETS[b.label];
 								return bucket ? <button key={b.label} className="chip" onClick={() => setFreqBucket(bucket)}>{b.label}: {b.value.toLocaleString()}</button> : null;
 							})}
-						</div>
-						{/* Logins are counted by an auth.users trigger (record_login_event) as of
-						    21 Jul 2026. Earlier logins were never recorded anywhere, so each account
-						    that had signed in was seeded with the one login provable from
-						    last_sign_in_at — historical counts are a floor, not a reconstruction. */}
-						<div style={{ marginTop: 12, fontSize: 11, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
-							Exact from 21 Jul 2026, when login tracking started. Earlier logins were never
-							recorded, so accounts active before then start at 1 — historical counts are a
-							minimum, not an exact total.
 						</div>
 					</AsyncState>
 				</Section>
@@ -697,9 +692,11 @@ function ReportsAnalytics() {
 			</div>
 
 			<div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-				<Section title="Daily downloads" meta="in the selected window">
+				<Section title="Daily downloads" meta={`in the selected window${daily.length > 60 ? ' · scroll sideways' : ''}`}>
 					<AsyncState loading={an.isLoading} error={an.error} empty={daily.length === 0} emptyMsg="No downloads in this window" onRetry={() => void an.mutate()}>
-						<ComboBarLine data={daily} height={200} valueFormatter={(v) => String(Math.round(v))} barLabel="Downloads" lineLabel="downloads" />
+						{/* A 12-month window is ~365 points; at fit-to-width each bar is ~1px.
+						    minBand gives every day room and lets the container scroll. */}
+						<ComboBarLine data={daily} height={200} minBand={14} valueFormatter={(v) => String(Math.round(v))} barLabel="Downloads" lineLabel="downloads" />
 					</AsyncState>
 				</Section>
 				<Section title="By day of week" meta="last 90 days">

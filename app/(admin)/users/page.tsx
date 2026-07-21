@@ -244,12 +244,14 @@ export function UsersView({ view }: { view: 'directory' | 'stats' | 'charts' }) 
 								return bucket ? <button key={b.label} className="chip" onClick={() => setFreqBucket(bucket)}>{b.label}: {b.value.toLocaleString()}</button> : null;
 							})}
 						</div>
-						{/* profiles.login_count is not incremented on sign-in, so nearly every
-						    row reads 0 while "Login recency" (last_seen_at) shows real activity.
-						    Flagged rather than hidden — remove this note once logins are counted. */}
-						<div className="tag warn" style={{ marginTop: 12, display: 'block', lineHeight: 1.5, whiteSpace: 'normal' }}>
-							Not trustworthy yet — <code>login_count</code> is not incremented on sign-in, so almost every
-							account reads 0. Use <strong>Login recency</strong> for real engagement until logins are tracked.
+						{/* Logins are counted by an auth.users trigger (record_login_event) as of
+						    21 Jul 2026. Earlier logins were never recorded anywhere, so each account
+						    that had signed in was seeded with the one login provable from
+						    last_sign_in_at — historical counts are a floor, not a reconstruction. */}
+						<div style={{ marginTop: 12, fontSize: 11, color: 'var(--fg-muted)', lineHeight: 1.5 }}>
+							Exact from 21 Jul 2026, when login tracking started. Earlier logins were never
+							recorded, so accounts active before then start at 1 — historical counts are a
+							minimum, not an exact total.
 						</div>
 					</AsyncState>
 				</Section>

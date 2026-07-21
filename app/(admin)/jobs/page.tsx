@@ -36,7 +36,7 @@ const secs = (n: number | null): string => {
 };
 const when = (v: string | null): string => (v ? new Date(v).toLocaleString() : '—');
 
-type EndpointKey = 'apolloBatch' | 'attioSync' | 'recommendations' | 'apolloEnrich' | 'digestEmail' | 'sweepStuck';
+type EndpointKey = 'apolloBatch' | 'attioSync' | 'recommendations' | 'apolloEnrich' | 'digestEmail' | 'sweepStuck' | 'embedReports';
 
 const ENDPOINTS: Array<{ key: EndpointKey; label: string; desc: string; path: string; needsId?: boolean }> = [
 	{
@@ -71,6 +71,13 @@ const ENDPOINTS: Array<{ key: EndpointKey; label: string; desc: string; path: st
 		path: '/api/admin/jobs/digest-email',
 	},
 	{
+		// POST /api/admin/embeddings/backfill-reports had no UI anywhere in the panel.
+		key: 'embedReports',
+		label: 'Backfill report embeddings',
+		desc: 'Re-embed every published report so semantic search and chat can find them.',
+		path: '/api/admin/embeddings/backfill-reports',
+	},
+	{
 		key: 'sweepStuck',
 		label: 'Sweep stuck jobs',
 		desc: 'Re-queue jobs stuck past their timeout (otherwise every 5 min).',
@@ -97,8 +104,13 @@ export default function JobsPage() {
 		setRunningKey(endpoint.key);
 		try {
 			const path = endpoint.needsId ? `${endpoint.path}/${enrichId}` : endpoint.path;
-			const res = await api<{ jobLogId: string; bullJobId: string | null }>('POST', path);
-			toast.success(`Queued ${endpoint.label}: job ${res.jobLogId.slice(0, 8)}`);
+			// Not every job endpoint returns a job-log id — the embeddings backfill
+			// reports a count instead, and blind .slice() on it would throw.
+			const res = await api<{ jobLogId?: string; bullJobId?: string | null; enqueued?: number }>('POST', path);
+			const detail = res.jobLogId ? `job ${res.jobLogId.slice(0, 8)}`
+				: res.enqueued != null ? `${res.enqueued} queued`
+				: 'queued';
+			toast.success(`${endpoint.label}: ${detail}`);
 			void history.mutate();
 		} catch (e) {
 			toast.error((e as Error).message);

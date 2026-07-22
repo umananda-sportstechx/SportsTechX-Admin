@@ -27,6 +27,55 @@ import {
  * with the same blurred lock-cards, live-data fetches, and rich text.
  */
 
+// ─── GSTER report design language (mirrors client/app/(app)/reports) ────────
+// Bebas Neue display + DM Mono labels, brand pink accent, navy/teal charts.
+
+const BRAND = {
+	pink: '#ED1A5E', darkTitle: '#2D3B49', peach: '#FDE1D9', slate: '#4D5E72',
+	lightBlue: '#BED0E3', teal: '#76ADA7', tealBright: '#6A9DA9', navy: '#2B3D8F',
+} as const;
+const DISPLAY = "'Bebas Neue', var(--font-display), sans-serif";
+const MONO = "'DM Mono', var(--font-mono), monospace";
+/** Chart series palette (navy → teal → pink …), matching the report's bars. */
+const CHART_COLORS = [BRAND.navy, BRAND.teal, BRAND.tealBright, BRAND.pink, BRAND.slate, BRAND.lightBlue, BRAND.darkTitle];
+
+/** Loads the report fonts + GSTER table/card styles once (scoped by class). */
+function ReportFonts() {
+	return (
+		<style>{`
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap');
+.report-table { width:100%; border-collapse:collapse; border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+.report-table thead th { background:${BRAND.darkTitle}; color:#fff; font-family:'DM Mono',monospace; font-size:10px; letter-spacing:0.16em; text-transform:uppercase; text-align:left; padding:13px 16px; font-weight:500; }
+.report-table thead th.num { text-align:right; }
+.report-table tbody td { padding:14px 16px; font-size:13px; border-top:1px solid var(--border); }
+.report-table tbody tr:nth-child(even) { background:var(--bg-2); }
+.report-table td.num { text-align:right; font-family:'DM Mono',monospace; color:${BRAND.pink}; font-weight:500; }
+.report-hoverlift { transition:transform .2s ease, box-shadow .2s ease; }
+.report-hoverlift:hover { transform:translateY(-3px); box-shadow:0 12px 32px rgba(0,0,0,0.12); }
+		`}</style>
+	);
+}
+
+/** Editorial section header: pink mono eyebrow + big Bebas Neue title + accent bar. */
+function SectionHeader({ eyebrow, title }: { eyebrow?: unknown; title?: unknown }) {
+	if (title == null && eyebrow == null) return null;
+	return (
+		<header style={{ marginBottom: 'var(--space-4)' }}>
+			{eyebrow != null && (
+				<div style={{ fontFamily: MONO, fontSize: 12, letterSpacing: '0.28em', color: BRAND.pink, textTransform: 'uppercase', marginBottom: 10 }}>
+					<RichText value={eyebrow} inline />
+				</div>
+			)}
+			{title != null && (
+				<h2 style={{ fontFamily: DISPLAY, fontSize: 'clamp(30px, 4.2vw, 52px)', lineHeight: 0.95, letterSpacing: '0.01em', margin: 0, color: 'var(--fg)' }}>
+					<RichText value={title} inline />
+				</h2>
+			)}
+			<div style={{ height: 3, width: 46, marginTop: 14, borderRadius: 2, background: `linear-gradient(to right, ${BRAND.pink}, ${BRAND.pink}55)` }} />
+		</header>
+	);
+}
+
 // ─── Types matching the server `/sections` response ─────────────────────────
 
 export type Tier = 'free' | 'growth' | 'pro';
@@ -57,7 +106,24 @@ export type Section = VisibleSection | LockedSection;
 // ─── Section dispatcher ─────────────────────────────────────────────────────
 
 export function SectionRenderer({ section }: { section: Section }) {
-	if (section.is_locked) return <LockedCard section={section} />;
+	if (section.is_locked) return <><ReportFonts /><LockedCard section={section} /></>;
+	const inner = renderKind(section);
+	// Hero is fully self-contained; every other kind gets the editorial header
+	// (pink eyebrow + Bebas title) so the report reads with clear section rhythm.
+	if (section.kind === 'hero') return <><ReportFonts />{inner}</>;
+	const eyebrow = section.content.eyebrow ?? section.content.kicker;
+	return (
+		<>
+			<ReportFonts />
+			<section>
+				<SectionHeader eyebrow={eyebrow} title={section.title} />
+				{inner}
+			</section>
+		</>
+	);
+}
+
+function renderKind(section: VisibleSection): ReactNode {
 	switch (section.kind) {
 		case 'hero':            return <HeroSection content={section.content} />;
 		case 'narrative':       return <NarrativeSection content={section.content} />;
@@ -156,34 +222,31 @@ function HeroSection({ content }: { content: Record<string, unknown> }) {
 	const subtitle = content.subtitle;
 	const kpis = (content.kpis as Array<{ label: unknown; value: unknown; delta?: string; icon?: unknown; sublabel?: unknown }>) ?? [];
 	const coverUrl = content.cover_url as string | undefined;
-	const onDark = !!coverUrl;
+	const bg = coverUrl
+		? `linear-gradient(180deg, rgba(12,15,26,0.82) 0%, rgba(12,15,26,0.94) 100%), url(${coverUrl}) center / cover`
+		: `linear-gradient(135deg, #0c0f1a 0%, ${BRAND.darkTitle} 100%)`;
 	return (
-		<div
-			className="card"
-			style={{
-				padding: 'var(--space-5)', borderRadius: 12,
-				background: coverUrl
-					? `linear-gradient(180deg, rgba(15,23,42,0.85) 0%, rgba(15,23,42,0.95) 100%), url(${coverUrl}) center / cover`
-					: 'var(--bg-2)',
-				color: onDark ? '#fff' : undefined,
-			}}
-		>
-			{subtitle != null && (
-				<p style={{ fontSize: 18, lineHeight: 1.5, margin: '0 0 20px', opacity: 0.92, maxWidth: 720 }}><RichText value={subtitle} inline /></p>
-			)}
+		<div style={{ position: 'relative', overflow: 'hidden', borderRadius: 16, padding: 'clamp(28px, 5vw, 56px)', background: bg, color: '#fff' }}>
+			{/* soft pink glow, top-right — echoes the report hero */}
+			<div style={{ position: 'absolute', top: -90, right: -70, width: 300, height: 300, borderRadius: '50%', background: `radial-gradient(circle, ${BRAND.pink}33, transparent 70%)`, pointerEvents: 'none' }} />
+			{subtitle != null && <p style={{ position: 'relative', fontSize: 18, lineHeight: 1.6, margin: '0 0 28px', maxWidth: 760, color: 'rgba(255,255,255,0.88)' }}><RichText value={subtitle} inline /></p>}
 			{kpis.length > 0 && (
-				<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+				<div style={{ position: 'relative', display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(190px, 1fr))`, gap: 14 }}>
 					{kpis.map((k, i) => (
 						<div key={i} style={{
-							position: 'relative', padding: '16px 18px', borderRadius: 10,
-							background: onDark ? 'rgba(255,255,255,0.06)' : 'var(--bg-1)',
-							border: `1px solid ${onDark ? 'rgba(255,255,255,0.12)' : 'var(--border)'}`,
+							position: 'relative', padding: '24px 22px 20px', borderRadius: 12,
+							background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+							boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
 						}}>
-							{k.icon != null && <span style={{ position: 'absolute', top: 14, right: 14, opacity: 0.45 }}><SectionIcon name={k.icon} size={20} /></span>}
-							<div style={{ fontSize: 30, fontWeight: 800, lineHeight: 1.05, color: 'var(--accent)', paddingRight: 24 }}><RichText value={k.value} inline /></div>
-							<div style={{ fontSize: 13, fontWeight: 600, marginTop: 6, opacity: onDark ? 0.95 : 1 }}><RichText value={k.label} inline /></div>
-							{k.sublabel != null && <div style={{ fontSize: 12, lineHeight: 1.45, marginTop: 4, opacity: 0.7 }}><RichText value={k.sublabel} inline /></div>}
-							{k.delta && <div style={{ fontSize: 11, marginTop: 4, color: k.delta.startsWith('-') ? '#dc2626' : '#16a34a' }}>{k.delta}</div>}
+							{k.icon != null && (
+								<span style={{ position: 'absolute', top: 16, right: 16, opacity: 0.5 }}>
+									<SectionIcon name={k.icon} size={22} color="#fff" />
+								</span>
+							)}
+							<div style={{ fontFamily: DISPLAY, fontSize: 'clamp(38px, 3.4vw, 52px)', fontWeight: 400, lineHeight: 1, color: BRAND.pink, paddingRight: 26 }}><RichText value={k.value} inline /></div>
+							<div style={{ fontSize: 13, fontWeight: 600, marginTop: 8, color: 'rgba(255,255,255,0.95)', lineHeight: 1.4 }}><RichText value={k.label} inline /></div>
+							{k.sublabel != null && <div style={{ fontSize: 12, lineHeight: 1.45, marginTop: 4, color: 'rgba(255,255,255,0.6)' }}><RichText value={k.sublabel} inline /></div>}
+							{k.delta && <div style={{ fontFamily: MONO, fontSize: 11, marginTop: 6, color: k.delta.startsWith('-') ? '#ff8095' : BRAND.teal }}>{k.delta}</div>}
 						</div>
 					))}
 				</div>
@@ -206,11 +269,15 @@ function KpiGridSection({ content }: { content: Record<string, unknown> }) {
 	return (
 		<div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${Math.floor(100 / columns)}%), 1fr))`, gap: 12 }}>
 			{items.map((it, i) => (
-				<div key={i} className="card" style={{ padding: 'var(--space-4)', position: 'relative' }}>
-					{it.icon != null && <span style={{ position: 'absolute', top: 14, right: 14, color: 'var(--fg-muted)', opacity: 0.5 }}><SectionIcon name={it.icon} size={18} /></span>}
-					<div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1.1, color: 'var(--accent)', paddingRight: 22 }}><RichText value={it.value} inline /></div>
-					<div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', marginTop: 6 }}><RichText value={it.label} inline /></div>
-					{it.hint != null && <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.45, marginTop: 4 }}><RichText value={it.hint} inline /></div>}
+				<div key={i} style={{ position: 'relative', padding: '32px 28px', borderRadius: 14, background: 'var(--bg-2)', border: '1px solid var(--border)' }}>
+					{it.icon != null && (
+						<span style={{ position: 'absolute', top: 18, right: 18, color: BRAND.pink, opacity: 0.16 }}>
+							<SectionIcon name={it.icon} size={30} />
+						</span>
+					)}
+					<div style={{ fontFamily: DISPLAY, fontSize: 'clamp(40px, 4vw, 60px)', fontWeight: 400, lineHeight: 1, color: BRAND.pink, paddingRight: 26 }}><RichText value={it.value} inline /></div>
+					<div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg)', marginTop: 8, lineHeight: 1.4 }}><RichText value={it.label} inline /></div>
+					{it.hint != null && <div style={{ fontSize: 12, color: 'var(--fg-muted)', lineHeight: 1.45, marginTop: 5 }}><RichText value={it.hint} inline /></div>}
 				</div>
 			))}
 		</div>
@@ -232,12 +299,12 @@ function TrendCardListSection({ content }: { content: Record<string, unknown> })
 		<div>
 			{intro != null && <p style={{ fontSize: 15, color: 'var(--fg-2)', margin: '0 0 16px', lineHeight: 1.6 }}><RichText value={intro} inline /></p>}
 			{tabs.length > 0 && (
-				<div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border)', marginBottom: 16, flexWrap: 'wrap' }}>
+				<div style={{ display: 'flex', gap: 18, borderBottom: '2px solid var(--border)', marginBottom: 24, flexWrap: 'wrap' }}>
 					{tabs.map((t) => (
 						<button key={t.key} type="button" onClick={() => setActiveTab(t.key)} style={{
-							padding: '8px 14px', border: 0, background: 'transparent', cursor: 'pointer', fontSize: 13, fontWeight: 700,
-							color: activeTab === t.key ? 'var(--accent)' : 'var(--fg-muted)',
-							borderBottom: `2px solid ${activeTab === t.key ? 'var(--accent)' : 'transparent'}`, marginBottom: -1,
+							padding: '6px 2px', border: 0, background: 'transparent', cursor: 'pointer',
+							fontFamily: DISPLAY, fontSize: 24, letterSpacing: '0.04em', color: activeTab === t.key ? BRAND.pink : 'var(--fg-muted)',
+							borderBottom: `3px solid ${activeTab === t.key ? BRAND.pink : 'transparent'}`, marginBottom: -2,
 						}}><RichText value={t.label} inline /></button>
 					))}
 				</div>
@@ -252,27 +319,29 @@ function TrendCardItem({ card: it }: { card: TrendCardData }) {
 	const [open, setOpen] = useState(false);
 	const hasDetail = !!(it.detail || (it.table && it.table.rows?.length));
 	return (
-		<div className="card" style={{ padding: 'var(--space-4)', display: 'flex', flexDirection: 'column' }}>
-			<div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-				{it.icon != null && <span style={{ color: 'var(--accent)', marginTop: 2, flexShrink: 0 }}><SectionIcon name={it.icon} size={20} /></span>}
+		<div className="card" style={{ padding: '28px 24px', borderRadius: 12, display: 'flex', flexDirection: 'column', border: '1px solid var(--border)' }}>
+			<div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+				{it.icon != null && <span style={{ width: 48, height: 48, borderRadius: 12, background: `${BRAND.pink}12`, color: BRAND.pink, display: 'grid', placeItems: 'center', flexShrink: 0 }}><SectionIcon name={it.icon} size={26} /></span>}
 				<div style={{ flex: 1, minWidth: 0 }}>
-					{it.eyebrow != null && <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-muted)', marginBottom: 3 }}><RichText value={it.eyebrow} inline /></div>}
-					<h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, lineHeight: 1.25 }}><RichText value={it.title} inline /></h3>
+					{it.eyebrow != null && <div style={{ fontFamily: MONO, fontSize: 11, fontWeight: 500, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--fg-muted)', marginBottom: 4 }}><RichText value={it.eyebrow} inline /></div>}
+					<h3 style={{ margin: 0, fontFamily: DISPLAY, fontSize: 26, fontWeight: 400, letterSpacing: '0.01em', lineHeight: 1.02, color: 'var(--fg)' }}><RichText value={it.title} inline /></h3>
 				</div>
 			</div>
 			{it.stat != null && (
-				<div style={{ marginTop: 12 }}>
-					<div style={{ fontSize: 24, fontWeight: 800, color: 'var(--accent)', lineHeight: 1 }}><RichText value={it.stat} inline /></div>
-					{it.stat_label != null && <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}><RichText value={it.stat_label} inline /></div>}
+				<div style={{ marginTop: 16 }}>
+					<div style={{ fontFamily: DISPLAY, fontSize: 34, fontWeight: 400, color: BRAND.pink, lineHeight: 1 }}><RichText value={it.stat} inline /></div>
+					{it.stat_label != null && <div style={{ fontFamily: MONO, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--fg-muted)', marginTop: 4 }}><RichText value={it.stat_label} inline /></div>}
 				</div>
 			)}
-			<div style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--fg-2)', marginTop: 12 }}><TiptapRenderer doc={it.body} /></div>
+			<div style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--fg-2)', marginTop: 14 }}>
+				<TiptapRenderer doc={it.body} />
+			</div>
 			{open && (
 				<div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border)', fontSize: 14, lineHeight: 1.6, color: 'var(--fg-2)' }}>
 					{it.detail && <TiptapRenderer doc={it.detail} />}
 					{it.table && it.table.rows.length > 0 && (
 						<div style={{ overflowX: 'auto', marginTop: 12 }}>
-							<table className="data-table">
+							<table className="report-table">
 								<thead><tr>{it.table.headers.map((h, j) => <th key={j}>{h}</th>)}</tr></thead>
 								<tbody>{it.table.rows.map((row, ri) => <tr key={ri}>{row.map((cell, ci) => <td key={ci}>{cell}</td>)}</tr>)}</tbody>
 							</table>
@@ -281,8 +350,11 @@ function TrendCardItem({ card: it }: { card: TrendCardData }) {
 				</div>
 			)}
 			{hasDetail && (
-				<button type="button" onClick={() => setOpen((o) => !o)} style={{ marginTop: 14, alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 4, border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--accent)', fontSize: 12, fontWeight: 700, padding: 0 }}>
-					{open ? 'Show less' : 'Read more'} <ChevronDown size={14} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
+				<button type="button" onClick={() => setOpen((o) => !o)} style={{
+					marginTop: 16, alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 5,
+					border: 0, background: 'transparent', cursor: 'pointer', color: BRAND.pink, fontFamily: MONO, fontSize: 11, fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', padding: 0,
+				}}>
+					{open ? 'Close' : 'Read more'} <ChevronDown size={14} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
 				</button>
 			)}
 		</div>
@@ -294,11 +366,15 @@ type RegionDef = { key: string; label: unknown; color?: string };
 function PeopleAvatar({ person, size, colorFor }: { person: PersonEntry; size: number; colorFor: (r?: string) => string }) {
 	const initials = plainText(person.name).trim().split(/\s+/).slice(0, 2).map((w) => w[0] ?? '').join('').toUpperCase();
 	return (
-		<div style={{ width: size, height: size, borderRadius: '50%', border: `3px solid ${colorFor(person.region)}`, overflow: 'hidden', display: 'grid', placeItems: 'center', background: 'var(--bg-2)' }}>
+		<div style={{
+			width: size, height: size, borderRadius: '50%', border: `3px solid ${colorFor(person.region)}`,
+			overflow: 'hidden', display: 'grid', placeItems: 'center', background: 'var(--bg-2)',
+			boxShadow: `0 0 18px ${colorFor(person.region)}44`,
+		}}>
 			{person.photo_url
 				/* eslint-disable-next-line @next/next/no-img-element */
-				? <img src={person.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-				: <span style={{ fontSize: size * 0.28, fontWeight: 800, color: 'var(--fg-muted)' }}>{initials}</span>}
+				? <img src={person.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', filter: 'grayscale(15%)' }} />
+				: <span style={{ fontFamily: DISPLAY, fontSize: size * 0.34, fontWeight: 400, color: 'var(--fg-muted)' }}>{initials}</span>}
 		</div>
 	);
 }
@@ -314,8 +390,9 @@ function PeopleGridSection({ content }: { content: Record<string, unknown> }) {
 			{regions.length > 0 && (
 				<div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
 					{regions.map((r) => (
-						<span key={r.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--fg-muted)' }}>
-							<span style={{ width: 10, height: 10, borderRadius: '50%', background: r.color ?? 'var(--accent)' }} /><RichText value={r.label} inline />
+						<span key={r.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontFamily: MONO, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-muted)' }}>
+							<span style={{ width: 10, height: 10, borderRadius: '50%', background: r.color ?? BRAND.pink }} />
+							<RichText value={r.label} inline />
 						</span>
 					))}
 				</div>
@@ -326,8 +403,8 @@ function PeopleGridSection({ content }: { content: Record<string, unknown> }) {
 					return (
 						<div key={i} onClick={() => { if (p.detail) setSelected(p); else if (p.link) window.open(p.link, '_blank', 'noopener'); }} style={{ textAlign: 'center', cursor: clickable ? 'pointer' : 'default' }}>
 							<div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}><PeopleAvatar person={p} size={92} colorFor={colorFor} /></div>
-							<div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.2 }}><RichText value={p.name} inline /></div>
-							{p.org != null && <div style={{ fontSize: 11, color: colorFor(p.region), textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 3, lineHeight: 1.3 }}><RichText value={p.org} inline /></div>}
+							<div style={{ fontFamily: DISPLAY, fontSize: 17, fontWeight: 400, letterSpacing: '0.01em', lineHeight: 1.05, color: 'var(--fg)' }}><RichText value={p.name} inline /></div>
+							{p.org != null && <div style={{ fontFamily: MONO, fontSize: 10, color: colorFor(p.region), textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 4, lineHeight: 1.3 }}><RichText value={p.org} inline /></div>}
 						</div>
 					);
 				})}
@@ -353,19 +430,20 @@ function QuoteSection({ content }: { content: Record<string, unknown> }) {
 	const role = content.role;
 	const avatarUrl = content.avatar_url as string | undefined;
 	return (
-		<blockquote className="card" style={{
-			padding: 'var(--space-4)', borderLeft: '3px solid var(--accent)',
-			fontStyle: 'italic', margin: 0, fontSize: 17, lineHeight: 1.6,
+		<blockquote style={{
+			position: 'relative', padding: 'clamp(28px, 4vw, 44px)', margin: 0, borderRadius: 16,
+			background: `linear-gradient(135deg, ${BRAND.darkTitle} 0%, #0c0f1a 100%)`, color: '#fff', overflow: 'hidden',
 		}}>
-			<div style={{ marginBottom: 12 }}><TiptapRenderer doc={content.body} /></div>
-			<footer style={{ display: 'flex', alignItems: 'center', gap: 10, fontStyle: 'normal', fontSize: 13 }}>
+			<span style={{ position: 'absolute', top: 4, left: 22, fontFamily: DISPLAY, fontSize: 120, lineHeight: 1, color: BRAND.pink, opacity: 0.25, pointerEvents: 'none' }}>&ldquo;</span>
+			<div style={{ position: 'relative', fontSize: 'clamp(20px, 2.4vw, 30px)', lineHeight: 1.4, fontWeight: 300, marginBottom: 20 }}><TiptapRenderer doc={content.body} /></div>
+			<footer style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 12, fontSize: 13 }}>
 				{avatarUrl && (
 					/* eslint-disable-next-line @next/next/no-img-element */
-					<img src={avatarUrl} alt="" style={{ width: 32, height: 32, borderRadius: '50%' }} />
+					<img src={avatarUrl} alt="" style={{ width: 40, height: 40, borderRadius: '50%', border: `2px solid ${BRAND.pink}` }} />
 				)}
 				<div>
-					<div style={{ fontWeight: 700 }}><RichText value={author} inline /></div>
-					{role != null && <div style={{ color: 'var(--fg-muted)', fontSize: 12 }}><RichText value={role} inline /></div>}
+					<div style={{ fontFamily: DISPLAY, fontSize: 20, fontWeight: 400, letterSpacing: '0.02em' }}><RichText value={author} inline /></div>
+					{role != null && <div style={{ fontFamily: MONO, fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: BRAND.lightBlue }}><RichText value={role} inline /></div>}
 				</div>
 			</footer>
 		</blockquote>
@@ -459,14 +537,10 @@ function useLiveSectionData<T = unknown>(sectionId: string) {
 }
 
 function LiveSectionShell({
-	title, refEl, children,
+	refEl, children,
 }: { title?: unknown; refEl: React.RefObject<HTMLDivElement | null>; children: ReactNode }) {
-	return (
-		<section ref={refEl}>
-			{title != null && <h3 style={{ margin: '0 0 12px', fontSize: 20, fontWeight: 700 }}><RichText value={title} inline /></h3>}
-			{children}
-		</section>
-	);
+	// The section title is rendered by the outer editorial <SectionHeader>.
+	return <div ref={refEl}>{children}</div>;
 }
 
 function CompanyGridSection({ section }: { section: VisibleSection }) {
@@ -492,8 +566,7 @@ function StaticCompanyGrid({ companyIds, title }: { companyIds: string[]; title:
 	const sorted = companyIds.map((id) => byId.get(id)).filter(Boolean) as Array<NonNullable<ReturnType<typeof byId.get>>>;
 
 	return (
-		<section>
-			{title != null && <h3 style={{ margin: '0 0 12px', fontSize: 20, fontWeight: 700 }}><RichText value={title} inline /></h3>}
+		<div>
 			{isLoading && <div className="card" style={{ padding: 12 }}>Loading…</div>}
 			{!isLoading && sorted.length === 0 && companyIds.length > 0 && (
 				<div className="card" style={{ padding: 12, color: 'var(--fg-muted)' }}>
@@ -506,27 +579,32 @@ function StaticCompanyGrid({ companyIds, title }: { companyIds: string[]; title:
 						<Link
 							key={c.id}
 							href={`/companies/${c.slug ?? c.id}`}
-							className="card"
-							style={{ padding: 'var(--space-3)', textDecoration: 'none', color: 'inherit', display: 'block' }}
+							className="report-hoverlift"
+							style={{ borderRadius: 14, overflow: 'hidden', textDecoration: 'none', color: 'inherit', display: 'block', border: '1px solid var(--border)', background: 'var(--bg-2)' }}
 						>
-							{c.custom_logo_url && (
-								/* eslint-disable-next-line @next/next/no-img-element */
-								<img src={c.custom_logo_url} alt="" style={{ width: 28, height: 28, objectFit: 'contain', marginBottom: 8 }} />
-							)}
-							<div style={{ fontWeight: 600, marginBottom: 4 }}>{c.name}</div>
-							<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
-								{c.primary_sector ?? '—'}{c.hq_country ? ` · ${c.hq_country}` : ''}
-							</div>
-							{c.total_funding_usd && (
-								<div style={{ fontSize: 11, color: 'var(--fg-2)', marginTop: 4 }}>
-									${formatBig(Number(c.total_funding_usd))} raised
+							<div style={{ height: 3, background: `linear-gradient(90deg, ${BRAND.pink}, ${BRAND.pink}44)` }} />
+							<div style={{ padding: '18px 20px 20px' }}>
+								<div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+									{c.custom_logo_url
+										/* eslint-disable-next-line @next/next/no-img-element */
+										? <img src={c.custom_logo_url} alt="" style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 8, background: 'var(--bg-1)', padding: 4 }} />
+										: <div style={{ width: 40, height: 40, borderRadius: 8, background: `${BRAND.teal}22`, display: 'grid', placeItems: 'center', fontFamily: DISPLAY, fontSize: 18, color: BRAND.teal }}>{c.name.charAt(0)}</div>}
+									<div style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.2 }}>{c.name}</div>
 								</div>
-							)}
+								<div style={{ fontFamily: MONO, fontSize: 11, color: 'var(--fg-muted)' }}>
+									{c.primary_sector ?? '—'}{c.hq_country ? ` · ${c.hq_country}` : ''}
+								</div>
+								{c.total_funding_usd && (
+									<div style={{ fontFamily: MONO, fontSize: 12, color: BRAND.pink, fontWeight: 500, marginTop: 6 }}>
+										${formatBig(Number(c.total_funding_usd))} raised
+									</div>
+								)}
+							</div>
 						</Link>
 					))}
 				</div>
 			)}
-		</section>
+		</div>
 	);
 }
 
@@ -542,16 +620,22 @@ function LiveCompanyGrid({ section, heading }: { section: VisibleSection; headin
 			{!isLoading && data && (
 				<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
 					{data.map((c) => (
-						<div key={c.id} className="card" style={{ padding: 'var(--space-3)' }}>
-							<div style={{ fontWeight: 600, marginBottom: 4 }}>{c.name}</div>
-							<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
-								{c.sector_name ?? '—'}{c.country ? ` · ${c.country}` : ''}
-							</div>
-							{c.total_funding_usd && (
-								<div style={{ fontSize: 11, color: 'var(--fg-2)', marginTop: 4 }}>
-									${formatBig(Number(c.total_funding_usd))} raised
+						<div key={c.id} className="report-hoverlift" style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--bg-2)' }}>
+							<div style={{ height: 3, background: `linear-gradient(90deg, ${BRAND.pink}, ${BRAND.pink}44)` }} />
+							<div style={{ padding: '18px 20px 20px' }}>
+								<div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+									<div style={{ width: 40, height: 40, borderRadius: 8, background: `${BRAND.teal}22`, display: 'grid', placeItems: 'center', fontFamily: DISPLAY, fontSize: 18, color: BRAND.teal }}>{c.name.charAt(0)}</div>
+									<div style={{ fontWeight: 600, fontSize: 15, lineHeight: 1.2 }}>{c.name}</div>
 								</div>
-							)}
+								<div style={{ fontFamily: MONO, fontSize: 11, color: 'var(--fg-muted)' }}>
+									{c.sector_name ?? '—'}{c.country ? ` · ${c.country}` : ''}
+								</div>
+								{c.total_funding_usd && (
+									<div style={{ fontFamily: MONO, fontSize: 12, color: BRAND.pink, fontWeight: 500, marginTop: 6 }}>
+										${formatBig(Number(c.total_funding_usd))} raised
+									</div>
+								)}
+							</div>
 						</div>
 					))}
 				</div>
@@ -567,7 +651,8 @@ function DealTableSection({ section }: { section: VisibleSection }) {
 		<LiveSectionShell title={section.title} refEl={ref}>
 			{isLoading && <div className="card" style={{ padding: 12 }}>Loading…</div>}
 			{!isLoading && data && data.length > 0 && (
-				<table className="data-table">
+				<div style={{ overflowX: 'auto' }}>
+				<table className="report-table">
 					<thead>
 						<tr>
 							<th>{dealType === 'ma' ? 'Acquiree' : 'Company'}</th>
@@ -589,6 +674,7 @@ function DealTableSection({ section }: { section: VisibleSection }) {
 						))}
 					</tbody>
 				</table>
+				</div>
 			)}
 		</LiveSectionShell>
 	);
@@ -616,10 +702,10 @@ function DataChartSection({ section }: { section: VisibleSection }) {
 						{data.map((r, i) => {
 							const val = Number(r.total ?? 0);
 							return (
-								<div key={i} className="card" style={{ padding: 'var(--space-4)' }}>
-									<div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--fg-muted)' }}>{String(r[labelKey] ?? '—')}</div>
-									<div style={{ fontSize: 26, fontWeight: 800, color: 'var(--accent)', marginTop: 4 }}>${formatBig(val)}</div>
-									<div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 4 }}>{Math.round((val / tot) * 100)}% global{r.deals != null ? ` · ${Number(r.deals).toLocaleString()} deals` : ''}</div>
+								<div key={i} style={{ padding: '24px 26px', borderRadius: 12, background: 'var(--bg-2)', border: '1px solid var(--border)' }}>
+									<div style={{ fontFamily: MONO, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.16em', color: 'var(--fg-muted)' }}>{String(r[labelKey] ?? '—')}</div>
+									<div style={{ fontFamily: DISPLAY, fontSize: 40, fontWeight: 400, color: BRAND.pink, marginTop: 6, lineHeight: 1 }}>${formatBig(val)}</div>
+									<div style={{ fontFamily: MONO, fontSize: 11, color: 'var(--fg-muted)', marginTop: 6 }}>{Math.round((val / tot) * 100)}% global{r.deals != null ? ` · ${Number(r.deals).toLocaleString()} deals` : ''}</div>
 								</div>
 							);
 						})}
@@ -636,10 +722,10 @@ function DataChartSection({ section }: { section: VisibleSection }) {
 								<div key={i}>
 									<div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
 										<span style={{ fontWeight: 600 }}>{String(r[labelKey] ?? '—')}</span>
-										<span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontWeight: 700 }}>${formatBig(val)}</span>
+										<span style={{ fontFamily: MONO, color: BRAND.pink, fontWeight: 500 }}>${formatBig(val)}</span>
 									</div>
-									<div style={{ height: 6, background: 'var(--bg-2)', borderRadius: 3, overflow: 'hidden' }}>
-										<div style={{ width: `${(val / max) * 100}%`, height: '100%', background: 'var(--accent)' }} />
+									<div style={{ height: 8, background: 'var(--bg-1)', borderRadius: 4, overflow: 'hidden' }}>
+										<div style={{ width: `${(val / max) * 100}%`, height: '100%', background: `linear-gradient(to right, ${BRAND.navy}, ${BRAND.navy}bb)`, transition: 'width .8s cubic-bezier(.16,1,.3,1)' }} />
 									</div>
 								</div>
 							);
@@ -653,25 +739,25 @@ function DataChartSection({ section }: { section: VisibleSection }) {
 						{chartType === 'line' ? (
 							<LineChart data={data}>
 								<CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-								<XAxis dataKey={xKey} stroke="var(--fg-muted)" fontSize={11} />
-								<YAxis stroke="var(--fg-muted)" fontSize={11} tickFormatter={(v) => `$${formatBig(v)}`} />
+								<XAxis dataKey={xKey} stroke="var(--fg-muted)" fontSize={11} tick={{ fontFamily: MONO }} />
+								<YAxis stroke="var(--fg-muted)" fontSize={11} tick={{ fontFamily: MONO }} tickFormatter={(v) => `$${formatBig(v)}`} />
 								<Tooltip contentStyle={{ background: 'var(--bg-1)', border: '1px solid var(--border)' }} formatter={(v) => `$${formatBig(Number(v))}`} />
-								<Line type="monotone" dataKey={yKey} stroke="var(--accent)" strokeWidth={2} />
+								<Line type="monotone" dataKey={yKey} stroke={BRAND.tealBright} strokeWidth={2.5} dot={{ r: 3, fill: BRAND.tealBright }} />
 							</LineChart>
 						) : chartType === 'pie' ? (
 							<PieChart>
 								<Pie data={data} dataKey={yKey} nameKey={labelKey} outerRadius={110}>
-									{data.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+									{data.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
 								</Pie>
 								<Tooltip formatter={(v) => `$${formatBig(Number(v))}`} />
 							</PieChart>
 						) : (
 							<BarChart data={data}>
 								<CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-								<XAxis dataKey={xKey} stroke="var(--fg-muted)" fontSize={11} />
-								<YAxis stroke="var(--fg-muted)" fontSize={11} tickFormatter={(v) => `$${formatBig(v)}`} />
+								<XAxis dataKey={xKey} stroke="var(--fg-muted)" fontSize={11} tick={{ fontFamily: MONO }} />
+								<YAxis stroke="var(--fg-muted)" fontSize={11} tick={{ fontFamily: MONO }} tickFormatter={(v) => `$${formatBig(v)}`} />
 								<Tooltip contentStyle={{ background: 'var(--bg-1)', border: '1px solid var(--border)' }} formatter={(v) => `$${formatBig(Number(v))}`} />
-								<Bar dataKey={yKey} fill="var(--accent)" />
+								<Bar dataKey={yKey} fill={BRAND.navy} radius={[3, 3, 0, 0]} />
 							</BarChart>
 						)}
 					</ResponsiveContainer>
@@ -776,8 +862,6 @@ function TiptapText({ text, marks }: { text: string; marks?: Array<{ type: strin
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
 function formatBig(n: number): string {
 	if (!Number.isFinite(n)) return '—';

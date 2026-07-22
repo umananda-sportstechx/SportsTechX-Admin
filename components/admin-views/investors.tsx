@@ -538,4 +538,3 @@ function SectorCascadeMulti({ value, onChange }: { value: string[]; onChange: (i
 	);
 }
 
-export default function InvestorsAdminPage() { return <InvestorsView />; }

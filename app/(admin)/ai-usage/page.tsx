@@ -6,7 +6,8 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Receipt, RefreshCw, Save, Plus } from 'lucide-react';
 import { api } from '@/lib/api';
-import { PageHeader, StatCard, StatsPanel, Section, AsyncState } from '@/components/atoms';
+import { PageHeader, StatCard, StatsPanel, Section, AsyncState, Pager } from '@/components/atoms';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { ComboBarLine } from '@/components/charts';
 
 /**
@@ -97,10 +98,14 @@ export default function AiUsagePage() {
 		['/api/admin/ai-usage/summary', { from }],
 		{ dedupingInterval: 30_000 },
 	);
-	const { data: recent, mutate: mutateRecent } = useSWR<LedgerRow[]>(
-		['/api/admin/ai-usage/recent', { limit: 100 }],
+	const [recentQ, setRecentQ] = useState('');
+	const [recentPage, setRecentPage] = useState(1);
+	const recentDq = useDebouncedValue(recentQ);
+	const { data: recent, mutate: mutateRecent } = useSWR<{ data: LedgerRow[]; total: number; page: number; totalPages: number }>(
+		['/api/admin/ai-usage/recent', { q: recentDq || undefined, page: recentPage, limit: 25 }],
 		{ dedupingInterval: 30_000 },
 	);
+	const recentRows = recent?.data ?? [];
 
 	const t = summary?.totals;
 	const spendChart = (summary?.byDay ?? []).map((d) => {
@@ -233,9 +238,12 @@ export default function AiUsagePage() {
 				</Section>
 			</div>
 
-			{/* Recent rows */}
-			<div className="card" style={{ padding: 'var(--space-4)' }}>
-				<div style={{ fontWeight: 700, marginBottom: 10 }}>Recent calls <span style={{ fontWeight: 400, color: 'var(--fg-muted)', fontSize: 12 }}>· latest 100</span></div>
+			{/* Recent rows — one per LLM call, the highest-velocity table here. */}
+			<Section title="Recent calls" meta={`${(recent?.total ?? 0).toLocaleString()} calls`} padded={false}>
+				<div style={{ padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--border)' }}>
+					<input className="search-input" style={{ flex: '0 0 260px', height: 30, maxWidth: '100%' }} placeholder="Search feature, model or user email…"
+						value={recentQ} onChange={(e) => { setRecentQ(e.target.value); setRecentPage(1); }} />
+				</div>
 				<div style={{ overflowX: 'auto' }}>
 					<table className="data-table">
 						<thead>
@@ -245,7 +253,7 @@ export default function AiUsagePage() {
 							</tr>
 						</thead>
 						<tbody>
-							{(recent ?? []).map((r) => (
+							{recentRows.map((r) => (
 								<tr key={r.id}>
 									<td style={{ whiteSpace: 'nowrap', color: 'var(--fg-muted)', fontSize: 12 }}>
 										{new Date(r.created_at).toLocaleString()}
@@ -265,13 +273,16 @@ export default function AiUsagePage() {
 									</td>
 								</tr>
 							))}
-							{(recent?.length ?? 0) === 0 && (
-								<tr><td colSpan={8} style={{ color: 'var(--fg-muted)' }}>No calls yet.</td></tr>
+							{recentRows.length === 0 && (
+								<tr><td colSpan={8} style={{ color: 'var(--fg-muted)' }}>{recentDq ? 'No calls match.' : 'No calls yet.'}</td></tr>
 							)}
 						</tbody>
 					</table>
 				</div>
-			</div>
+				<div style={{ padding: '0 var(--space-4)' }}>
+					<Pager page={recentPage} totalPages={recent?.totalPages} onPage={setRecentPage} />
+				</div>
+			</Section>
 		</div>
 	);
 }

@@ -5,8 +5,9 @@ import useSWR from 'swr';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { InvestorSelectOne } from '@/components/entity-pickers';
-import { PageHeader, Section, StatCard, AsyncState, Tag } from '@/components/atoms';
+import { PageHeader, Section, StatCard, AsyncState, Tag, Pager } from '@/components/atoms';
 import { StatStrip } from '@/components/filters';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 
 interface JobRow {
 	id: string; queue_name: string; job_name: string | null; status: string;
@@ -23,6 +24,9 @@ interface HistoryResp {
 	rows: JobRow[];
 	by_status: Array<{ status: string; count: number }>;
 	by_queue: QueueRow[];
+	page: number;
+	total: number;
+	totalPages: number;
 }
 
 const STATUS_TONE: Record<string, '' | 'pos' | 'neg' | 'warn'> = {
@@ -89,9 +93,12 @@ export default function JobsPage() {
 	const [enrichId, setEnrichId] = useState('');
 	const [runningKey, setRunningKey] = useState<EndpointKey | null>(null);
 	const [status, setStatus] = useState<string>('');
+	const [q, setQ] = useState('');
+	const [page, setPage] = useState(1);
+	const dq = useDebouncedValue(q);
 
 	const history = useSWR<HistoryResp>(
-		['/api/admin/jobs/history', { status: status || undefined, limit: 100 }],
+		['/api/admin/jobs/history', { status: status || undefined, q: dq || undefined, page, limit: 50 }],
 		{ dedupingInterval: 15_000, refreshInterval: 30_000 },
 	);
 	const rows = history.data?.rows ?? [];
@@ -197,12 +204,14 @@ export default function JobsPage() {
 				</Section>
 			</div>
 
-			<Section title="Recent runs" meta={`latest ${rows.length} · refreshes every 30s`} padded={false}>
+			<Section title="Recent runs" meta={`${history.data?.total ?? 0} runs · refreshes every 30s`} padded={false}>
 				<div style={{ padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--border)', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+					<input className="search-input" style={{ flex: '0 0 220px', height: 30 }} placeholder="Search queue, job or entity id…"
+						value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} />
 					<span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>Status</span>
-					<button className={`chip ${status === '' ? 'on' : ''}`} onClick={() => setStatus('')}>All</button>
+					<button className={`chip ${status === '' ? 'on' : ''}`} onClick={() => { setStatus(''); setPage(1); }}>All</button>
 					{byStatus.map((b) => (
-						<button key={b.status} className={`chip ${status === b.status ? 'on' : ''}`} onClick={() => setStatus(b.status)}>
+						<button key={b.status} className={`chip ${status === b.status ? 'on' : ''}`} onClick={() => { setStatus(b.status); setPage(1); }}>
 							{b.status}: {b.count}
 						</button>
 					))}
@@ -242,6 +251,7 @@ export default function JobsPage() {
 						</table>
 					</div>
 				</AsyncState>
+				<Pager page={page} totalPages={history.data?.totalPages} onPage={setPage} />
 			</Section>
 		</div>
 	);

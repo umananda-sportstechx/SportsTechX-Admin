@@ -489,4 +489,3 @@ function CreateEntityPanel({ claim, onDone }: { claim: Claim; onDone: () => void
 	);
 }
 
-export default function ClaimsAdminPage() { return <ClaimsView />; }

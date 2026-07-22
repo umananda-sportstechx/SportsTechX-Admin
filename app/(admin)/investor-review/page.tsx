@@ -16,7 +16,7 @@ import { DateRangePicker, type RangeValue } from '@/components/date-range-picker
 import { CompletionByAdmin, TimeAnalytics, WeeklyMetrics } from '@/components/queue-stats';
 import { WorkSessionTimer, countWorkItem } from '@/components/work-session-timer';
 import { CandidateInput, parseInvestorCandidates } from '@/components/candidate-import';
-import { InvestorModal } from '../investors/page';
+import { InvestorModal } from '@/components/admin-views/investors';
 
 interface QueueRow {
 	id: string; name: string; website: string | null; category: string | null; country: string | null;

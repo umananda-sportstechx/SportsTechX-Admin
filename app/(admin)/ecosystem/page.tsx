@@ -18,9 +18,9 @@ import { ImageInput } from '@/components/image-input';
 import { useConfirm } from '@/components/confirm';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import { SportsPicker, LocationFields, SocialLinks, CompanySelectOne, EMPTY_SOCIAL, EMPTY_LOCATION, type SocialValue, type LocationValue } from '@/components/entity-pickers';
-import { InvestorsView } from '../investors/page';
-import { ClaimsView } from '../claims/page';
-import { DataRequestsView } from '../data-requests/page';
+import { InvestorsView } from '@/components/admin-views/investors';
+import { ClaimsView } from '@/components/admin-views/claims';
+import { DataRequestsView } from '@/components/admin-views/data-requests';
 import { DateRangePicker, type RangeValue } from '@/components/date-range-picker';
 
 interface Entity {

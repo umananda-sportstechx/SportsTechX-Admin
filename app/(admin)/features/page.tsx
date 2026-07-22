@@ -6,8 +6,9 @@ import { toast } from 'sonner';
 import { Plus, Save, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useConfirm } from '@/components/confirm';
+import { FilterBar, FilterSelect } from '@/components/filters';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState } from '@/components/atoms';
+import { PageHeader, AsyncState, Section, Tag } from '@/components/atoms';
 
 interface FeatureRow {
 	id: string;
@@ -31,6 +32,8 @@ interface FeaturesResponse { data: FeatureRow[] }
 export default function FeaturesAdminPage() {
 	const ask = useConfirm();
 	const [includeInactive, setIncludeInactive] = useState(false);
+	const [q, setQ] = useState('');
+	const [cat, setCat] = useState('');
 	const { data, mutate, isLoading, error } = useSWR<FeaturesResponse>(['/api/admin/features', { include_inactive: includeInactive || undefined }]);
 	const [creating, setCreating] = useState(false);
 	const [editing, setEditing] = useState<FeatureRow | null>(null);
@@ -74,7 +77,12 @@ export default function FeaturesAdminPage() {
 		}
 	};
 
-	const rows = data?.data ?? [];
+	const all = data?.data ?? [];
+	const categories = Array.from(new Set(all.map((r) => r.category).filter(Boolean))) as string[];
+	const rows = all.filter((r) =>
+		(!cat || r.category === cat) &&
+		(!q || r.name.toLowerCase().includes(q.toLowerCase()) || r.slug.toLowerCase().includes(q.toLowerCase())),
+	);
 
 	return (
 		<div>
@@ -84,14 +92,18 @@ export default function FeaturesAdminPage() {
 				subtitle="Edits go live on the public /api/features response on the next request (5-min cache, invalidated on write). Per-user overrides live separately in profile_feature_grants."
 			/>
 
-			<div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 16, marginBottom: 12 }}>
+			<FilterBar>
+				<input className="search-input" style={{ flex: '0 0 240px', height: 32 }} placeholder="Search name or slug…"
+					value={q} onChange={(e) => setQ(e.target.value)} />
+				<FilterSelect ariaLabel="Category" value={cat} onChange={setCat} options={categories} allLabel="All categories" />
+				<div style={{ flex: 1 }} />
 				<label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, color: 'var(--fg-2)' }}>
 					<input type="checkbox" checked={includeInactive} onChange={(e) => setIncludeInactive(e.target.checked)} /> Show inactive
 				</label>
 				<button className="btn" onClick={() => setCreating(true)}>
 					<Plus size={12} /> Add feature
 				</button>
-			</div>
+			</FilterBar>
 
 			{(creating || editing) && (
 				<FeatureModal
@@ -101,31 +113,31 @@ export default function FeaturesAdminPage() {
 				/>
 			)}
 
-			<div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-				<AsyncState loading={isLoading} error={error} empty={rows.length === 0} emptyMsg="No features yet — add one." onRetry={() => void mutate()}>
-				<table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+			<Section padded={false} title="All features" meta={`${rows.length} of ${all.length}`}>
+				<AsyncState loading={isLoading} error={error} empty={rows.length === 0} emptyMsg={q || cat ? 'No features match.' : 'No features yet — add one.'} onRetry={() => void mutate()}>
+				<table className="data-table">
 					<thead>
-						<tr style={{ background: 'var(--bg-2)', textAlign: 'left' }}>
-							<th style={th}>Name</th>
-							<th style={th}>Slug</th>
-							<th style={th}>Category</th>
-							<th style={{ ...th, textAlign: 'center', width: 70 }}>Free</th>
-							<th style={{ ...th, textAlign: 'center', width: 70 }}>Growth</th>
-							<th style={{ ...th, textAlign: 'center', width: 70 }}>Pro</th>
-							<th style={{ ...th, width: 80 }} />
+						<tr>
+							<th>Name</th>
+							<th>Slug</th>
+							<th>Category</th>
+							<th style={{ textAlign: 'center' }}>Free</th>
+							<th style={{ textAlign: 'center' }}>Growth</th>
+							<th style={{ textAlign: 'center' }}>Pro</th>
+							<th />
 						</tr>
 					</thead>
 					<tbody>
 						{rows.map((row) => (
-							<tr key={row.id} style={{ borderTop: '1px solid var(--border)', opacity: row.is_active ? 1 : 0.5 }}>
-								<td style={td}>
-									<div style={{ fontWeight: 600 }}>{row.name}{!row.is_active && <span className="tag" style={{ marginLeft: 6 }}>inactive</span>}</div>
+							<tr key={row.id} style={{ opacity: row.is_active ? 1 : 0.5 }}>
+								<td>
+									<div style={{ fontWeight: 600 }}>{row.name}{!row.is_active && <Tag>inactive</Tag>}</div>
 									{row.description && <div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 2 }}>{row.description}</div>}
 								</td>
-								<td style={{ ...td, fontFamily: 'var(--font-mono)', fontSize: 11 }}>{row.slug}</td>
-								<td style={{ ...td, color: 'var(--fg-2)' }}>{row.category ?? '—'}</td>
+								<td style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{row.slug}</td>
+								<td style={{ color: 'var(--fg-2)' }}>{row.category ?? '—'}</td>
 								{TIERS.map((t) => (
-									<td key={t} style={{ ...td, textAlign: 'center' }}>
+									<td key={t} style={{ textAlign: 'center' }}>
 										<button
 											className={`chip ${row[t] ? 'on' : ''}`}
 											style={{ minWidth: 32 }}
@@ -136,7 +148,7 @@ export default function FeaturesAdminPage() {
 										</button>
 									</td>
 								))}
-								<td style={{ ...td, textAlign: 'right' }}>
+								<td style={{ textAlign: 'right' }}>
 									<div style={{ display: 'inline-flex', gap: 6, justifyContent: 'flex-end' }}>
 										<button className="btn ghost" onClick={() => setEditing(row)}>Edit</button>
 										{row.is_active ? (
@@ -153,13 +165,11 @@ export default function FeaturesAdminPage() {
 					</tbody>
 				</table>
 				</AsyncState>
-			</div>
+			</Section>
 		</div>
 	);
 }
 
-const th: React.CSSProperties = { padding: '10px 12px', fontFamily: 'var(--font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--fg-muted)' };
-const td: React.CSSProperties = { padding: '12px' };
 
 function FeatureModal({ initial, onClose, onSaved }: { initial: FeatureRow | null; onClose: () => void; onSaved: () => void }) {
 	const isEdit = !!initial;

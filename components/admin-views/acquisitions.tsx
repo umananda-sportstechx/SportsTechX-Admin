@@ -358,4 +358,3 @@ function AcquisitionForm({ id, initial, onClose, onSaved, onStage }: { id: strin
 	);
 }
 
-export default function AcquisitionsAdminPage() { return <AcquisitionsView />; }

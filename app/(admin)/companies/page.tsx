@@ -23,10 +23,10 @@ import {
 	RoundTypeSelect, CurrencySelect, InvestorPicker, CompanySelectOne,
 	EMPTY_SOCIAL, EMPTY_LOCATION, type SocialValue, type LocationValue, type DealInvestor,
 } from '@/components/entity-pickers';
-import { DealModal, DealsView, type StagedDeal } from '../deals/page';
-import { AcquisitionModal, AcquisitionsView, type StagedAcq } from '../acquisitions/page';
-import { ClaimsView } from '../claims/page';
-import { DataRequestsView } from '../data-requests/page';
+import { DealModal, DealsView, type StagedDeal } from '@/components/admin-views/deals';
+import { AcquisitionModal, AcquisitionsView, type StagedAcq } from '@/components/admin-views/acquisitions';
+import { ClaimsView } from '@/components/admin-views/claims';
+import { DataRequestsView } from '@/components/admin-views/data-requests';
 import { DateRangePicker, type RangeValue } from '@/components/date-range-picker';
 
 interface Company {

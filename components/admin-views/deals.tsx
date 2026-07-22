@@ -337,4 +337,3 @@ function DealForm({ id, initial, onClose, onSaved, onStage }: { id: string | nul
 	);
 }
 
-export default function DealsAdminPage() { return <DealsView />; }

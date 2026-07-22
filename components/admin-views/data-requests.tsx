@@ -265,4 +265,3 @@ export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: 
 	);
 }
 
-export default function DataRequestsPage() { return <DataRequestsView />; }

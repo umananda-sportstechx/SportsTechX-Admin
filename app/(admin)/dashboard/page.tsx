@@ -190,7 +190,7 @@ export default function AdminDashboard() {
 
 			{/* Mix charts — three balanced columns */}
 			<div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 'var(--space-4)', marginBottom: 'var(--space-5)' }}>
-				<Section title="Top sectors" meta="by capital">
+				<Section title="Top sectors" meta="by capital" center>
 					<AsyncState loading={sectorTree.isLoading} error={sectorTree.error} empty={sectorRows.length === 0} emptyMsg="No sector data" onRetry={() => void sectorTree.mutate()}>
 						<HBarDrilldown rows={sectorRows} total={sectorTotal} accordion />
 					</AsyncState>
@@ -203,7 +203,7 @@ export default function AdminDashboard() {
 						</div>
 					</AsyncState>
 				</Section>
-				<Section title="Deal share by sector" meta="rounds">
+				<Section title="Deal share by sector" meta="rounds" center>
 					<AsyncState loading={sectorTree.isLoading} error={sectorTree.error} empty={sectorDealSegments.length === 0} emptyMsg="No data" onRetry={() => void sectorTree.mutate()}>
 						<PieDonut segments={sectorDealSegments} mode="bar" />
 					</AsyncState>

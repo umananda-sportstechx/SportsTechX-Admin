@@ -47,7 +47,7 @@ export default function BillingAdminPage() {
 	const [bulkExpiry, setBulkExpiry] = useState(0); // 0 = never expires
 
 	const [accessEmails, setAccessEmails] = useState('');
-	const [accessTier, setAccessTier] = useState<'growth' | 'pro'>('pro');
+	const [accessTier, setAccessTier] = useState<'general' | 'raise' | 'scout' | 'growth' | 'pro'>('raise');
 	const [accessDays, setAccessDays] = useState(30);
 	const [accessReason, setAccessReason] = useState('');
 	const [accessResults, setAccessResults] = useState<BulkGrantAccessResponse | null>(null);
@@ -181,9 +181,10 @@ export default function BillingAdminPage() {
 					<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, marginBottom: 16 }}>
 						<div>
 							<Label>Tier</Label>
-							<div style={{ display: 'flex', gap: 6 }}>
-								<button type="button" className={`chip ${accessTier === 'growth' ? 'on' : ''}`} onClick={() => setAccessTier('growth')}>Growth</button>
-								<button type="button" className={`chip ${accessTier === 'pro' ? 'on' : ''}`} onClick={() => setAccessTier('pro')}>Pro</button>
+							<div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+								{([['general', 'General'], ['raise', 'Raise'], ['scout', 'Scout'], ['growth', 'Growth'], ['pro', 'Pro']] as const).map(([v, label]) => (
+									<button key={v} type="button" className={`chip ${accessTier === v ? 'on' : ''}`} onClick={() => setAccessTier(v)}>{label}</button>
+								))}
 							</div>
 						</div>
 						<div>

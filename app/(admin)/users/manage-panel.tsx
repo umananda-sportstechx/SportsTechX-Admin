@@ -321,7 +321,7 @@ function TierChangeSection({ user }: { user: ManageUser }) {
 	return (
 		<div>
 			<div className="co-stat-label" style={{ marginBottom: 8 }}>Permanent tier</div>
-			<Select value={tier} onChange={setTier} width="100%" style={{ display: 'block', width: '100%', marginBottom: 8 }} options={['free', 'growth', 'pro'].map((t) => ({ value: t, label: t }))} />
+			<Select value={tier} onChange={setTier} width="100%" style={{ display: 'block', width: '100%', marginBottom: 8 }} options={['free', 'general', 'raise', 'scout', 'growth', 'pro'].map((t) => ({ value: t, label: t }))} />
 			<button className="btn" disabled={pending || tier === user.user_type} onClick={() => void update()}>
 				{pending ? 'Saving…' : 'Save tier'}
 			</button>
@@ -331,7 +331,7 @@ function TierChangeSection({ user }: { user: ManageUser }) {
 
 function GrantAccessSection({ profileId }: { profileId: string }) {
 	const { mutate } = useSWRConfig();
-	const [tier, setTier] = useState<'growth' | 'pro'>('pro');
+	const [tier, setTier] = useState<'general' | 'raise' | 'scout' | 'growth' | 'pro'>('raise');
 	const [days, setDays] = useState(30);
 	const [reason, setReason] = useState('');
 	const [pending, setPending] = useState(false);
@@ -349,7 +349,7 @@ function GrantAccessSection({ profileId }: { profileId: string }) {
 		<div>
 			<div className="co-stat-label" style={{ marginBottom: 8 }}>Grant time-bounded access</div>
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: 6, marginBottom: 6 }}>
-				<Select value={tier} onChange={(v) => setTier(v as 'growth' | 'pro')} width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: 'growth', label: 'Growth' }, { value: 'pro', label: 'Pro' }]} />
+				<Select value={tier} onChange={(v) => setTier(v as 'general' | 'raise' | 'scout' | 'growth' | 'pro')} width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: 'general', label: 'General' }, { value: 'raise', label: 'Raise' }, { value: 'scout', label: 'Scout' }, { value: 'growth', label: 'Growth (legacy)' }, { value: 'pro', label: 'Pro (legacy)' }]} />
 				<input className="search-input" type="number" min={1} max={3650} value={days} onChange={(e) => setDays(Math.max(1, Number(e.target.value) || 1))} />
 			</div>
 			<input className="search-input" placeholder="Reason (optional)" style={{ width: '100%', marginBottom: 8 }} value={reason} onChange={(e) => setReason(e.target.value)} />

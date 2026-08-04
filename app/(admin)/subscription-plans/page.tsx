@@ -218,7 +218,7 @@ function CreateModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 	const [name, setName] = useState('');
 	const [tagline, setTagline] = useState('');
 	const [description, setDescription] = useState('');
-	const [tier, setTier] = useState<'free' | 'growth' | 'pro'>('growth');
+	const [tier, setTier] = useState<'free' | 'general' | 'raise' | 'scout' | 'growth' | 'pro'>('general');
 	const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('yearly');
 	const [priceAmount, setPriceAmount] = useState('0'); // cents
 	const [currency, setCurrency] = useState('EUR');
@@ -229,8 +229,12 @@ function CreateModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 	const [sortOrder, setSortOrder] = useState('0');
 	const [pending, setPending] = useState(false);
 
-	// tier_detail is derived from tier + interval (matches the server enum).
-	const tierDetail = tier === 'free' ? 'free' : `${tier}_${billingInterval}`;
+	// tier_detail is derived from tier + interval (matches the server enum). The
+	// new plans (general/raise/scout) only have *_yearly enum members, so force
+	// yearly for them to avoid a 400 on `${tier}_monthly`.
+	const isNewTier = tier === 'general' || tier === 'raise' || tier === 'scout';
+	const effectiveInterval: 'monthly' | 'yearly' = isNewTier ? 'yearly' : billingInterval;
+	const tierDetail = tier === 'free' ? 'free' : `${tier}_${effectiveInterval}`;
 
 	const submit = async () => {
 		setPending(true);
@@ -242,7 +246,7 @@ function CreateModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 				description: description.trim() || null,
 				tier,
 				tier_detail: tierDetail,
-				billing_interval: billingInterval,
+				billing_interval: effectiveInterval,
 				price_amount: Number(priceAmount) || 0,
 				currency_code: currency.trim().toUpperCase() || 'EUR',
 				trial_days: Number(trialDays) || 0,
@@ -281,7 +285,7 @@ function CreateModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 				<Field label="Description"><textarea className="search-input" style={{ minHeight: 60 }} value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
 				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 					<Field label="Tier">
-						<Select value={tier} onChange={(v) => setTier(v as 'free' | 'growth' | 'pro')} width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: 'free', label: 'free' }, { value: 'growth', label: 'growth' }, { value: 'pro', label: 'pro' }]} />
+						<Select value={tier} onChange={(v) => setTier(v as 'free' | 'general' | 'raise' | 'scout' | 'growth' | 'pro')} width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: 'free', label: 'free' }, { value: 'general', label: 'general' }, { value: 'raise', label: 'raise' }, { value: 'scout', label: 'scout' }, { value: 'growth', label: 'growth (legacy)' }, { value: 'pro', label: 'pro (legacy)' }]} />
 					</Field>
 					<Field label="Billing interval">
 						<Select value={billingInterval} onChange={(v) => setBillingInterval(v as 'monthly' | 'yearly')} width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: 'monthly', label: 'monthly' }, { value: 'yearly', label: 'yearly' }]} />

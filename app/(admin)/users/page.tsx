@@ -27,7 +27,7 @@ interface UserAnalytics {
 	report_downloads: { total: number; unique_users: number; last_30d: number; in_range?: number; unique_users_in_range?: number; top_reports: Bucket[]; daily_trend: Bucket[]; by_day_of_week?: Bucket[] };
 }
 const FREQ_BUCKETS: Record<string, 'never' | 'once' | '2-5' | '6+'> = { 'never (0)': 'never', once: 'once', '2-5': '2-5', '6+': '6+' };
-const TIERS = ['free', 'growth', 'pro'] as const;
+const TIERS = ['free', 'general', 'raise', 'scout', 'growth', 'pro'] as const;
 const ROLES = ['user', 'admin'] as const;
 
 interface User {
@@ -136,7 +136,7 @@ export function UsersView({ view }: { view: 'directory' | 'stats' | 'charts' }) 
 				<StatStrip cols={4}>
 					<StatCard label="Total users" loading={stats.isLoading} value={(stats.data?.total ?? 0).toLocaleString()} />
 					<StatCard label="Admins" loading={stats.isLoading} value={(stats.data?.admins ?? 0).toLocaleString()} />
-					{(stats.data?.by_tier ?? []).slice(0, 2).map((b) => (
+					{[...(stats.data?.by_tier ?? [])].sort((a, b) => b.value - a.value).slice(0, 2).map((b) => (
 						<StatCard key={b.label} label={`${b.label} tier`} loading={stats.isLoading} value={b.value.toLocaleString()} />
 					))}
 				</StatStrip>

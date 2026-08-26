@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { Plus, Check, X, Trash2, Upload, Rocket } from 'lucide-react';
+import { Plus, Check, X, Trash2, Upload, Rocket, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
+import { qk } from '@/lib/query-keys';
 import { Select } from '@/components/select';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
@@ -30,14 +31,17 @@ interface TimeStats { perAdmin: Array<{ admin_id: string; full_name: string | nu
 interface AdminUser { id: string; full_name?: string | null; display_name?: string | null; email: string; user_role: string }
 interface UsersResponse { data: AdminUser[] }
 
+type EnrichStatus = 'pending' | 'enriching' | 'enriched' | 'failed';
+interface Suggestions { sectors?: string[]; tech_tags?: string[]; sports?: string[]; business_model?: string | null; confidence?: number }
 interface Entry {
 	id: string; name: string; website: string | null; source: string | null; notes: string | null;
 	status: Status; hq_country: string | null; hq_city: string | null;
 	assigned_to: string | null; company_id: string | null; created_at: string;
+	enrichment_status: EnrichStatus; enrichment_error: string | null; enriched_at: string | null;
 }
 interface Response { data: Entry[]; total: number; totalPages?: number }
 interface DedupeMatch { id: string; name: string; website: string | null; slug: string | null; status: string | null }
-interface Preview { matches: DedupeMatch[]; prefill: { name: string; website: string; description: string; hq_country: string; hq_city: string } }
+interface Preview { matches: DedupeMatch[]; suggestions: Suggestions | null; prefill: { name: string; website: string; description: string; hq_country: string; hq_city: string } }
 
 const TABS: Array<{ label: string; key: Status | '' }> = [
 	{ label: 'All', key: '' }, { label: 'New', key: 'new' }, { label: 'Reviewing', key: 'reviewing' },
@@ -88,6 +92,7 @@ export default function StartupsPipelinePage() {
 		catch (e) { toast.error((e as Error).message); }
 	};
 	const update = (id: string, next: Status) => act(() => api('PATCH', `/api/admin/startups-pipeline/${id}`, { status: next }), 'Updated');
+	const reEnrich = (id: string) => act(() => api('POST', `/api/admin/startups-pipeline/${id}/re-enrich`), 'Re-enrichment queued');
 	const remove = (id: string, name: string) => { void (async () => { if (await ask(`Delete ${name} from the pipeline?`)) void act(() => api('DELETE', `/api/admin/startups-pipeline/${id}`), 'Deleted'); })(); };
 	const selectAllMatching = async () => {
 		const p = new URLSearchParams();
@@ -182,7 +187,7 @@ export default function StartupsPipelinePage() {
 						<thead>
 							<tr>
 								<th style={{ width: 28 }}><input type="checkbox" checked={allSelected} onChange={toggleAll} /></th>
-								<th>Date</th><th>Name</th><th>HQ</th><th>Source</th><th>Notes</th><th>Assigned</th><th>Status</th><th style={{ textAlign: 'right' }}>Actions</th>
+								<th>Date</th><th>Name</th><th>HQ</th><th>Source</th><th>Enrichment</th><th>Assigned</th><th>Status</th><th style={{ textAlign: 'right' }}>Actions</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -193,13 +198,16 @@ export default function StartupsPipelinePage() {
 									<td><div style={{ fontWeight: 600 }}>{e.name}</div>{e.website && <a href={e.website} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: 'var(--accent)' }}>{e.website}</a>}</td>
 									<td>{[e.hq_city, e.hq_country].filter(Boolean).join(', ') || '—'}</td>
 									<td style={{ fontSize: 12 }}>{e.source ?? '—'}</td>
-									<td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: 'var(--fg-muted)' }} title={e.notes ?? ''}>{e.notes ?? '—'}</td>
+									<td title={e.enrichment_error ?? undefined}>
+										<Tag variant={e.enrichment_status === 'enriched' ? 'pos' : e.enrichment_status === 'failed' ? 'warn' : ''}>{e.enrichment_status}</Tag>
+									</td>
 									<td>{adminName(e.assigned_to)}</td>
 									<td><Tag variant={e.status === 'added' ? 'pos' : e.status === 'rejected' ? 'warn' : ''}>{e.status}</Tag></td>
 									<td style={{ textAlign: 'right' }}>
 										<div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
 											{e.status !== 'added' && <button className="btn" title="Promote to companies" onClick={() => setPromoting(e)}><Rocket size={12} /> Promote</button>}
 											{e.status === 'new' && <button className="btn ghost" onClick={() => void update(e.id, 'reviewing')}>Review</button>}
+											{e.website && <button className="btn ghost" title="Re-run enrichment" disabled={e.enrichment_status === 'enriching'} onClick={() => void reEnrich(e.id)}><RefreshCw size={12} /></button>}
 											{e.status !== 'rejected' && e.status !== 'added' && <button className="btn ghost" title="Reject" onClick={() => void update(e.id, 'rejected')}><X size={12} /></button>}
 											<button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => remove(e.id, e.name)}><Trash2 size={12} /></button>
 										</div>
@@ -215,8 +223,14 @@ export default function StartupsPipelinePage() {
 	);
 }
 
+interface RefRow { id: string; name: string }
+
 function PromoteModal({ row, onClose, onDone }: { row: Entry; onClose: () => void; onDone: () => void }) {
 	const { data: preview, isLoading } = useSWR<Preview>([`/api/admin/startups-pipeline/${row.id}/promote-preview`], { revalidateOnFocus: false });
+	// Reference lists to resolve Claude's suggested names → the form's IDs.
+	const { data: sectorsRef } = useSWR<RefRow[]>(qk.reference.sectors(), { dedupingInterval: 3_600_000 });
+	const { data: sportsRef } = useSWR<RefRow[]>(qk.reference.sports(), { dedupingInterval: 3_600_000 });
+	const { data: techRef } = useSWR<RefRow[]>(qk.reference.techTags(), { dedupingInterval: 3_600_000 });
 	const [createOpen, setCreateOpen] = useState(false);
 	const [busy, setBusy] = useState(false);
 
@@ -235,10 +249,23 @@ function PromoteModal({ row, onClose, onDone }: { row: Entry; onClose: () => voi
 
 	if (createOpen) {
 		const p = preview?.prefill;
+		const s = preview?.suggestions;
+		const idsByName = (rows: RefRow[] | undefined) => new Map((rows ?? []).map((r) => [r.name.toLowerCase(), r.id]));
+		const resolve = (names: string[] | undefined, map: Map<string, string>) =>
+			(names ?? []).map((n) => map.get(n.toLowerCase())).filter((x): x is string => !!x);
+		const sectorIds = resolve(s?.sectors, idsByName(sectorsRef));
+		const sportIds = resolve(s?.sports, idsByName(sportsRef));
+		const techIds = resolve(s?.tech_tags, idsByName(techRef));
 		return (
 			<CompanyModal
 				id={null}
-				seed={p ? { name: p.name, website: p.website, description: p.description, hq: { ...EMPTY_LOCATION, country: p.hq_country, city: p.hq_city } } : undefined}
+				seed={p ? {
+					name: p.name, website: p.website, description: p.description,
+					business_model: s?.business_model ?? '',
+					sector_id: sectorIds[0] ?? '', // company has one sector; take the top suggestion
+					sport_ids: sportIds, tech_tag_ids: techIds,
+					hq: { ...EMPTY_LOCATION, country: p.hq_country, city: p.hq_city },
+				} : undefined}
 				promotePipelineId={row.id}
 				onClose={() => setCreateOpen(false)}
 				onSaved={(id) => onCreated(id)}
@@ -255,6 +282,7 @@ function PromoteModal({ row, onClose, onDone }: { row: Entry; onClose: () => voi
 		}>
 			{isLoading ? <div style={{ color: 'var(--fg-muted)', fontSize: 13 }}>Checking for duplicates…</div> : (
 				<div style={{ display: 'grid', gap: 12 }}>
+					{preview?.suggestions && <SuggestionChips s={preview.suggestions} />}
 					{(preview?.matches.length ?? 0) > 0 ? (
 						<div>
 							<div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Possible existing matches — merge to avoid a duplicate:</div>
@@ -394,4 +422,29 @@ function AddModal({ admins, onClose, onSaved }: { admins: AdminUser[]; onClose: 
 
 function L({ label, children }: { label: string; children: React.ReactNode }) {
 	return <div><div className="co-stat-label" style={{ marginBottom: 6 }}>{label}</div>{children}</div>;
+}
+
+/** Read-only display of Claude's classification suggestions — the admin confirms
+ *  them in the company form (never auto-applied). business_model is pre-seeded. */
+function SuggestionChips({ s }: { s: Suggestions }) {
+	const groups: Array<[string, string[]]> = [
+		['Sectors', s.sectors ?? []],
+		['Tech', s.tech_tags ?? []],
+		['Sports', s.sports ?? []],
+		['Model', s.business_model ? [s.business_model.toUpperCase()] : []],
+	].filter(([, v]) => v.length) as Array<[string, string[]]>;
+	if (!groups.length) return null;
+	return (
+		<div style={{ padding: 8, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)' }}>
+			<div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Suggested classification {typeof s.confidence === 'number' ? `· ${Math.round(s.confidence * 100)}% conf` : ''} — confirm in the form:</div>
+			<div style={{ display: 'grid', gap: 4 }}>
+				{groups.map(([label, vals]) => (
+					<div key={label} style={{ fontSize: 12 }}>
+						<span style={{ color: 'var(--fg-muted)', marginRight: 6 }}>{label}:</span>
+						{vals.map((v) => <span key={v} style={{ marginRight: 4 }}><Tag>{v}</Tag></span>)}
+					</div>
+				))}
+			</div>
+		</div>
+	);
 }

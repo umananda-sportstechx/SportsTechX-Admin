@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { Plus, Trash2, Check, SkipForward, Rocket, Undo2 } from 'lucide-react';
+import { Plus, Trash2, Check, SkipForward, Rocket, Undo2, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Select } from '@/components/select';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
@@ -18,9 +18,11 @@ import { WorkSessionTimer, countWorkItem } from '@/components/work-session-timer
 import { CandidateInput, parseInvestorCandidates } from '@/components/candidate-import';
 import { InvestorModal } from '@/components/admin-views/investors';
 
+type EnrichStatus = 'pending' | 'enriching' | 'enriched' | 'failed';
 interface QueueRow {
 	id: string; name: string; website: string | null; category: string | null; country: string | null;
 	status: string; skip_reason: string | null; assigned_to: string | null; created_at: string;
+	enrichment_status: EnrichStatus; enrichment_error: string | null; enriched_at: string | null;
 }
 interface QueueResponse { data: QueueRow[]; total: number; totalPages?: number }
 interface PerAdmin { assigned_to: string | null; full_name: string | null; pending: number; completed: number; skipped: number; completion_rate: number }
@@ -108,6 +110,7 @@ export default function InvestorReviewPage() {
 	};
 	const remove = (id: string) => { void (async () => { if (await ask('Delete this candidate?')) void act(() => api('DELETE', `/api/admin/investor-review/${id}`), 'Deleted'); })(); };
 	const unskip = (id: string) => act(() => api('PATCH', `/api/admin/investor-review/${id}`, { status: 'pending', skip_reason: '' }), 'Moved back to pending');
+	const reEnrich = (id: string) => act(() => api('POST', `/api/admin/investor-review/${id}/re-enrich`), 'Re-enrichment queued');
 
 	return (
 		<div>
@@ -186,7 +189,7 @@ export default function InvestorReviewPage() {
 						<thead>
 							<tr>
 								<th style={{ width: 28 }}><input type="checkbox" checked={allSelected} onChange={toggleAll} /></th>
-								<th>Name</th><th>Category</th><th>Country</th><th>Assigned</th><th>Status</th><th style={{ textAlign: 'right' }} />
+								<th>Name</th><th>Category</th><th>Country</th><th>Enrichment</th><th>Assigned</th><th>Status</th><th style={{ textAlign: 'right' }} />
 							</tr>
 						</thead>
 						<tbody>
@@ -196,6 +199,9 @@ export default function InvestorReviewPage() {
 									<td><div style={{ fontWeight: 600 }}>{r.name}</div>{r.website && <div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{r.website}</div>}</td>
 									<td>{r.category ?? '—'}</td>
 									<td>{r.country ?? '—'}</td>
+									<td title={r.enrichment_error ?? undefined}>
+										<Tag variant={r.enrichment_status === 'enriched' ? 'pos' : r.enrichment_status === 'failed' ? 'warn' : ''}>{r.enrichment_status}</Tag>
+									</td>
 									<td>{adminName(r.assigned_to)}</td>
 									<td>
 										<Tag variant={r.status === 'completed' ? 'pos' : r.status === 'skipped' ? 'warn' : ''}>{r.status}</Tag>
@@ -203,6 +209,7 @@ export default function InvestorReviewPage() {
 									</td>
 									<td style={{ textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
 										{r.status !== 'completed' && <button className="btn" title="Promote to investors" onClick={() => setPromoting(r)}><Rocket size={12} /> Promote</button>}
+										{r.website && <button className="btn ghost" title="Re-run enrichment" disabled={r.enrichment_status === 'enriching'} onClick={() => void reEnrich(r.id)}><RefreshCw size={12} /></button>}
 										{r.status === 'skipped'
 											? <button className="btn ghost" title="Move back to pending" onClick={() => void unskip(r.id)}><Undo2 size={12} /> Unskip</button>
 											: <button className="btn ghost" title="Skip" onClick={() => setSkipping(r)}><SkipForward size={12} /></button>}

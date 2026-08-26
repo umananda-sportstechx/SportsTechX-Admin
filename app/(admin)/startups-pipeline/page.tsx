@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Check, X, Trash2, Upload, Rocket, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
+import { qk } from '@/lib/query-keys';
 import { Select } from '@/components/select';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
@@ -222,8 +223,14 @@ export default function StartupsPipelinePage() {
 	);
 }
 
+interface RefRow { id: string; name: string }
+
 function PromoteModal({ row, onClose, onDone }: { row: Entry; onClose: () => void; onDone: () => void }) {
 	const { data: preview, isLoading } = useSWR<Preview>([`/api/admin/startups-pipeline/${row.id}/promote-preview`], { revalidateOnFocus: false });
+	// Reference lists to resolve Claude's suggested names → the form's IDs.
+	const { data: sectorsRef } = useSWR<RefRow[]>(qk.reference.sectors(), { dedupingInterval: 3_600_000 });
+	const { data: sportsRef } = useSWR<RefRow[]>(qk.reference.sports(), { dedupingInterval: 3_600_000 });
+	const { data: techRef } = useSWR<RefRow[]>(qk.reference.techTags(), { dedupingInterval: 3_600_000 });
 	const [createOpen, setCreateOpen] = useState(false);
 	const [busy, setBusy] = useState(false);
 
@@ -242,11 +249,23 @@ function PromoteModal({ row, onClose, onDone }: { row: Entry; onClose: () => voi
 
 	if (createOpen) {
 		const p = preview?.prefill;
-		const bm = preview?.suggestions?.business_model ?? '';
+		const s = preview?.suggestions;
+		const idsByName = (rows: RefRow[] | undefined) => new Map((rows ?? []).map((r) => [r.name.toLowerCase(), r.id]));
+		const resolve = (names: string[] | undefined, map: Map<string, string>) =>
+			(names ?? []).map((n) => map.get(n.toLowerCase())).filter((x): x is string => !!x);
+		const sectorIds = resolve(s?.sectors, idsByName(sectorsRef));
+		const sportIds = resolve(s?.sports, idsByName(sportsRef));
+		const techIds = resolve(s?.tech_tags, idsByName(techRef));
 		return (
 			<CompanyModal
 				id={null}
-				seed={p ? { name: p.name, website: p.website, description: p.description, business_model: bm, hq: { ...EMPTY_LOCATION, country: p.hq_country, city: p.hq_city } } : undefined}
+				seed={p ? {
+					name: p.name, website: p.website, description: p.description,
+					business_model: s?.business_model ?? '',
+					sector_id: sectorIds[0] ?? '', // company has one sector; take the top suggestion
+					sport_ids: sportIds, tech_tag_ids: techIds,
+					hq: { ...EMPTY_LOCATION, country: p.hq_country, city: p.hq_city },
+				} : undefined}
 				promotePipelineId={row.id}
 				onClose={() => setCreateOpen(false)}
 				onSaved={(id) => onCreated(id)}

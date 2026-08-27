@@ -48,7 +48,7 @@ interface EnrichedDetail {
 }
 interface Response { data: Entry[]; total: number; totalPages?: number }
 interface DedupeMatch { id: string; name: string; website: string | null; slug: string | null; status: string | null }
-interface Preview { matches: DedupeMatch[]; suggestions: Suggestions | null; prefill: { name: string; website: string; description: string; hq_country: string; hq_city: string } }
+interface Preview { matches: DedupeMatch[]; suggestions: Suggestions | null; prefill: { name: string; website: string; description: string; hq_country: string; hq_city: string; hq_state: string; linkedin_url: string; twitter_url: string; facebook_url: string } }
 
 const TABS: Array<{ label: string; key: Status | '' }> = [
 	{ label: 'All', key: '' }, { label: 'New', key: 'new' }, { label: 'Reviewing', key: 'reviewing' },
@@ -274,7 +274,8 @@ function PromoteModal({ row, onClose, onDone }: { row: Entry; onClose: () => voi
 					business_model: s?.business_model ?? '',
 					sector_id: sectorIds[0] ?? '', // company has one sector; take the top suggestion
 					sport_ids: sportIds, tech_tag_ids: techIds,
-					hq: { ...EMPTY_LOCATION, country: p.hq_country, city: p.hq_city },
+					hq: { ...EMPTY_LOCATION, country: p.hq_country, city: p.hq_city, state: p.hq_state },
+					social: { twitter_url: p.twitter_url, instagram_url: '', facebook_url: p.facebook_url, linkedin_url: p.linkedin_url, youtube_url: '', email: '' },
 				} : undefined}
 				promotePipelineId={row.id}
 				onClose={() => setCreateOpen(false)}
@@ -440,7 +441,10 @@ function ViewModal({ row, onClose }: { row: Entry; onClose: () => void }) {
 	const fields: Array<[string, React.ReactNode]> = data ? [
 		['Enrichment', <Tag key="e" variant={data.enrichment_status === 'enriched' ? 'pos' : data.enrichment_status === 'failed' ? 'warn' : ''}>{data.enrichment_status}</Tag>],
 		['Description', val(data.description)],
-		['HQ', val([data.hq_city, data.hq_country].filter(Boolean).join(', '))],
+		['HQ', val([data.hq_city, raw.state, data.hq_country].filter(Boolean).join(', '))],
+		['LinkedIn', val(raw.linkedin_url)],
+		['Twitter', val(raw.twitter_url)],
+		['Facebook', val(raw.facebook_url)],
 		['Industry (Apollo)', val(raw.industry)],
 		['Employees (Apollo)', fmtNum(raw.estimated_num_employees)],
 		['Total funding (Apollo)', fmtNum(raw.total_funding)],

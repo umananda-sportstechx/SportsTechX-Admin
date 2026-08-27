@@ -38,7 +38,12 @@ interface Entry {
 	status: Status; hq_country: string | null; hq_city: string | null;
 	assigned_to: string | null; company_id: string | null; created_at: string;
 	enrichment_status: EnrichStatus; enrichment_error: string | null; enriched_at: string | null;
-	description: string | null; apollo_raw: Record<string, unknown> | null; suggestions: Suggestions | null;
+}
+// Full row (incl. apollo_raw + suggestions) fetched on demand for the view modal.
+interface EnrichedDetail {
+	enrichment_status: EnrichStatus; enrichment_error: string | null;
+	description: string | null; hq_country: string | null; hq_city: string | null;
+	apollo_raw: Record<string, unknown> | null; suggestions: Suggestions | null;
 }
 interface Response { data: Entry[]; total: number; totalPages?: number }
 interface DedupeMatch { id: string; name: string; website: string | null; slug: string | null; status: string | null }
@@ -338,8 +343,8 @@ function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 		if (!approved.length) { toast.error('No candidates approved'); return; }
 		setBusy(true);
 		try {
-			const r = await api<{ inserted: number; skipped: number }>('POST', '/api/admin/startups-pipeline/import', { rows: approved });
-			toast.success(`Imported ${r.inserted}${r.skipped ? `, ${r.skipped} dup skipped` : ''}`);
+			const r = await api<{ inserted: number; skipped: number; enqueued: number }>('POST', '/api/admin/startups-pipeline/import', { rows: approved });
+			toast.success(`Imported ${r.inserted}${r.skipped ? `, ${r.skipped} dup skipped` : ''}${r.enqueued ? ` · ${r.enqueued} queued for enrichment` : ''}`);
 			onSaved();
 		} catch (e) { toast.error((e as Error).message); } finally { setBusy(false); }
 	};
@@ -424,35 +429,48 @@ function AddModal({ admins, onClose, onSaved }: { admins: AdminUser[]; onClose: 
 	);
 }
 
+const val = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v));
+/** Compact number: 60000000000 → 60.00B, 1666975000 → 1.67B, 124000 → 124,000. */
+const fmtNum = (v: unknown) => {
+	const n = Number(v);
+	if (!Number.isFinite(n) || n <= 0) return '—';
+	return n >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n.toLocaleString();
+};
+
 /** Read-only view of a candidate's enriched data (Claude suggestions + raw
- *  Apollo firmographics) — inspect before promoting. */
+ *  Apollo firmographics), fetched on demand so the list payload stays light. */
 function ViewModal({ row, onClose }: { row: Entry; onClose: () => void }) {
-	const raw = (row.apollo_raw ?? {}) as Record<string, unknown>;
+	const { data, isLoading } = useSWR<EnrichedDetail>([`/api/admin/startups-pipeline/${row.id}/enriched`], { revalidateOnFocus: false });
+	const raw = (data?.apollo_raw ?? {}) as Record<string, unknown>;
 	const kw = Array.isArray(raw.keywords) ? (raw.keywords as unknown[]).join(', ') : '';
-	const val = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v));
-	const fields: Array<[string, React.ReactNode]> = [
-		['Enrichment', <Tag key="e" variant={row.enrichment_status === 'enriched' ? 'pos' : row.enrichment_status === 'failed' ? 'warn' : ''}>{row.enrichment_status}</Tag>],
-		['Description', val(row.description)],
-		['HQ', val([row.hq_city, row.hq_country].filter(Boolean).join(', '))],
+	const notEnriched = !!data && data.enrichment_status !== 'enriched' && !data.apollo_raw;
+	const fields: Array<[string, React.ReactNode]> = data ? [
+		['Enrichment', <Tag key="e" variant={data.enrichment_status === 'enriched' ? 'pos' : data.enrichment_status === 'failed' ? 'warn' : ''}>{data.enrichment_status}</Tag>],
+		['Description', val(data.description)],
+		['HQ', val([data.hq_city, data.hq_country].filter(Boolean).join(', '))],
 		['Industry (Apollo)', val(raw.industry)],
-		['Employees (Apollo)', val(raw.estimated_num_employees)],
-		['Total funding (Apollo)', val(raw.total_funding)],
+		['Employees (Apollo)', fmtNum(raw.estimated_num_employees)],
+		['Total funding (Apollo)', fmtNum(raw.total_funding)],
 		['Keywords (Apollo)', val(kw)],
-	];
-	if (row.enrichment_error) fields.push(['Error', row.enrichment_error]);
+	] : [];
+	if (data?.enrichment_error) fields.push(['Error', data.enrichment_error]);
 	return (
 		<Modal title={`Enriched data — ${row.name}`} onClose={onClose} width={560}>
-			<div style={{ display: 'grid', gap: 12 }}>
-				{row.suggestions && <SuggestionChips s={row.suggestions} />}
-				<div style={{ display: 'grid', gap: 8, fontSize: 13 }}>
-					{fields.map(([k, v]) => (
-						<div key={k} style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 10, alignItems: 'start' }}>
-							<div style={{ color: 'var(--fg-muted)' }}>{k}</div>
-							<div style={{ wordBreak: 'break-word' }}>{v}</div>
+			{isLoading ? <div style={{ color: 'var(--fg-muted)', fontSize: 13 }}>Loading…</div>
+				: notEnriched ? <div style={{ color: 'var(--fg-muted)', fontSize: 13 }}>Not enriched yet. Ensure the candidate has a website, then use Re-enrich.</div>
+				: (
+					<div style={{ display: 'grid', gap: 12 }}>
+						{data?.suggestions && <SuggestionChips s={data.suggestions} />}
+						<div style={{ display: 'grid', gap: 8, fontSize: 13 }}>
+							{fields.map(([k, v]) => (
+								<div key={k} style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 10, alignItems: 'start' }}>
+									<div style={{ color: 'var(--fg-muted)' }}>{k}</div>
+									<div style={{ wordBreak: 'break-word' }}>{v}</div>
+								</div>
+							))}
 						</div>
-					))}
-				</div>
-			</div>
+					</div>
+				)}
 		</Modal>
 	);
 }

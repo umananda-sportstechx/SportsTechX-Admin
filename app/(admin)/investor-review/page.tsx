@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Trash2, Check, SkipForward, Rocket, Undo2, RefreshCw, Eye } from 'lucide-react';
 import { api } from '@/lib/api';
+import { val, fmtNum } from '@/lib/format';
 import { Select } from '@/components/select';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
@@ -419,18 +420,10 @@ function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 	);
 }
 
-const val = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v));
-/** Compact number: 60000000000 → 60.00B, 1666975000 → 1.67B, 124000 → 124,000. */
-const fmtNum = (v: unknown) => {
-	const n = Number(v);
-	if (!Number.isFinite(n) || n <= 0) return '—';
-	return n >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n.toLocaleString();
-};
-
 /** Read-only view of a candidate's enriched data (queue fields + raw Apollo
  *  firmographics), fetched on demand so the list payload stays light. */
 function ViewModal({ row, onClose }: { row: QueueRow; onClose: () => void }) {
-	const { data, isLoading } = useSWR<EnrichedDetail>([`/api/admin/investor-review/${row.id}/enriched`], { revalidateOnFocus: false });
+	const { data, isLoading, error } = useSWR<EnrichedDetail>([`/api/admin/investor-review/${row.id}/enriched`], { revalidateOnFocus: false });
 	const raw = (data?.apollo_raw ?? {}) as Record<string, unknown>;
 	const kw = Array.isArray(raw.keywords) ? (raw.keywords as unknown[]).join(', ') : '';
 	const notEnriched = !!data && data.enrichment_status !== 'enriched' && !data.apollo_raw;
@@ -454,7 +447,8 @@ function ViewModal({ row, onClose }: { row: QueueRow; onClose: () => void }) {
 	if (data?.enrichment_error) fields.push(['Error', data.enrichment_error]);
 	return (
 		<Modal title={`Enriched data — ${row.name}`} onClose={onClose} width={560}>
-			{isLoading ? <div style={{ color: 'var(--fg-muted)', fontSize: 13 }}>Loading…</div>
+			{error ? <div style={{ color: 'var(--neg)', fontSize: 13 }}>Couldn&apos;t load enriched data.</div>
+				: isLoading ? <div style={{ color: 'var(--fg-muted)', fontSize: 13 }}>Loading…</div>
 				: notEnriched ? <div style={{ color: 'var(--fg-muted)', fontSize: 13 }}>Not enriched yet. Ensure the candidate has a website, then use Re-enrich.</div>
 				: (
 					<div style={{ display: 'grid', gap: 8, fontSize: 13 }}>

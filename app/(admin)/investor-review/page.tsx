@@ -23,9 +23,13 @@ interface QueueRow {
 	id: string; name: string; website: string | null; category: string | null; country: string | null;
 	status: string; skip_reason: string | null; assigned_to: string | null; created_at: string;
 	enrichment_status: EnrichStatus; enrichment_error: string | null; enriched_at: string | null;
-	description: string | null; year_launched: number | null; city: string | null;
-	twitter_url: string | null; instagram_url: string | null; facebook_url: string | null; linkedin_url: string | null;
-	poc_name: string | null; poc_position: string | null; poc_email: string | null; poc_linkedin: string | null;
+}
+// Full row (incl. apollo_raw) fetched on demand for the view modal.
+interface EnrichedDetail {
+	enrichment_status: EnrichStatus; enrichment_error: string | null;
+	description: string | null; country: string | null; city: string | null; year_launched: number | null;
+	twitter_url: string | null; facebook_url: string | null; linkedin_url: string | null;
+	poc_name: string | null; poc_position: string | null; poc_linkedin: string | null;
 	apollo_raw: Record<string, unknown> | null;
 }
 interface QueueResponse { data: QueueRow[]; total: number; totalPages?: number }
@@ -393,8 +397,8 @@ function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 		if (!rows.length) { toast.error('Paste at least one line'); return; }
 		setPending(true);
 		try {
-			const r = await api<{ inserted: number; skipped: number }>('POST', '/api/admin/investor-review/import', { rows });
-			toast.success(`Imported ${r.inserted}${r.skipped ? `, skipped ${r.skipped} dup(s)` : ''}`); onSaved();
+			const r = await api<{ inserted: number; skipped: number; enqueued: number }>('POST', '/api/admin/investor-review/import', { rows });
+			toast.success(`Imported ${r.inserted}${r.skipped ? `, skipped ${r.skipped} dup(s)` : ''}${r.enqueued ? ` · ${r.enqueued} queued for enrichment` : ''}`); onSaved();
 		} catch (e) { toast.error((e as Error).message); } finally { setPending(false); }
 	};
 	return (
@@ -415,40 +419,53 @@ function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 	);
 }
 
+const val = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v));
+/** Compact number: 60000000000 → 60.00B, 1666975000 → 1.67B, 124000 → 124,000. */
+const fmtNum = (v: unknown) => {
+	const n = Number(v);
+	if (!Number.isFinite(n) || n <= 0) return '—';
+	return n >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n.toLocaleString();
+};
+
 /** Read-only view of a candidate's enriched data (queue fields + raw Apollo
- *  firmographics) — inspect before promoting, no need to open the create form. */
+ *  firmographics), fetched on demand so the list payload stays light. */
 function ViewModal({ row, onClose }: { row: QueueRow; onClose: () => void }) {
-	const raw = (row.apollo_raw ?? {}) as Record<string, unknown>;
+	const { data, isLoading } = useSWR<EnrichedDetail>([`/api/admin/investor-review/${row.id}/enriched`], { revalidateOnFocus: false });
+	const raw = (data?.apollo_raw ?? {}) as Record<string, unknown>;
 	const kw = Array.isArray(raw.keywords) ? (raw.keywords as unknown[]).join(', ') : '';
-	const val = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v));
-	const fields: Array<[string, React.ReactNode]> = [
-		['Enrichment', <Tag key="e" variant={row.enrichment_status === 'enriched' ? 'pos' : row.enrichment_status === 'failed' ? 'warn' : ''}>{row.enrichment_status}</Tag>],
-		['Description', val(row.description)],
-		['Country', val(row.country ?? raw.country)],
-		['City', val(row.city ?? raw.city)],
-		['Year launched', val(row.year_launched ?? raw.founded_year)],
-		['LinkedIn', val(row.linkedin_url)],
-		['Twitter', val(row.twitter_url)],
-		['Facebook', val(row.facebook_url)],
-		['POC', val([row.poc_name, row.poc_position].filter(Boolean).join(' · '))],
-		['POC LinkedIn', val(row.poc_linkedin)],
+	const notEnriched = !!data && data.enrichment_status !== 'enriched' && !data.apollo_raw;
+	const fields: Array<[string, React.ReactNode]> = data ? [
+		['Enrichment', <Tag key="e" variant={data.enrichment_status === 'enriched' ? 'pos' : data.enrichment_status === 'failed' ? 'warn' : ''}>{data.enrichment_status}</Tag>],
+		['Description', val(data.description)],
+		['Country', val(data.country ?? raw.country)],
+		['City', val(data.city ?? raw.city)],
+		['Year launched', val(data.year_launched ?? raw.founded_year)],
+		['LinkedIn', val(data.linkedin_url)],
+		['Twitter', val(data.twitter_url)],
+		['Facebook', val(data.facebook_url)],
+		['POC', val([data.poc_name, data.poc_position].filter(Boolean).join(' · '))],
+		['POC LinkedIn', val(data.poc_linkedin)],
 		['Industry (Apollo)', val(raw.industry)],
-		['Employees (Apollo)', val(raw.estimated_num_employees)],
-		['Total funding (Apollo)', val(raw.total_funding)],
-		['Annual revenue (Apollo)', val(raw.annual_revenue)],
+		['Employees (Apollo)', fmtNum(raw.estimated_num_employees)],
+		['Total funding (Apollo)', fmtNum(raw.total_funding)],
+		['Annual revenue (Apollo)', fmtNum(raw.annual_revenue)],
 		['Keywords (Apollo)', val(kw)],
-	];
-	if (row.enrichment_error) fields.push(['Error', row.enrichment_error]);
+	] : [];
+	if (data?.enrichment_error) fields.push(['Error', data.enrichment_error]);
 	return (
 		<Modal title={`Enriched data — ${row.name}`} onClose={onClose} width={560}>
-			<div style={{ display: 'grid', gap: 8, fontSize: 13 }}>
-				{fields.map(([k, v]) => (
-					<div key={k} style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 10, alignItems: 'start' }}>
-						<div style={{ color: 'var(--fg-muted)' }}>{k}</div>
-						<div style={{ wordBreak: 'break-word' }}>{v}</div>
+			{isLoading ? <div style={{ color: 'var(--fg-muted)', fontSize: 13 }}>Loading…</div>
+				: notEnriched ? <div style={{ color: 'var(--fg-muted)', fontSize: 13 }}>Not enriched yet. Ensure the candidate has a website, then use Re-enrich.</div>
+				: (
+					<div style={{ display: 'grid', gap: 8, fontSize: 13 }}>
+						{fields.map(([k, v]) => (
+							<div key={k} style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 10, alignItems: 'start' }}>
+								<div style={{ color: 'var(--fg-muted)' }}>{k}</div>
+								<div style={{ wordBreak: 'break-word' }}>{v}</div>
+							</div>
+						))}
 					</div>
-				))}
-			</div>
+				)}
 		</Modal>
 	);
 }

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { Plus, Trash2, Check, SkipForward, Rocket, Undo2, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, Check, SkipForward, Rocket, Undo2, RefreshCw, Eye } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Select } from '@/components/select';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
@@ -23,6 +23,10 @@ interface QueueRow {
 	id: string; name: string; website: string | null; category: string | null; country: string | null;
 	status: string; skip_reason: string | null; assigned_to: string | null; created_at: string;
 	enrichment_status: EnrichStatus; enrichment_error: string | null; enriched_at: string | null;
+	description: string | null; year_launched: number | null; city: string | null;
+	twitter_url: string | null; instagram_url: string | null; facebook_url: string | null; linkedin_url: string | null;
+	poc_name: string | null; poc_position: string | null; poc_email: string | null; poc_linkedin: string | null;
+	apollo_raw: Record<string, unknown> | null;
 }
 interface QueueResponse { data: QueueRow[]; total: number; totalPages?: number }
 interface PerAdmin { assigned_to: string | null; full_name: string | null; pending: number; completed: number; skipped: number; completion_rate: number }
@@ -35,7 +39,7 @@ interface TimeStats { perAdmin: Array<{ admin_id: string; full_name: string | nu
 interface AdminUser { id: string; full_name?: string | null; display_name?: string | null; email: string; user_role: string }
 interface UsersResponse { data: AdminUser[] }
 interface DedupeMatch { id: string; name: string; website: string | null; slug: string | null }
-interface Preview { matches: DedupeMatch[]; prefill: { name: string; website: string; category: string; hq_country: string; description: string; year_launched: number | null; city: string; twitter_url: string; instagram_url: string; facebook_url: string; linkedin_url: string; poc_name: string; poc_position: string; poc_email: string; poc_linkedin: string } }
+interface Preview { matches: DedupeMatch[]; prefill: { name: string; website: string; category: string; hq_country: string; description: string; year_launched: number | null; city: string; twitter_url: string; instagram_url: string; facebook_url: string; linkedin_url: string; poc_name: string; poc_position: string; poc_email: string; poc_linkedin: string; keywords: string; logo_url: string; num_employees: number | null; total_funding: string; annual_revenue: string; last_raised_at: string } }
 
 const STATUSES = ['pending', 'completed', 'skipped'] as const;
 
@@ -54,6 +58,7 @@ export default function InvestorReviewPage() {
 	const [importing, setImporting] = useState(false);
 	const [promoting, setPromoting] = useState<QueueRow | null>(null);
 	const [skipping, setSkipping] = useState<QueueRow | null>(null);
+	const [viewing, setViewing] = useState<QueueRow | null>(null);
 	const [bulkAssignee, setBulkAssignee] = useState('');
 	const [statsRange, setStatsRange] = useState<RangeValue>({});
 
@@ -182,6 +187,7 @@ export default function InvestorReviewPage() {
 			{importing && <ImportModal onClose={() => setImporting(false)} onSaved={() => { setImporting(false); refreshAll(); }} />}
 			{promoting && <PromoteModal row={promoting} onClose={() => setPromoting(null)} onDone={() => { setPromoting(null); refreshAll(); }} />}
 			{skipping && <SkipModal row={skipping} onClose={() => setSkipping(null)} onSaved={() => { setSkipping(null); refreshAll(); }} />}
+			{viewing && <ViewModal row={viewing} onClose={() => setViewing(null)} />}
 
 			<div className="card">
 				<AsyncState loading={isLoading} error={error} empty={rows.length === 0} emptyMsg="No candidates in this view." onRetry={refreshAll}>
@@ -208,6 +214,7 @@ export default function InvestorReviewPage() {
 										{r.status === 'skipped' && r.skip_reason && <div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{r.skip_reason}</div>}
 									</td>
 									<td style={{ textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+										<button className="btn ghost" title="View enriched data" onClick={() => setViewing(r)}><Eye size={12} /></button>
 										{r.status !== 'completed' && <button className="btn" title="Promote to investors" onClick={() => setPromoting(r)}><Rocket size={12} /> Promote</button>}
 										{r.website && <button className="btn ghost" title="Re-run enrichment" disabled={r.enrichment_status === 'enriching'} onClick={() => void reEnrich(r.id)}><RefreshCw size={12} /></button>}
 										{r.status === 'skipped'
@@ -342,7 +349,7 @@ function PromoteModal({ row, onClose, onDone }: { row: QueueRow; onClose: () => 
 		return (
 			<InvestorModal
 				id={null}
-				seed={p ? { name: p.name, website: p.website, category: cat, description: p.description, year_launched: p.year_launched ? String(p.year_launched) : '', hq: { country: p.hq_country, city: p.city, continent: '', region: '', state: '' }, social: { twitter_url: p.twitter_url, instagram_url: p.instagram_url, facebook_url: p.facebook_url, linkedin_url: p.linkedin_url, youtube_url: '', email: '' }, poc_name: p.poc_name, poc_position: p.poc_position, poc_email: p.poc_email, poc_linkedin: p.poc_linkedin } : undefined}
+				seed={p ? { name: p.name, website: p.website, category: cat, description: p.description, year_launched: p.year_launched ? String(p.year_launched) : '', hq: { country: p.hq_country, city: p.city, continent: '', region: '', state: '' }, social: { twitter_url: p.twitter_url, instagram_url: p.instagram_url, facebook_url: p.facebook_url, linkedin_url: p.linkedin_url, youtube_url: '', email: '' }, poc_name: p.poc_name, poc_position: p.poc_position, poc_email: p.poc_email, poc_linkedin: p.poc_linkedin, keywords: p.keywords, logo_url: p.logo_url, num_employees: p.num_employees != null ? String(p.num_employees) : '', total_funding: p.total_funding, annual_revenue: p.annual_revenue, last_raised_at: p.last_raised_at } : undefined}
 				promoteReviewId={row.id}
 				onClose={() => setCreateOpen(false)}
 				onSaved={(id) => onCreated(id)}
@@ -404,6 +411,44 @@ function ImportModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 				templateColumns={['Name', 'Website', 'Category', 'Country', 'City', 'Year_Launched', 'Description', 'LinkedIn', 'Twitter', 'Instagram', 'Facebook', 'POC_Name', 'POC_Position', 'POC_Email', 'POC_LinkedIn']}
 				templateRows={[['Sequoia Capital', 'https://sequoiacap.com', 'venture_capital', 'USA', 'Menlo Park', '1972', 'Global venture capital firm', 'https://linkedin.com/company/sequoia', 'https://x.com/sequoia', '', '', 'Roelof Botha', 'Managing Partner', 'roelof@sequoiacap.com', 'https://linkedin.com/in/roelofbotha']]}
 			/>
+		</Modal>
+	);
+}
+
+/** Read-only view of a candidate's enriched data (queue fields + raw Apollo
+ *  firmographics) — inspect before promoting, no need to open the create form. */
+function ViewModal({ row, onClose }: { row: QueueRow; onClose: () => void }) {
+	const raw = (row.apollo_raw ?? {}) as Record<string, unknown>;
+	const kw = Array.isArray(raw.keywords) ? (raw.keywords as unknown[]).join(', ') : '';
+	const val = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v));
+	const fields: Array<[string, React.ReactNode]> = [
+		['Enrichment', <Tag key="e" variant={row.enrichment_status === 'enriched' ? 'pos' : row.enrichment_status === 'failed' ? 'warn' : ''}>{row.enrichment_status}</Tag>],
+		['Description', val(row.description)],
+		['Country', val(row.country ?? raw.country)],
+		['City', val(row.city ?? raw.city)],
+		['Year launched', val(row.year_launched ?? raw.founded_year)],
+		['LinkedIn', val(row.linkedin_url)],
+		['Twitter', val(row.twitter_url)],
+		['Facebook', val(row.facebook_url)],
+		['POC', val([row.poc_name, row.poc_position].filter(Boolean).join(' · '))],
+		['POC LinkedIn', val(row.poc_linkedin)],
+		['Industry (Apollo)', val(raw.industry)],
+		['Employees (Apollo)', val(raw.estimated_num_employees)],
+		['Total funding (Apollo)', val(raw.total_funding)],
+		['Annual revenue (Apollo)', val(raw.annual_revenue)],
+		['Keywords (Apollo)', val(kw)],
+	];
+	if (row.enrichment_error) fields.push(['Error', row.enrichment_error]);
+	return (
+		<Modal title={`Enriched data — ${row.name}`} onClose={onClose} width={560}>
+			<div style={{ display: 'grid', gap: 8, fontSize: 13 }}>
+				{fields.map(([k, v]) => (
+					<div key={k} style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 10, alignItems: 'start' }}>
+						<div style={{ color: 'var(--fg-muted)' }}>{k}</div>
+						<div style={{ wordBreak: 'break-word' }}>{v}</div>
+					</div>
+				))}
+			</div>
 		</Modal>
 	);
 }

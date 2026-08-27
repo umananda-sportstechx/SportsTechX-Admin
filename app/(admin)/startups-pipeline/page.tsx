@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { Plus, Check, X, Trash2, Upload, Rocket, RefreshCw } from 'lucide-react';
+import { Plus, Check, X, Trash2, Upload, Rocket, RefreshCw, Eye } from 'lucide-react';
 import { api } from '@/lib/api';
 import { qk } from '@/lib/query-keys';
 import { Select } from '@/components/select';
@@ -38,6 +38,7 @@ interface Entry {
 	status: Status; hq_country: string | null; hq_city: string | null;
 	assigned_to: string | null; company_id: string | null; created_at: string;
 	enrichment_status: EnrichStatus; enrichment_error: string | null; enriched_at: string | null;
+	description: string | null; apollo_raw: Record<string, unknown> | null; suggestions: Suggestions | null;
 }
 interface Response { data: Entry[]; total: number; totalPages?: number }
 interface DedupeMatch { id: string; name: string; website: string | null; slug: string | null; status: string | null }
@@ -63,6 +64,7 @@ export default function StartupsPipelinePage() {
 	const [creating, setCreating] = useState(false);
 	const [importing, setImporting] = useState(false);
 	const [promoting, setPromoting] = useState<Entry | null>(null);
+	const [viewing, setViewing] = useState<Entry | null>(null);
 
 	const { data, error, isLoading } = useSWR<Response>(
 		['/api/admin/startups-pipeline', { status: status || undefined, assigned_to: assigned || undefined, q: debouncedSearch || undefined, from: from || undefined, to: to || undefined, page, limit: 50 }],
@@ -180,6 +182,7 @@ export default function StartupsPipelinePage() {
 			{creating && <AddModal admins={admins} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); refreshAll(); }} />}
 			{importing && <ImportModal onClose={() => setImporting(false)} onSaved={() => { setImporting(false); refreshAll(); }} />}
 			{promoting && <PromoteModal row={promoting} onClose={() => setPromoting(null)} onDone={() => { setPromoting(null); refreshAll(); }} />}
+			{viewing && <ViewModal row={viewing} onClose={() => setViewing(null)} />}
 
 			<div className="card">
 				<AsyncState loading={isLoading} error={error} empty={entries.length === 0} emptyMsg={`Nothing in ${status || 'any status'}.`} onRetry={refreshAll}>
@@ -205,6 +208,7 @@ export default function StartupsPipelinePage() {
 									<td><Tag variant={e.status === 'added' ? 'pos' : e.status === 'rejected' ? 'warn' : ''}>{e.status}</Tag></td>
 									<td style={{ textAlign: 'right' }}>
 										<div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+											<button className="btn ghost" title="View enriched data" onClick={() => setViewing(e)}><Eye size={12} /></button>
 											{e.status !== 'added' && <button className="btn" title="Promote to companies" onClick={() => setPromoting(e)}><Rocket size={12} /> Promote</button>}
 											{e.status === 'new' && <button className="btn ghost" onClick={() => void update(e.id, 'reviewing')}>Review</button>}
 											{e.website && <button className="btn ghost" title="Re-run enrichment" disabled={e.enrichment_status === 'enriching'} onClick={() => void reEnrich(e.id)}><RefreshCw size={12} /></button>}
@@ -415,6 +419,39 @@ function AddModal({ admins, onClose, onSaved }: { admins: AdminUser[]; onClose: 
 					<Select value={f.assigned_to} onChange={(v) => set('assigned_to', v)} searchable width="100%" style={{ display: 'block', width: '100%' }} placeholder="— unassigned —" options={[{ value: '', label: '— unassigned —' }, ...admins.map((a) => ({ value: a.id, label: a.full_name || a.display_name || a.email }))]} />
 				</L>
 				<L label="Notes"><textarea className="search-input" style={{ minHeight: 60, resize: 'vertical' }} value={f.notes} onChange={(e) => set('notes', e.target.value)} /></L>
+			</div>
+		</Modal>
+	);
+}
+
+/** Read-only view of a candidate's enriched data (Claude suggestions + raw
+ *  Apollo firmographics) — inspect before promoting. */
+function ViewModal({ row, onClose }: { row: Entry; onClose: () => void }) {
+	const raw = (row.apollo_raw ?? {}) as Record<string, unknown>;
+	const kw = Array.isArray(raw.keywords) ? (raw.keywords as unknown[]).join(', ') : '';
+	const val = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v));
+	const fields: Array<[string, React.ReactNode]> = [
+		['Enrichment', <Tag key="e" variant={row.enrichment_status === 'enriched' ? 'pos' : row.enrichment_status === 'failed' ? 'warn' : ''}>{row.enrichment_status}</Tag>],
+		['Description', val(row.description)],
+		['HQ', val([row.hq_city, row.hq_country].filter(Boolean).join(', '))],
+		['Industry (Apollo)', val(raw.industry)],
+		['Employees (Apollo)', val(raw.estimated_num_employees)],
+		['Total funding (Apollo)', val(raw.total_funding)],
+		['Keywords (Apollo)', val(kw)],
+	];
+	if (row.enrichment_error) fields.push(['Error', row.enrichment_error]);
+	return (
+		<Modal title={`Enriched data — ${row.name}`} onClose={onClose} width={560}>
+			<div style={{ display: 'grid', gap: 12 }}>
+				{row.suggestions && <SuggestionChips s={row.suggestions} />}
+				<div style={{ display: 'grid', gap: 8, fontSize: 13 }}>
+					{fields.map(([k, v]) => (
+						<div key={k} style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 10, alignItems: 'start' }}>
+							<div style={{ color: 'var(--fg-muted)' }}>{k}</div>
+							<div style={{ wordBreak: 'break-word' }}>{v}</div>
+						</div>
+					))}
+				</div>
 			</div>
 		</Modal>
 	);

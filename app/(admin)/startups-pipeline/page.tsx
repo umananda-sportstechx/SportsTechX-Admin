@@ -33,7 +33,7 @@ interface AdminUser { id: string; full_name?: string | null; display_name?: stri
 interface UsersResponse { data: AdminUser[] }
 
 type EnrichStatus = 'pending' | 'enriching' | 'enriched' | 'failed';
-interface Suggestions { sectors?: string[]; tech_tags?: string[]; sports?: string[]; business_model?: string | null; confidence?: number }
+interface Suggestions { primary_sector?: string | null; sectors?: string[]; tech_tags?: string[]; sports?: string[]; business_model?: string | null; confidence?: number }
 interface Entry {
 	id: string; name: string; website: string | null; source: string | null; notes: string | null;
 	status: Status; hq_country: string | null; hq_city: string | null;
@@ -44,11 +44,12 @@ interface Entry {
 interface EnrichedDetail {
 	enrichment_status: EnrichStatus; enrichment_error: string | null;
 	description: string | null; hq_country: string | null; hq_city: string | null;
+	poc_name: string | null; poc_position: string | null; poc_linkedin: string | null;
 	apollo_raw: Record<string, unknown> | null; suggestions: Suggestions | null;
 }
 interface Response { data: Entry[]; total: number; totalPages?: number }
 interface DedupeMatch { id: string; name: string; website: string | null; slug: string | null; status: string | null }
-interface Preview { matches: DedupeMatch[]; suggestions: Suggestions | null; prefill: { name: string; website: string; description: string; hq_country: string; hq_city: string; hq_state: string; linkedin_url: string; twitter_url: string; facebook_url: string } }
+interface Preview { matches: DedupeMatch[]; suggestions: Suggestions | null; prefill: { name: string; website: string; description: string; hq_country: string; hq_city: string; hq_state: string; continent: string; region: string; report_region: string; logo_url: string; founded_year: number | null; linkedin_url: string; twitter_url: string; facebook_url: string; poc_name: string; poc_position: string; poc_linkedin: string } }
 
 const TABS: Array<{ label: string; key: Status | '' }> = [
 	{ label: 'All', key: '' }, { label: 'New', key: 'new' }, { label: 'Reviewing', key: 'reviewing' },
@@ -263,19 +264,28 @@ function PromoteModal({ row, onClose, onDone }: { row: Entry; onClose: () => voi
 		const idsByName = (rows: RefRow[] | undefined) => new Map((rows ?? []).map((r) => [r.name.toLowerCase(), r.id]));
 		const resolve = (names: string[] | undefined, map: Map<string, string>) =>
 			(names ?? []).map((n) => map.get(n.toLowerCase())).filter((x): x is string => !!x);
-		const sectorIds = resolve(s?.sectors, idsByName(sectorsRef));
+		const secMap = idsByName(sectorsRef);
 		const sportIds = resolve(s?.sports, idsByName(sportsRef));
 		const techIds = resolve(s?.tech_tags, idsByName(techRef));
+		// Prefer the most-specific (leaf) sector so the sub-sector cascade fills;
+		// fall back to the first broad suggestion.
+		const primaryId = s?.primary_sector ? secMap.get(s.primary_sector.toLowerCase()) : undefined;
+		const sectorId = primaryId ?? resolve(s?.sectors, secMap)[0] ?? '';
+		const pocParts = (p?.poc_name ?? '').trim().split(/\s+/).filter(Boolean);
 		return (
 			<CompanyModal
 				id={null}
 				seed={p ? {
 					name: p.name, website: p.website, description: p.description,
+					custom_logo_url: p.logo_url,
+					founded_year: p.founded_year != null ? String(p.founded_year) : '',
 					business_model: s?.business_model ?? '',
-					sector_id: sectorIds[0] ?? '', // company has one sector; take the top suggestion
+					sector_id: sectorId,
 					sport_ids: sportIds, tech_tag_ids: techIds,
-					hq: { ...EMPTY_LOCATION, country: p.hq_country, city: p.hq_city, state: p.hq_state },
+					hq: { ...EMPTY_LOCATION, country: p.hq_country, city: p.hq_city, state: p.hq_state, continent: p.continent, region: p.region, report_region: p.report_region },
 					social: { twitter_url: p.twitter_url, instagram_url: '', facebook_url: p.facebook_url, linkedin_url: p.linkedin_url, youtube_url: '', email: '' },
+					poc_first_name: pocParts[0] ?? '', poc_last_name: pocParts.slice(1).join(' '),
+					poc_job_position: p.poc_position, poc_linkedin: p.poc_linkedin,
 				} : undefined}
 				promotePipelineId={row.id}
 				onClose={() => setCreateOpen(false)}
@@ -442,6 +452,9 @@ function ViewModal({ row, onClose }: { row: Entry; onClose: () => void }) {
 		['Enrichment', <Tag key="e" variant={data.enrichment_status === 'enriched' ? 'pos' : data.enrichment_status === 'failed' ? 'warn' : ''}>{data.enrichment_status}</Tag>],
 		['Description', val(data.description)],
 		['HQ', val([data.hq_city, raw.state, data.hq_country].filter(Boolean).join(', '))],
+		['Founded (Apollo)', val(raw.founded_year)],
+		['POC', val([data.poc_name, data.poc_position].filter(Boolean).join(' · '))],
+		['POC LinkedIn', val(data.poc_linkedin)],
 		['LinkedIn', val(raw.linkedin_url)],
 		['Twitter', val(raw.twitter_url)],
 		['Facebook', val(raw.facebook_url)],

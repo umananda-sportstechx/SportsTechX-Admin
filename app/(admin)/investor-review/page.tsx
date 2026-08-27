@@ -44,7 +44,7 @@ interface TimeStats { perAdmin: Array<{ admin_id: string; full_name: string | nu
 interface AdminUser { id: string; full_name?: string | null; display_name?: string | null; email: string; user_role: string }
 interface UsersResponse { data: AdminUser[] }
 interface DedupeMatch { id: string; name: string; website: string | null; slug: string | null }
-interface Preview { matches: DedupeMatch[]; prefill: { name: string; website: string; category: string; hq_country: string; state: string; description: string; year_launched: number | null; city: string; twitter_url: string; instagram_url: string; facebook_url: string; linkedin_url: string; poc_name: string; poc_position: string; poc_email: string; poc_linkedin: string; keywords: string; logo_url: string; num_employees: number | null; total_funding: string; annual_revenue: string; last_raised_at: string } }
+interface Preview { matches: DedupeMatch[]; prefill: { name: string; website: string; category: string; hq_country: string; state: string; continent: string; region: string; report_region: string; description: string; year_launched: number | null; city: string; twitter_url: string; instagram_url: string; facebook_url: string; linkedin_url: string; poc_name: string; poc_position: string; poc_email: string; poc_linkedin: string; keywords: string; logo_url: string; num_employees: number | null; total_funding: string; annual_revenue: string; last_raised_at: string } }
 
 const STATUSES = ['pending', 'completed', 'skipped'] as const;
 
@@ -354,7 +354,7 @@ function PromoteModal({ row, onClose, onDone }: { row: QueueRow; onClose: () => 
 		return (
 			<InvestorModal
 				id={null}
-				seed={p ? { name: p.name, website: p.website, category: cat, description: p.description, year_launched: p.year_launched ? String(p.year_launched) : '', hq: { country: p.hq_country, city: p.city, continent: '', region: '', state: p.state }, social: { twitter_url: p.twitter_url, instagram_url: p.instagram_url, facebook_url: p.facebook_url, linkedin_url: p.linkedin_url, youtube_url: '', email: '' }, poc_name: p.poc_name, poc_position: p.poc_position, poc_email: p.poc_email, poc_linkedin: p.poc_linkedin, keywords: p.keywords, logo_url: p.logo_url, num_employees: p.num_employees != null ? String(p.num_employees) : '', total_funding: p.total_funding, annual_revenue: p.annual_revenue, last_raised_at: p.last_raised_at } : undefined}
+				seed={p ? { name: p.name, website: p.website, category: cat, description: p.description, year_launched: p.year_launched ? String(p.year_launched) : '', hq: { country: p.hq_country, city: p.city, continent: p.continent, region: p.region, state: p.state, report_region: p.report_region }, social: { twitter_url: p.twitter_url, instagram_url: p.instagram_url, facebook_url: p.facebook_url, linkedin_url: p.linkedin_url, youtube_url: '', email: '' }, poc_name: p.poc_name, poc_position: p.poc_position, poc_email: p.poc_email, poc_linkedin: p.poc_linkedin, keywords: p.keywords, logo_url: p.logo_url, num_employees: p.num_employees != null ? String(p.num_employees) : '', total_funding: p.total_funding, annual_revenue: p.annual_revenue, last_raised_at: p.last_raised_at } : undefined}
 				promoteReviewId={row.id}
 				onClose={() => setCreateOpen(false)}
 				onSaved={(id) => onCreated(id)}

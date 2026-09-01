@@ -5,7 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Trash2, Check, SkipForward, Rocket, Undo2, RefreshCw, Eye } from 'lucide-react';
 import { api } from '@/lib/api';
-import { val, fmtNum } from '@/lib/format';
+import { val, fmtNum, enrichedKeys } from '@/lib/format';
 import { Select } from '@/components/select';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
@@ -351,10 +351,12 @@ function PromoteModal({ row, onClose, onDone }: { row: QueueRow; onClose: () => 
 	if (createOpen) {
 		const p = preview?.prefill;
 		const cat = p && INVESTOR_CATEGORIES.includes(p.category) ? p.category : '';
+		const seed = p ? { name: p.name, website: p.website, category: cat, description: p.description, year_launched: p.year_launched ? String(p.year_launched) : '', hq: { country: p.hq_country, city: p.city, continent: p.continent, region: p.region, state: p.state, report_region: p.report_region }, social: { twitter_url: p.twitter_url, instagram_url: p.instagram_url, facebook_url: p.facebook_url, linkedin_url: p.linkedin_url, youtube_url: '', email: '' }, poc_name: p.poc_name, poc_position: p.poc_position, poc_email: p.poc_email, poc_linkedin: p.poc_linkedin, keywords: p.keywords, logo_url: p.logo_url, num_employees: p.num_employees != null ? String(p.num_employees) : '', total_funding: p.total_funding, annual_revenue: p.annual_revenue, last_raised_at: p.last_raised_at } : undefined;
 		return (
 			<InvestorModal
 				id={null}
-				seed={p ? { name: p.name, website: p.website, category: cat, description: p.description, year_launched: p.year_launched ? String(p.year_launched) : '', hq: { country: p.hq_country, city: p.city, continent: p.continent, region: p.region, state: p.state, report_region: p.report_region }, social: { twitter_url: p.twitter_url, instagram_url: p.instagram_url, facebook_url: p.facebook_url, linkedin_url: p.linkedin_url, youtube_url: '', email: '' }, poc_name: p.poc_name, poc_position: p.poc_position, poc_email: p.poc_email, poc_linkedin: p.poc_linkedin, keywords: p.keywords, logo_url: p.logo_url, num_employees: p.num_employees != null ? String(p.num_employees) : '', total_funding: p.total_funding, annual_revenue: p.annual_revenue, last_raised_at: p.last_raised_at } : undefined}
+				seed={seed}
+				enrichedFields={enrichedKeys(seed)}
 				promoteReviewId={row.id}
 				onClose={() => setCreateOpen(false)}
 				onSaved={(id) => onCreated(id)}

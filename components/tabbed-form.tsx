@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { createContext, useContext, useState } from 'react';
 
 /**
  * Tab strip for the rich entity modals. Render this as the `children` of
@@ -90,14 +90,50 @@ export function TabbedForm({
 	);
 }
 
-/** Labelled field wrapper matching the existing admin form style. */
-export function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+/**
+ * Set of form-field keys the enrichment pipeline auto-filled. Provided by the
+ * promote flow; `<Field name>` / `<EnrichedGroup name>` mark those fields so the
+ * admin can tell pipeline-filled values from their own input. Empty in edit mode.
+ */
+const EnrichedFieldsContext = createContext<Set<string>>(new Set());
+
+export function EnrichedFieldsProvider({ value, children }: { value: Set<string>; children: React.ReactNode }) {
+	return <EnrichedFieldsContext.Provider value={value}>{children}</EnrichedFieldsContext.Provider>;
+}
+
+function useEnriched(name?: string): boolean {
+	const set = useContext(EnrichedFieldsContext);
+	return !!name && set.has(name);
+}
+
+function EnrichedTag() {
+	return <span className="tag enriched" style={{ marginLeft: 6, verticalAlign: 'middle' }}>Enriched</span>;
+}
+
+/** Labelled field wrapper matching the existing admin form style. Pass `name` to
+ *  mark it when that key is in the enriched set. */
+export function Field({ label, hint, name, children }: { label: string; hint?: string; name?: string; children: React.ReactNode }) {
+	const enriched = useEnriched(name);
 	return (
-		<div>
+		<div className={enriched ? 'field-enriched' : undefined}>
 			<div className="co-stat-label" style={{ marginBottom: 6 }}>
 				{label}
 				{hint && <span style={{ color: 'var(--fg-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}> · {hint}</span>}
+				{enriched && <EnrichedTag />}
 			</div>
+			{children}
+		</div>
+	);
+}
+
+/** Marks a control group that isn't wrapped in <Field> (e.g. the bare socials
+ *  block) when `name` is enriched. Renders children unchanged otherwise. */
+export function EnrichedGroup({ name, children }: { name: string; children: React.ReactNode }) {
+	const enriched = useEnriched(name);
+	if (!enriched) return <>{children}</>;
+	return (
+		<div className="field-enriched">
+			<div style={{ marginBottom: 6 }}><EnrichedTag /></div>
 			{children}
 		</div>
 	);

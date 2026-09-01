@@ -613,7 +613,23 @@
   color: var(--warn);
   border-color: color-mix(in oklab, var(--warn) 34%, transparent);
 }
+.tag.enriched {
+  height: 16px;
+  padding: 0 6px;
+  font-size: 10px;
+  background: color-mix(in oklab, var(--info) 16%, transparent);
+  color: var(--info);
+  border-color: color-mix(in oklab, var(--info) 34%, transparent);
+}
 .tag.pill { background: var(--bg-3); color: var(--fg-2); }
+
+/* Marks a form field that was auto-filled by the enrichment pipeline. */
+.field-enriched {
+  border-left: 2px solid var(--info);
+  padding-left: 10px;
+  background: color-mix(in oklab, var(--info) 5%, transparent);
+  border-radius: var(--radius-sm);
+}
 
 .chip {
   height: 30px;

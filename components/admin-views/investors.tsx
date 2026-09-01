@@ -13,7 +13,7 @@ import { PageHeader, AsyncState, Loading, StatCard, RichStatCard, StatsPanel, Se
 import { PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip, BoolFilter, FilterRange, RefSlugFilter, SectorTierFilter } from '@/components/filters';
 import { downloadCsv } from '@/components/csv-import';
-import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
+import { TabbedForm, Field, useTabs, EnrichedFieldsProvider, EnrichedGroup } from '@/components/tabbed-form';
 import {
 	SectorCascade, SportsPicker, TechTagsPicker, RoundTypesPicker, LocationFields, SocialLinks, CurrencySelect,
 	EMPTY_SOCIAL, EMPTY_LOCATION, type SocialValue, type LocationValue,
@@ -279,14 +279,14 @@ function toInvestorForm(h: InvestorEdit): InvestorForm {
 	};
 }
 
-export function InvestorModal({ id, onClose, onSaved, seed, promoteReviewId }: { id: string | null; onClose: () => void; onSaved: (createdId?: string) => void; seed?: Partial<InvestorForm>; promoteReviewId?: string }) {
+export function InvestorModal({ id, onClose, onSaved, seed, promoteReviewId, enrichedFields }: { id: string | null; onClose: () => void; onSaved: (createdId?: string) => void; seed?: Partial<InvestorForm>; promoteReviewId?: string; enrichedFields?: string[] }) {
 	const isEdit = !!id;
 	const { data: hydrated } = useSWR<InvestorEdit>(isEdit ? [`/api/admin/investors/${id}/edit`] : null, { revalidateOnFocus: false });
 	if (isEdit && !hydrated) return <Modal title="Edit investor" onClose={onClose}><Loading msg="Loading investor…" /></Modal>;
-	return <InvestorForm id={id} initial={hydrated ? toInvestorForm(hydrated) : { ...EMPTY_INVESTOR, ...seed }} onClose={onClose} onSaved={onSaved} promoteReviewId={promoteReviewId} />;
+	return <InvestorForm id={id} initial={hydrated ? toInvestorForm(hydrated) : { ...EMPTY_INVESTOR, ...seed }} onClose={onClose} onSaved={onSaved} promoteReviewId={promoteReviewId} enrichedFields={enrichedFields} />;
 }
 
-function InvestorForm({ id, initial, onClose, onSaved, promoteReviewId }: { id: string | null; initial: InvestorForm; onClose: () => void; onSaved: (createdId?: string) => void; promoteReviewId?: string }) {
+function InvestorForm({ id, initial, onClose, onSaved, promoteReviewId, enrichedFields }: { id: string | null; initial: InvestorForm; onClose: () => void; onSaved: (createdId?: string) => void; promoteReviewId?: string; enrichedFields?: string[] }) {
 	const isEdit = !!id;
 	const [tab, setTab] = useTabs('profile');
 	const [form, setForm] = useState<InvestorForm>(initial);
@@ -376,7 +376,11 @@ function InvestorForm({ id, initial, onClose, onSaved, promoteReviewId }: { id: 
 			}
 		>
 			{(
-				<TabbedForm
+				<EnrichedFieldsProvider value={new Set(enrichedFields ?? [])}>
+					{!!enrichedFields?.length && (
+						<div style={{ fontSize: 12, color: 'var(--info)', padding: '8px 10px', border: '1px solid color-mix(in oklab, var(--info) 30%, transparent)', background: 'color-mix(in oklab, var(--info) 6%, transparent)', borderRadius: 'var(--radius-sm)', marginBottom: 4 }}>Highlighted fields were auto-filled by enrichment — verify before saving.</div>
+					)}
+					<TabbedForm
 					active={tab}
 					onChange={setTab}
 					tabs={[
@@ -386,12 +390,12 @@ function InvestorForm({ id, initial, onClose, onSaved, promoteReviewId }: { id: 
 									<Field label="Name"><input className="search-input" value={form.name} onChange={(e) => set('name', e.target.value)} /></Field>
 									<Field label={isEdit ? 'Slug' : 'Slug (optional — auto from name)'}><input className="search-input" style={{ fontFamily: 'var(--font-mono)' }} value={form.slug} onChange={(e) => set('slug', e.target.value)} disabled={isEdit} /></Field>
 									<Field label="Website"><input className="search-input" value={form.website} onChange={(e) => set('website', e.target.value)} placeholder="https://" /></Field>
-									<Field label="Description"><textarea className="search-input" style={{ minHeight: 70, resize: 'vertical' }} value={form.description} onChange={(e) => set('description', e.target.value)} /></Field>
+									<Field name="description" label="Description"><textarea className="search-input" style={{ minHeight: 70, resize: 'vertical' }} value={form.description} onChange={(e) => set('description', e.target.value)} /></Field>
 									<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>
 										<Field label="Category">
 											<Select value={form.category} onChange={(v) => set('category', v)} searchable width="100%" style={{ display: 'block', width: '100%' }} placeholder="—" options={[{ value: '', label: '—' }, ...CATEGORIES.map((c) => ({ value: c, label: c.replace(/_/g, ' ') }))]} />
 										</Field>
-										<Field label="Launched"><YearSelect value={form.year_launched} onChange={(v) => set('year_launched', v)} /></Field>
+										<Field name="year_launched" label="Launched"><YearSelect value={form.year_launched} onChange={(v) => set('year_launched', v)} /></Field>
 									</div>
 									<Field label="Status">
 										<div style={{ display: 'flex', gap: 6 }}>
@@ -413,8 +417,8 @@ function InvestorForm({ id, initial, onClose, onSaved, promoteReviewId }: { id: 
 						},
 						{ key: 'locsocial', label: 'Location & Social', node: (
 							<>
-								<Field label="Headquarters"><LocationFields value={form.hq} onChange={(v) => set('hq', v)} /></Field>
-								<SocialLinks value={form.social} onChange={(v) => set('social', v)} />
+								<Field name="hq" label="Headquarters"><LocationFields value={form.hq} onChange={(v) => set('hq', v)} /></Field>
+								<EnrichedGroup name="social"><SocialLinks value={form.social} onChange={(v) => set('social', v)} /></EnrichedGroup>
 							</>
 						) },
 						{ key: 'thesis', label: 'Thesis', hint: thesisCount, node: (
@@ -456,21 +460,21 @@ function InvestorForm({ id, initial, onClose, onSaved, promoteReviewId }: { id: 
 						) },
 						{ key: 'stats', label: 'Stats & Notes', node: (
 							<>
-								<Field label="Keywords"><input className="search-input" value={form.keywords} onChange={(e) => set('keywords', e.target.value)} /></Field>
-								<Field label="Logo URL"><input className="search-input" value={form.logo_url} onChange={(e) => set('logo_url', e.target.value)} placeholder="https://" /></Field>
+								<Field name="keywords" label="Keywords"><input className="search-input" value={form.keywords} onChange={(e) => set('keywords', e.target.value)} /></Field>
+								<Field name="logo_url" label="Logo URL"><input className="search-input" value={form.logo_url} onChange={(e) => set('logo_url', e.target.value)} placeholder="https://" /></Field>
 								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-									<Field label="Employees"><input className="search-input" type="number" value={form.num_employees} onChange={(e) => set('num_employees', e.target.value)} /></Field>
+									<Field name="num_employees" label="Employees"><input className="search-input" type="number" value={form.num_employees} onChange={(e) => set('num_employees', e.target.value)} /></Field>
 									<Field label="# Investments"><input className="search-input" type="number" value={form.num_investments} onChange={(e) => set('num_investments', e.target.value)} /></Field>
 									<Field label="# Exits"><input className="search-input" type="number" value={form.num_exits} onChange={(e) => set('num_exits', e.target.value)} /></Field>
 								</div>
 								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-									<Field label="Total funding (USD)"><input className="search-input" value={form.total_funding} onChange={(e) => set('total_funding', e.target.value)} /></Field>
-									<Field label="Annual revenue (USD)"><input className="search-input" value={form.annual_revenue} onChange={(e) => set('annual_revenue', e.target.value)} /></Field>
+									<Field name="total_funding" label="Total funding (USD)"><input className="search-input" value={form.total_funding} onChange={(e) => set('total_funding', e.target.value)} /></Field>
+									<Field name="annual_revenue" label="Annual revenue (USD)"><input className="search-input" value={form.annual_revenue} onChange={(e) => set('annual_revenue', e.target.value)} /></Field>
 								</div>
 								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
 									<Field label="Latest fund / round"><input className="search-input" value={form.latest_funding} onChange={(e) => set('latest_funding', e.target.value)} placeholder="e.g. Fund III" /></Field>
 									<Field label="Latest amount (USD)"><input className="search-input" value={form.latest_funding_amount} onChange={(e) => set('latest_funding_amount', e.target.value)} /></Field>
-									<Field label="Last raised"><input className="search-input" type="date" value={form.last_raised_at} onChange={(e) => set('last_raised_at', e.target.value)} /></Field>
+									<Field name="last_raised_at" label="Last raised"><input className="search-input" type="date" value={form.last_raised_at} onChange={(e) => set('last_raised_at', e.target.value)} /></Field>
 								</div>
 								<Field label="Analyst notes"><textarea className="search-input" style={{ minHeight: 70, resize: 'vertical' }} value={form.analyst_notes} onChange={(e) => set('analyst_notes', e.target.value)} /></Field>
 							</>
@@ -478,12 +482,12 @@ function InvestorForm({ id, initial, onClose, onSaved, promoteReviewId }: { id: 
 						{ key: 'contact', label: 'Contact', node: (
 							<>
 								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-									<Field label="POC name"><input className="search-input" value={form.poc_name} onChange={(e) => set('poc_name', e.target.value)} /></Field>
-									<Field label="POC position"><input className="search-input" value={form.poc_position} onChange={(e) => set('poc_position', e.target.value)} /></Field>
+									<Field name="poc_name" label="POC name"><input className="search-input" value={form.poc_name} onChange={(e) => set('poc_name', e.target.value)} /></Field>
+									<Field name="poc_position" label="POC position"><input className="search-input" value={form.poc_position} onChange={(e) => set('poc_position', e.target.value)} /></Field>
 								</div>
 								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 									<Field label="POC email"><input className="search-input" value={form.poc_email} onChange={(e) => set('poc_email', e.target.value)} placeholder="name@fund.com" /></Field>
-									<Field label="POC LinkedIn"><input className="search-input" value={form.poc_linkedin} onChange={(e) => set('poc_linkedin', e.target.value)} placeholder="https://linkedin.com/in/…" /></Field>
+									<Field name="poc_linkedin" label="POC LinkedIn"><input className="search-input" value={form.poc_linkedin} onChange={(e) => set('poc_linkedin', e.target.value)} placeholder="https://linkedin.com/in/…" /></Field>
 								</div>
 							</>
 						) },
@@ -512,6 +516,7 @@ function InvestorForm({ id, initial, onClose, onSaved, promoteReviewId }: { id: 
 						) },
 					]}
 				/>
+				</EnrichedFieldsProvider>
 			)}
 		</Modal>
 	);

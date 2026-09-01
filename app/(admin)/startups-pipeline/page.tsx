@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { Plus, Check, X, Trash2, Upload, Rocket, RefreshCw, Eye } from 'lucide-react';
 import { api } from '@/lib/api';
 import { qk } from '@/lib/query-keys';
-import { val, fmtNum } from '@/lib/format';
+import { val, fmtNum, enrichedKeys } from '@/lib/format';
 import { Select } from '@/components/select';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useConfirm } from '@/components/confirm';
@@ -272,10 +272,7 @@ function PromoteModal({ row, onClose, onDone }: { row: Entry; onClose: () => voi
 		const primaryId = s?.primary_sector ? secMap.get(s.primary_sector.toLowerCase()) : undefined;
 		const sectorId = primaryId ?? resolve(s?.sectors, secMap)[0] ?? '';
 		const pocParts = (p?.poc_name ?? '').trim().split(/\s+/).filter(Boolean);
-		return (
-			<CompanyModal
-				id={null}
-				seed={p ? {
+		const seed = p ? {
 					name: p.name, website: p.website, description: p.description,
 					custom_logo_url: p.logo_url,
 					founded_year: p.founded_year != null ? String(p.founded_year) : '',
@@ -286,7 +283,12 @@ function PromoteModal({ row, onClose, onDone }: { row: Entry; onClose: () => voi
 					social: { twitter_url: p.twitter_url, instagram_url: '', facebook_url: p.facebook_url, linkedin_url: p.linkedin_url, youtube_url: '', email: '' },
 					poc_first_name: pocParts[0] ?? '', poc_last_name: pocParts.slice(1).join(' '),
 					poc_job_position: p.poc_position, poc_linkedin: p.poc_linkedin,
-				} : undefined}
+				} : undefined;
+		return (
+			<CompanyModal
+				id={null}
+				seed={seed}
+				enrichedFields={enrichedKeys(seed)}
 				promotePipelineId={row.id}
 				onClose={() => setCreateOpen(false)}
 				onSaved={(id) => onCreated(id)}

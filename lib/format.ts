@@ -9,3 +9,18 @@ export const fmtNum = (v: unknown): string => {
 	if (!Number.isFinite(n) || n <= 0) return '—';
 	return n >= 1e9 ? `${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n.toLocaleString();
 };
+
+/**
+ * Keys of a promote `seed` that were populated by the enrichment pipeline
+ * (non-empty), excluding admin/candidate-entered fields (name/website/category).
+ * Used to visually mark those fields in the create form.
+ */
+export function enrichedKeys(seed?: Record<string, unknown>): string[] {
+	if (!seed) return [];
+	const skip = new Set(['name', 'website', 'category']);
+	const nonEmpty = (v: unknown): boolean =>
+		Array.isArray(v) ? v.length > 0
+			: v && typeof v === 'object' ? Object.values(v).some(nonEmpty)
+				: v !== '' && v != null;
+	return Object.keys(seed).filter((k) => !skip.has(k) && nonEmpty(seed[k]));
+}

@@ -17,7 +17,7 @@ import { FilterBar, FilterSelect, StatStrip, BoolFilter, FilterRange, RefSlugFil
 import { CsvImportButton, CsvTemplateButton, CsvCheckButton } from '@/components/csv-import';
 import { YearSelect } from '@/components/year-select';
 import { ImageInput } from '@/components/image-input';
-import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
+import { TabbedForm, Field, useTabs, EnrichedFieldsProvider, EnrichedGroup } from '@/components/tabbed-form';
 import {
 	SectorCascade, SportsPicker, TechTagsPicker, LocationFields, SocialLinks,
 	RoundTypeSelect, CurrencySelect, InvestorPicker, CompanySelectOne,
@@ -278,11 +278,11 @@ function toCompanyForm(h: CompanyEdit): CompanyForm {
 // Outer modal fetches the edit payload (when editing) and only mounts the form
 // once data is ready, so the form can seed useState from props directly — no
 // setState-in-effect, no cascading renders.
-export function CompanyModal({ id, onClose, onSaved, seed, promotePipelineId }: { id: string | null; onClose: () => void; onSaved: (createdId?: string) => void; seed?: Partial<CompanyForm>; promotePipelineId?: string }) {
+export function CompanyModal({ id, onClose, onSaved, seed, promotePipelineId, enrichedFields }: { id: string | null; onClose: () => void; onSaved: (createdId?: string) => void; seed?: Partial<CompanyForm>; promotePipelineId?: string; enrichedFields?: string[] }) {
 	const isEdit = !!id;
 	const { data: hydrated } = useSWR<CompanyEdit>(isEdit ? [`/api/admin/companies/${id}/edit`] : null, { revalidateOnFocus: false });
 	if (isEdit && !hydrated) return <Modal title="Edit company" onClose={onClose}><Loading msg="Loading company…" /></Modal>;
-	return <CompanyForm id={id} initial={hydrated ? toCompanyForm(hydrated) : { ...EMPTY_COMPANY, ...seed }} onClose={onClose} onSaved={onSaved} promotePipelineId={promotePipelineId} />;
+	return <CompanyForm id={id} initial={hydrated ? toCompanyForm(hydrated) : { ...EMPTY_COMPANY, ...seed }} onClose={onClose} onSaved={onSaved} promotePipelineId={promotePipelineId} enrichedFields={enrichedFields} />;
 }
 
 // ── Funding tab: a company's deals, managed inline via the shared DealModal ──
@@ -669,7 +669,7 @@ function InlineFundingEditor({ onStage, onCancel }: { onStage: (d: StagedDeal) =
 			<Field label="Investors" hint="star marks the lead"><InvestorPicker value={investors} onChange={setInvestors} /></Field>
 			<Field label="Sector"><SectorCascade value={sectorId} onChange={setSectorId} /></Field>
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-				<Field label="Business model" hint="who they sell to — B2B, B2C or B2B2C">
+				<Field name="business_model" label="Business model" hint="who they sell to — B2B, B2C or B2B2C">
 					<Select value={model} onChange={setModel} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...PARTY_MODELS.map((b) => ({ value: b, label: b.toUpperCase() }))]} />
 				</Field>
 				<Field label="Status">
@@ -840,7 +840,7 @@ function InlineMaEditor({ onStage, onCancel }: { onStage: (a: StagedAcq) => void
 	);
 }
 
-function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id: string | null; initial: CompanyForm; onClose: () => void; onSaved: (createdId?: string) => void; promotePipelineId?: string }) {
+function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enrichedFields }: { id: string | null; initial: CompanyForm; onClose: () => void; onSaved: (createdId?: string) => void; promotePipelineId?: string; enrichedFields?: string[] }) {
 	const isEdit = !!id;
 	const [tab, setTab] = useTabs('profile');
 	const [form, setForm] = useState<CompanyForm>(initial);
@@ -948,7 +948,11 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 			}
 		>
 			{(
-				<TabbedForm
+				<EnrichedFieldsProvider value={new Set(enrichedFields ?? [])}>
+					{!!enrichedFields?.length && (
+						<div style={{ fontSize: 12, color: 'var(--info)', padding: '8px 10px', border: '1px solid color-mix(in oklab, var(--info) 30%, transparent)', background: 'color-mix(in oklab, var(--info) 6%, transparent)', borderRadius: 'var(--radius-sm)', marginBottom: 4 }}>Highlighted fields were auto-filled by enrichment — verify before saving.</div>
+					)}
+					<TabbedForm
 					active={tab}
 					onChange={setTab}
 					tabs={[
@@ -963,10 +967,10 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 										</div>
 									</Field>
 									<Field label="Slug" hint={isEdit ? 'the public URL is fixed once created' : 'optional — auto-generated from the name if left blank'}><input className="search-input" style={{ fontFamily: 'var(--font-mono)' }} value={form.slug} onChange={(e) => set('slug', e.target.value)} disabled={isEdit} placeholder={isEdit ? undefined : 'acme-sports'} /></Field>
-									<Field label="Description" hint="one or two sentences shown on the public profile"><textarea className="search-input" style={{ minHeight: 80, resize: 'vertical' }} value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="What the company does, in a sentence or two." /></Field>
-									<Field label="Logo" hint="square image works best; leave blank to fall back to the fetched favicon"><ImageInput value={form.custom_logo_url} onChange={(u) => set('custom_logo_url', u)} pathPrefix="companies/logos" /></Field>
+									<Field name="description" label="Description" hint="one or two sentences shown on the public profile"><textarea className="search-input" style={{ minHeight: 80, resize: 'vertical' }} value={form.description} onChange={(e) => set('description', e.target.value)} placeholder="What the company does, in a sentence or two." /></Field>
+									<Field name="custom_logo_url" label="Logo" hint="square image works best; leave blank to fall back to the fetched favicon"><ImageInput value={form.custom_logo_url} onChange={(u) => set('custom_logo_url', u)} pathPrefix="companies/logos" /></Field>
 									<div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 12 }}>
-										<Field label="Founded" hint="year"><YearSelect value={form.founded_year} onChange={(v) => set('founded_year', v)} /></Field>
+										<Field name="founded_year" label="Founded" hint="year"><YearSelect value={form.founded_year} onChange={(v) => set('founded_year', v)} /></Field>
 										<Field label="IPO date"><input className="search-input" type="date" value={form.ipo_date} onChange={(e) => set('ipo_date', e.target.value)} /></Field>
 									</div>
 								</>
@@ -975,12 +979,12 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 						{
 							key: 'class', label: 'Classification', hint: form.sport_ids.length + form.tech_tag_ids.length, node: (
 								<>
-									<Field label="Sector" hint="drill into sub-sectors as needed"><SectorCascade value={form.sector_id} onChange={(v) => set('sector_id', v)} /></Field>
-									<Field label="Business model" hint="who they sell to — B2B, B2C or B2B2C">
+									<Field name="sector_id" label="Sector" hint="drill into sub-sectors as needed"><SectorCascade value={form.sector_id} onChange={(v) => set('sector_id', v)} /></Field>
+									<Field name="business_model" label="Business model" hint="who they sell to — B2B, B2C or B2B2C">
 										<Select value={form.business_model} onChange={(v) => set('business_model', v)} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...BUSINESS_MODELS.map((b) => ({ value: b, label: b.toUpperCase() }))]} />
 									</Field>
-									<Field label="Sports" hint={form.sport_ids.length ? `${form.sport_ids.length} selected · pick “Multisport” for 5+` : 'pick “Multisport” for 5+ sports'}><SportsPicker value={form.sport_ids} onChange={(v) => set('sport_ids', v)} /></Field>
-									<Field label="Tech tags" hint={form.tech_tag_ids.length ? `${form.tech_tag_ids.length} selected` : undefined}><TechTagsPicker value={form.tech_tag_ids} onChange={(v) => set('tech_tag_ids', v)} /></Field>
+									<Field name="sport_ids" label="Sports" hint={form.sport_ids.length ? `${form.sport_ids.length} selected · pick “Multisport” for 5+` : 'pick “Multisport” for 5+ sports'}><SportsPicker value={form.sport_ids} onChange={(v) => set('sport_ids', v)} /></Field>
+									<Field name="tech_tag_ids" label="Tech tags" hint={form.tech_tag_ids.length ? `${form.tech_tag_ids.length} selected` : undefined}><TechTagsPicker value={form.tech_tag_ids} onChange={(v) => set('tech_tag_ids', v)} /></Field>
 									<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 										<Field label="Accelerator" hint="programs the company joined"><input className="search-input" value={form.accelerator} onChange={(e) => set('accelerator', e.target.value)} placeholder="e.g. Techstars" /></Field>
 										<Field label="Cohort" hint="batch / year, if any"><input className="search-input" value={form.cohort} onChange={(e) => set('cohort', e.target.value)} placeholder="e.g. 2023 Spring" /></Field>
@@ -988,19 +992,19 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 								</>
 							),
 						},
-						{ key: 'location', label: 'Location', node: <Field label="Headquarters"><LocationFields value={form.hq} onChange={(v) => set('hq', v)} /></Field> },
-						{ key: 'social', label: 'Social', node: <SocialLinks value={form.social} onChange={(v) => set('social', v)} /> },
+						{ key: 'location', label: 'Location', node: <Field name="hq" label="Headquarters"><LocationFields value={form.hq} onChange={(v) => set('hq', v)} /></Field> },
+						{ key: 'social', label: 'Social', node: <EnrichedGroup name="social"><SocialLinks value={form.social} onChange={(v) => set('social', v)} /></EnrichedGroup> },
 						{
 							key: 'contact', label: 'Contact', node: (
 								<>
 									<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-										<Field label="POC first name"><input className="search-input" value={form.poc_first_name} onChange={(e) => set('poc_first_name', e.target.value)} /></Field>
-										<Field label="POC last name"><input className="search-input" value={form.poc_last_name} onChange={(e) => set('poc_last_name', e.target.value)} /></Field>
+										<Field name="poc_first_name" label="POC first name"><input className="search-input" value={form.poc_first_name} onChange={(e) => set('poc_first_name', e.target.value)} /></Field>
+										<Field name="poc_last_name" label="POC last name"><input className="search-input" value={form.poc_last_name} onChange={(e) => set('poc_last_name', e.target.value)} /></Field>
 									</div>
-									<Field label="POC job position"><input className="search-input" value={form.poc_job_position} onChange={(e) => set('poc_job_position', e.target.value)} /></Field>
+									<Field name="poc_job_position" label="POC job position"><input className="search-input" value={form.poc_job_position} onChange={(e) => set('poc_job_position', e.target.value)} /></Field>
 									<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 										<Field label="POC email (company)"><input className="search-input" value={form.poc_email} onChange={(e) => set('poc_email', e.target.value)} placeholder="name@company.com" /></Field>
-										<Field label="POC LinkedIn (company)"><input className="search-input" value={form.poc_linkedin} onChange={(e) => set('poc_linkedin', e.target.value)} placeholder="https://linkedin.com/in/…" /></Field>
+										<Field name="poc_linkedin" label="POC LinkedIn (company)"><input className="search-input" value={form.poc_linkedin} onChange={(e) => set('poc_linkedin', e.target.value)} placeholder="https://linkedin.com/in/…" /></Field>
 									</div>
 									<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 										<Field label="POC personal email"><input className="search-input" value={form.poc_personal_email} onChange={(e) => set('poc_personal_email', e.target.value)} placeholder="personal@email.com" /></Field>
@@ -1051,6 +1055,7 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId }: { id:
 						},
 					]}
 				/>
+				</EnrichedFieldsProvider>
 			)}
 		</Modal>
 	);

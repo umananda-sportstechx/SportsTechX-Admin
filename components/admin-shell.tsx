@@ -7,7 +7,7 @@ import {
 	LayoutDashboard, Briefcase, Users, FilePlus, FileText, Layers,
 	Activity, ShoppingCart, LogOut, CreditCard, ToggleLeft,
 	Banknote, Sparkles, Tag, BookOpen, Menu, BarChart3, Gauge,
-	Receipt, Package, Handshake, Download, Coins, ChevronDown, Sun, Moon,
+	Receipt, Package, Handshake, Download, Coins, ChevronDown, Sun, Moon, Newspaper,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthSession } from '@/hooks/use-auth-session';
@@ -52,6 +52,7 @@ const DATA_NAV: NavItem[] = [
 	{ label: 'Featured lists', href: '/featured-lists', Icon: Sparkles },
 	{ label: 'Reference data', href: '/reference', Icon: BookOpen },
 	{ label: 'Polls', href: '/polls', Icon: Sparkles },
+	{ label: 'Market roundup', href: '/market-roundup', Icon: Newspaper },
 	{ label: 'Intro requests', href: '/intro-requests', Icon: Handshake },
 ];
 

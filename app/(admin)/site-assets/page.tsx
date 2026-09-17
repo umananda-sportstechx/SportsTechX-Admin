@@ -40,7 +40,8 @@ export default function SiteAssetsPage() {
 	const [site, setSite] = useState('atlas');
 	const { mutate } = useSWRConfig();
 
-	const schemaQ = useSWR<{ sites: SiteSchema }>(['/api/admin/site-content/schema'], { dedupingInterval: 300_000 });
+	const SCHEMA_KEY = '/api/admin/site-content/schema';
+	const schemaQ = useSWR<{ sites: SiteSchema }>([SCHEMA_KEY], { dedupingInterval: 300_000 });
 	const assetsQ = useSWR<Asset[]>([ASSETS_KEY], { dedupingInterval: 15_000 });
 	const placementsQ = useSWR<Placement[]>([PLACEMENTS_KEY, { site }], { dedupingInterval: 15_000 });
 
@@ -52,9 +53,13 @@ export default function SiteAssetsPage() {
 	const reload = () => {
 		void mutate([ASSETS_KEY]);
 		void mutate([PLACEMENTS_KEY, { site }]);
+		// The schema too: it is the board's Retry handler, and a schema fetch
+		// that failed would otherwise keep the error screen up forever - its own
+		// key deduped for 5 minutes and never revalidated by the button.
+		void mutate([SCHEMA_KEY]);
 	};
 
-	const sections = Object.entries(schemaQ.data?.sites[site] ?? {})
+	const sections = Object.entries(schemaQ.data?.sites?.[site] ?? {})
 		.filter((e): e is [string, SectionSpec] => e[1] !== undefined);
 
 	return (

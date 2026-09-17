@@ -75,6 +75,10 @@ export function PlacementBoard({
 			await api('POST', `${PLACEMENTS_KEY}/reorder`, { site, section, ordered_ids: orderedIds });
 		} catch (e) {
 			toast.error((e as Error).message);
+		} finally {
+			// Always reconcile. Two reorders dragged in quick succession race, and
+			// without a revalidation on the SUCCESS path the loser's order sticks
+			// on screen while the database - and the live site - holds the other.
 			reload();
 		}
 	};
@@ -95,14 +99,27 @@ export function PlacementBoard({
 			return;
 		}
 
-		// Reorder. Both ends must be cards in the same section.
+		// A card is being dragged. It can only move within its own section -
+		// changing section would be a different request, so the drop targets of
+		// other sections refuse to highlight for it (see SectionDrop).
 		if (activeId === overId) return;
 		const moved = placements.find((p) => p.id === activeId);
 		if (!moved) return;
 		const ids = bySection(moved.section).map((p) => p.id);
 		const from = ids.indexOf(activeId);
+		if (from < 0) return;
+
+		// Released on the section body rather than on a sibling card. That covers
+		// the 8px padding and every gap BETWEEN cards, which is a large share of
+		// the drop area - discarding it made reordering feel broken unless you
+		// landed exactly inside another card. Treat it as "move to the end".
+		if (overId === `sec:${moved.section}`) {
+			if (from === ids.length - 1) return;
+			return void reorder(moved.section, arrayMove(ids, from, ids.length - 1));
+		}
+
 		const to = ids.indexOf(overId);
-		if (from < 0 || to < 0) return;
+		if (to < 0) return;   // a card or logo box belonging to another section
 		void reorder(moved.section, arrayMove(ids, from, to));
 	};
 
@@ -150,13 +167,21 @@ export function PlacementBoard({
 }
 
 /* Prefer whatever the pointer is actually inside - that is what lets a card's
-   small logo box win over the section body it sits in. Sortable reordering
-   needs a fallback, because the pointer leaves every droppable while a card is
-   mid-flight. */
+   small logo box win over the section body it sits in.
+   The fallback is deliberately limited to CARDS. closestCenter scores every
+   registered droppable with no distance threshold, so it never returns empty:
+   applied to tray tiles, releasing one over whitespace snapped to the nearest
+   droppable and silently added a card - or overwrote a company logo. Cards do
+   need it, because the pointer leaves every droppable while one is lifted and
+   reordering would stall without it. */
 const collision: CollisionDetection = (args) => {
 	const hits = pointerWithin(args);
-	return hits.length > 0 ? hits : closestCenter(args);
+	if (hits.length > 0) return hits;
+	return isTrayDrag(args.active.id) ? [] : closestCenter(args);
 };
+
+const isTrayDrag = (id: string | number | null | undefined) =>
+	typeof id === 'string' && id.startsWith('lib:');
 
 // ---- library tray -----------------------------------------------------------
 
@@ -205,8 +230,13 @@ function SectionDrop({
 	onSetOverlay: (placementId: string, assetId: string | null) => void;
 	reload: () => void;
 }) {
-	const { setNodeRef, isOver } = useDroppable({ id: `sec:${name}` });
+	const { setNodeRef, isOver, active } = useDroppable({ id: `sec:${name}` });
 	const ids = cards.map((c) => c.id);
+	// Only highlight for a drag this section can actually take: a tray tile, or
+	// one of its own cards being reordered. Lighting up for another section's
+	// card promised a move that onDragEnd then silently discarded.
+	const accepts = isTrayDrag(active?.id) || (active != null && ids.includes(String(active.id)));
+	const armed = isOver && accepts;
 
 	return (
 		<Section
@@ -225,8 +255,8 @@ function SectionDrop({
 				ref={setNodeRef}
 				style={{
 					display: 'grid', gap: 8, padding: 8, minHeight: 72,
-					border: `1px dashed ${isOver ? 'var(--accent)' : 'var(--border)'}`,
-					background: isOver ? 'var(--bg-3)' : 'transparent',
+					border: `1px dashed ${armed ? 'var(--accent)' : 'var(--border)'}`,
+					background: armed ? 'var(--bg-3)' : 'transparent',
 				}}
 			>
 				{cards.length === 0 && (
@@ -347,7 +377,9 @@ function LogoSlot({
 	card: Placement;
 	onSetOverlay: (placementId: string, assetId: string | null) => void;
 }) {
-	const { setNodeRef, isOver } = useDroppable({ id: `logo:${card.id}` });
+	const { setNodeRef, isOver, active } = useDroppable({ id: `logo:${card.id}` });
+	// Only a library tile can become a logo; a dragged card can't.
+	const armed = isOver && isTrayDrag(active?.id);
 	return (
 		<div style={{ flex: 'none', display: 'grid', gap: 3, justifyItems: 'center' }}>
 			<div
@@ -355,8 +387,8 @@ function LogoSlot({
 				title="Drop a company logo here"
 				style={{
 					width: 72, height: 46, display: 'grid', placeItems: 'center',
-					border: `1px dashed ${isOver ? 'var(--accent)' : 'var(--border)'}`,
-					background: isOver ? 'var(--bg-3)' : 'var(--bg-2)',
+					border: `1px dashed ${armed ? 'var(--accent)' : 'var(--border)'}`,
+					background: armed ? 'var(--bg-3)' : 'var(--bg-2)',
 					fontSize: 9, color: 'var(--fg-muted)', textAlign: 'center', padding: 2,
 				}}
 			>

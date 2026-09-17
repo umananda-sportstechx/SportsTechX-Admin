@@ -83,6 +83,17 @@ export interface UploadedFile {
  * public-bucket objects are CDN-fronted, and a year-long max-age means the edge
  * answers repeat traffic on the public sites.
  */
+/** Undo an upload whose DB row could not be written. Without it the object
+ *  stays in the bucket forever with nothing referencing it - invisible to the
+ *  library and impossible to delete from any UI. */
+export async function discardUpload(storagePath: string): Promise<void> {
+	try {
+		await getSupabaseBrowser().storage.from(BUCKET).remove([storagePath]);
+	} catch {
+		/* best effort - the toast for the real failure has already fired */
+	}
+}
+
 export async function uploadOne(file: File): Promise<UploadedFile | null> {
 	if (!ALLOWED_MIME.has(file.type)) {
 		toast.error(`${file.name}: unsupported type ${file.type || '(unknown)'}. PNG, JPEG, WebP or GIF.`);
@@ -92,26 +103,31 @@ export async function uploadOne(file: File): Promise<UploadedFile | null> {
 		toast.error(`${file.name}: too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Max 5 MB.`);
 		return null;
 	}
-	const supabase = getSupabaseBrowser();
-	const ext = (file.name.match(/\.([a-zA-Z0-9]+)$/)?.[1] ?? mimeExt(file.type)).toLowerCase();
-	const key = `${PATH_PREFIX}/${crypto.randomUUID()}.${ext}`;
-	const { error } = await supabase.storage.from(BUCKET).upload(key, file, {
-		cacheControl: '31536000',
-		upsert: false,
-		contentType: file.type,
-	});
-	if (error) {
-		toast.error(`${file.name}: ${error.message}`);
+	// The whole body is guarded, not just the returned { error }:
+	// getSupabaseBrowser() itself throws when the Supabase env vars are absent,
+	// and that rejection used to escape the caller as an unhandled promise.
+	try {
+		const supabase = getSupabaseBrowser();
+		const ext = (file.name.match(/\.([a-zA-Z0-9]+)$/)?.[1] ?? mimeExt(file.type)).toLowerCase();
+		const key = `${PATH_PREFIX}/${crypto.randomUUID()}.${ext}`;
+		const { error } = await supabase.storage.from(BUCKET).upload(key, file, {
+			cacheControl: '31536000',
+			upsert: false,
+			contentType: file.type,
+		});
+		if (error) throw error;
+		const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(key);
+		return {
+			url: pub.publicUrl,
+			storage_path: key,
+			filename: file.name,
+			mime_type: file.type,
+			bytes: file.size,
+		};
+	} catch (e) {
+		toast.error(`${file.name}: ${(e as Error).message || 'upload failed'}`);
 		return null;
 	}
-	const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(key);
-	return {
-		url: pub.publicUrl,
-		storage_path: key,
-		filename: file.name,
-		mime_type: file.type,
-		bytes: file.size,
-	};
 }
 
 function mimeExt(mime: string): string {

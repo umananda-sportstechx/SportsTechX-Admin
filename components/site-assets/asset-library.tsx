@@ -7,7 +7,7 @@ import { api } from '@/lib/api';
 import { useConfirm } from '@/components/confirm';
 import { AsyncState, Section, Tag } from '@/components/atoms';
 import {
-	ACCEPT, ASSETS_KEY, prettyBytes, uploadOne, uploadsDisabled,
+	ACCEPT, ASSETS_KEY, discardUpload, prettyBytes, uploadOne, uploadsDisabled,
 	type Asset,
 } from './shared';
 
@@ -48,6 +48,10 @@ export function AssetLibrary({
 					ok += 1;
 				} catch (e) {
 					toast.error(`${file.name}: ${(e as Error).message}`);
+					// The bytes are already in the bucket. Without this the object is
+					// orphaned: no row, so it never shows in the library and no UI can
+					// remove it. This is the only place that still knows its key.
+					await discardUpload(uploaded.storage_path);
 				}
 			}
 			if (ok > 0) toast.success(`Uploaded ${ok} image${ok === 1 ? '' : 's'}`);
@@ -93,7 +97,7 @@ export function AssetLibrary({
 					onClick={() => !disabled && !busy && fileRef.current?.click()}
 					onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
 					onDragLeave={() => setDragOver(false)}
-					onDrop={(e) => { e.preventDefault(); setDragOver(false); void ingest(e.dataTransfer.files); }}
+					onDrop={(e) => { e.preventDefault(); setDragOver(false); if (!disabled) void ingest(e.dataTransfer.files); }}
 					style={{
 						border: `1px dashed ${dragOver ? 'var(--accent)' : 'var(--border)'}`,
 						background: dragOver ? 'var(--bg-3)' : 'var(--bg-2)',

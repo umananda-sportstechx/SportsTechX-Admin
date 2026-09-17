@@ -201,12 +201,26 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
 			<aside className={`admin-rail ${navOpen ? 'open' : ''}`}>
 				<div className="admin-rail-brandrow">
-					<div>
-						<div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--sidebar-muted)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 4 }}>
-							SportsTechX
-						</div>
-						<div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em' }}>
-							Admin
+					<div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+						{/* The brand mark on its own, not the lockup: the wordmark is
+						    already spelled out beside it, and at this size it would
+						    be illegible anyway. Pink reads on both themes, so it
+						    needs no dark/light variant. */}
+						{/* eslint-disable-next-line @next/next/no-img-element */}
+						<img
+							src="/stx-mark.png"
+							alt="SportsTechX"
+							width={28}
+							height={28}
+							style={{ width: 28, height: 28, objectFit: 'contain', flex: 'none' }}
+						/>
+						<div>
+							<div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--sidebar-muted)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 4 }}>
+								SportsTechX
+							</div>
+							<div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em' }}>
+								Admin
+							</div>
 						</div>
 					</div>
 				</div>

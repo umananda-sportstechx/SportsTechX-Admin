@@ -8,6 +8,7 @@ import {
 	Activity, ShoppingCart, LogOut, CreditCard, ToggleLeft,
 	Banknote, Sparkles, Tag, BookOpen, Menu, BarChart3, Gauge,
 	Receipt, Package, Handshake, Download, Coins, ChevronDown, Sun, Moon, Newspaper,
+	Images,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthSession } from '@/hooks/use-auth-session';
@@ -53,6 +54,7 @@ const DATA_NAV: NavItem[] = [
 	{ label: 'Reference data', href: '/reference', Icon: BookOpen },
 	{ label: 'Polls', href: '/polls', Icon: Sparkles },
 	{ label: 'Market roundup', href: '/market-roundup', Icon: Newspaper },
+	{ label: 'Site assets', href: '/site-assets', Icon: Images },
 	{ label: 'Intro requests', href: '/intro-requests', Icon: Handshake },
 ];
 

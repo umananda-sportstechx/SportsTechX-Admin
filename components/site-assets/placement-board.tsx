@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { GripVertical, ImageOff, Plus, Trash2 } from 'lucide-react';
+import { GripVertical, ImageOff, Loader2, Plus, Trash2, Upload } from 'lucide-react';
 import {
 	DndContext, DragOverlay, PointerSensor, closestCenter, pointerWithin,
 	useDraggable, useDroppable, useSensor, useSensors,
@@ -13,7 +13,10 @@ import { CSS } from '@dnd-kit/utilities';
 import { api } from '@/lib/api';
 import { useConfirm } from '@/components/confirm';
 import { AsyncState, Section } from '@/components/atoms';
-import { PLACEMENTS_KEY, type Asset, type Placement, type SectionSpec } from './shared';
+import {
+	ACCEPT, ASSETS_KEY, PLACEMENTS_KEY, discardUpload, uploadOne, uploadsDisabled,
+	type Asset, type Placement, type SectionSpec,
+} from './shared';
 
 /* eslint-disable @next/next/no-img-element */
 
@@ -135,6 +138,10 @@ export function PlacementBoard({
 			onDragCancel={() => setDragging(null)}
 			onDragEnd={onDragEnd}
 		>
+			{/* The spinner keyframes live on the Library tab, which is not mounted
+			    here - the logo slots need their own copy. */}
+			<style>{`@keyframes site-assets-spin { to { transform: rotate(360deg); } }`}</style>
+
 			<div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 260px) 1fr', gap: 'var(--space-4)', alignItems: 'start' }}>
 				<Tray assets={assets} />
 
@@ -378,23 +385,73 @@ function LogoSlot({
 	onSetOverlay: (placementId: string, assetId: string | null) => void;
 }) {
 	const { setNodeRef, isOver, active } = useDroppable({ id: `logo:${card.id}` });
+	const fileRef = useRef<HTMLInputElement>(null);
+	const [busy, setBusy] = useState(false);
 	// Only a library tile can become a logo; a dragged card can't.
 	const armed = isOver && isTrayDrag(active?.id);
+	const canUpload = !uploadsDisabled();
+
+	/* Click-to-upload as well as drag-from-tray. Dragging alone meant a logo had
+	   to be uploaded on the Library tab FIRST and only then dragged over here -
+	   so with an empty library there was simply nothing to drag and the slot
+	   looked broken. This puts the whole flow on the card itself. */
+	const pick = async (file: File | undefined) => {
+		if (!file || busy || !canUpload) return;
+		setBusy(true);
+		try {
+			const uploaded = await uploadOne(file);
+			if (!uploaded) return;
+			try {
+				const asset = await api<Asset>('POST', ASSETS_KEY, { ...uploaded, alt_text: '' });
+				onSetOverlay(card.id, asset.id);
+			} catch (e) {
+				toast.error((e as Error).message);
+				await discardUpload(uploaded.storage_path);
+			}
+		} finally {
+			setBusy(false);
+		}
+	};
+
 	return (
 		<div style={{ flex: 'none', display: 'grid', gap: 3, justifyItems: 'center' }}>
+			<input
+				ref={fileRef}
+				type="file"
+				accept={ACCEPT}
+				style={{ display: 'none' }}
+				onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ''; }}
+			/>
 			<div
 				ref={setNodeRef}
-				title="Drop a company logo here"
+				onClick={() => !busy && canUpload && fileRef.current?.click()}
+				// A file dragged straight off the desktop uses native HTML5 drag
+				// events, which dnd-kit never sees - so both paths can coexist.
+				onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }}
+				onDrop={(e) => {
+					if (!e.dataTransfer.files?.length) return;
+					e.preventDefault();
+					void pick(e.dataTransfer.files[0]);
+				}}
+				title={canUpload
+					? 'Click to upload a company logo, or drag one from the library'
+					: 'Uploads are disabled in local dev'}
 				style={{
 					width: 72, height: 46, display: 'grid', placeItems: 'center',
 					border: `1px dashed ${armed ? 'var(--accent)' : 'var(--border)'}`,
 					background: armed ? 'var(--bg-3)' : 'var(--bg-2)',
 					fontSize: 9, color: 'var(--fg-muted)', textAlign: 'center', padding: 2,
+					cursor: busy || !canUpload ? 'default' : 'pointer',
 				}}
 			>
-				{card.overlay_url
-					? <img src={card.overlay_url} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
-					: 'company logo'}
+				{busy
+					? <Loader2 size={14} style={{ animation: 'site-assets-spin 0.9s linear infinite' }} />
+					: card.overlay_url
+						? <img src={card.overlay_url} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+						: <span style={{ display: 'grid', justifyItems: 'center', gap: 1 }}>
+							<Upload size={11} />
+							<span>logo</span>
+						</span>}
 			</div>
 			{card.overlay_url && (
 				<button

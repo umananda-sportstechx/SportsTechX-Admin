@@ -106,13 +106,15 @@ function fmtLedgerWhen(iso: string): string {
 	const dt = new Date(iso);
 	return Number.isNaN(dt.getTime()) ? '' : dt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
-const LEDGER_FILTERS: Array<{ k: 'all' | 'ai' | 'integration'; label: string }> = [
-	{ k: 'all', label: 'All' }, { k: 'ai', label: 'AI' }, { k: 'integration', label: 'Export' },
+// Spend CATEGORY, not a pool. One balance funds everything; the ledger still
+// records what each spend was for, so filtering the history stays useful.
+const LEDGER_FILTERS: Array<{ k: 'all' | 'ai' | 'integration' | 'stx'; label: string }> = [
+	{ k: 'all', label: 'All' }, { k: 'ai', label: 'AI' }, { k: 'integration', label: 'Export' }, { k: 'stx', label: 'Other' },
 ];
 
 /** Itemized credit-spend history for this user (every spend, grant & refund). */
 function CreditLedgerSection({ profileId }: { profileId: string }) {
-	const [type, setType] = useState<'all' | 'ai' | 'integration'>('all');
+	const [type, setType] = useState<'all' | 'ai' | 'integration' | 'stx'>('all');
 	const getKey = (index: number, prev: AdminLedgerPage | null) => {
 		if (prev && !prev.nextCursor) return null;
 		const cursor = index === 0 ? undefined : (prev?.nextCursor ?? undefined);
@@ -182,10 +184,16 @@ function CreditLedgerSection({ profileId }: { profileId: string }) {
 	);
 }
 
-/** Grant extra non-expiring credits (AI or integration/export) to this user. */
+/**
+ * Grant extra non-expiring STX credits to this user.
+ *
+ * There is one wallet — AI features and exports draw on the same balance — so
+ * the old AI/Export picker chose a ledger label, not a destination: whichever
+ * you picked, the credits landed in the same pool, and the panel above then
+ * displayed them under the other name.
+ */
 function CreditGrantSection({ profileId }: { profileId: string }) {
 	const [amount, setAmount] = useState('');
-	const [type, setType] = useState<'ai' | 'integration'>('ai');
 	const [pending, setPending] = useState(false);
 	const { mutate } = useSWRConfig();
 	const grant = async () => {
@@ -193,8 +201,8 @@ function CreditGrantSection({ profileId }: { profileId: string }) {
 		if (!Number.isFinite(n) || n < 1) { toast.error('Enter a positive amount'); return; }
 		setPending(true);
 		try {
-			await api('POST', '/api/admin/billing/bulk-credit-grant', { profile_ids: [profileId], credits: Math.floor(n), credit_type: type });
-			toast.success(`Granted ${Math.floor(n).toLocaleString()} ${type === 'ai' ? 'AI' : 'export'} credits`);
+			await api('POST', '/api/admin/billing/bulk-credit-grant', { profile_ids: [profileId], credits: Math.floor(n), credit_type: 'stx' });
+			toast.success(`Granted ${Math.floor(n).toLocaleString()} STX credits`);
 			setAmount('');
 			void mutate([`/api/admin/users/${profileId}/credits`]);
 		} catch (e) { toast.error((e as Error).message); }
@@ -203,7 +211,6 @@ function CreditGrantSection({ profileId }: { profileId: string }) {
 	return (
 		<Section title="Grant credits" meta="non-expiring top-up · used after monthly plan credits">
 			<div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-				<Select value={type} onChange={(v) => setType(v as 'ai' | 'integration')} width={180} options={[{ value: 'ai', label: 'AI credits' }, { value: 'integration', label: 'Integration / export credits' }]} />
 				<input className="search-input" type="number" min="1" step="1" style={{ height: 32, width: 140 }} placeholder="Amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
 				<button className="btn" disabled={pending} onClick={() => void grant()}>Grant</button>
 			</div>

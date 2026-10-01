@@ -42,12 +42,11 @@ export default function BillingAdminPage() {
 
 	const [bulkUsers, setBulkUsers] = useState<string[]>([]);
 	const [bulkCredits, setBulkCredits] = useState(50);
-	const [bulkType, setBulkType] = useState<'ai' | 'integration'>('ai');
 	const [bulkReason, setBulkReason] = useState('');
 	const [bulkExpiry, setBulkExpiry] = useState(0); // 0 = never expires
 
 	const [accessEmails, setAccessEmails] = useState('');
-	const [accessTier, setAccessTier] = useState<'general' | 'raise' | 'scout' | 'growth' | 'pro'>('raise');
+	const [accessTier, setAccessTier] = useState<'raise' | 'scout'>('raise');
 	const [accessDays, setAccessDays] = useState(30);
 	const [accessReason, setAccessReason] = useState('');
 	const [accessResults, setAccessResults] = useState<BulkGrantAccessResponse | null>(null);
@@ -71,11 +70,12 @@ export default function BillingAdminPage() {
 		setCreditPending(true);
 		try {
 			const res = await api<BulkCreditResponse>('POST', '/api/admin/billing/bulk-credit-grant', {
-				profile_ids: bulkUsers, credits: bulkCredits, credit_type: bulkType,
+				// One wallet — `credit_type` on a grant only labels the ledger row.
+				profile_ids: bulkUsers, credits: bulkCredits, credit_type: 'stx',
 				reason: bulkReason || undefined,
 				expires_in_days: bulkExpiry > 0 ? bulkExpiry : undefined,
 			});
-			toast.success(`Granted ${bulkCredits} ${bulkType} credit(s) to ${res.granted} user(s)`);
+			toast.success(`Granted ${bulkCredits} STX credit(s) to ${res.granted} user(s)`);
 			setBulkUsers([]);
 		} catch (e) { toast.error((e as Error).message ?? 'Could not grant credits'); }
 		finally { setCreditPending(false); }
@@ -140,13 +140,6 @@ export default function BillingAdminPage() {
 							<input className="search-input" type="number" min={1} style={{ width: '100%' }}
 								value={bulkCredits} onChange={(e) => setBulkCredits(Math.max(1, Number(e.target.value) || 1))} />
 						</div>
-						<div>
-							<Label>Type</Label>
-							<div style={{ display: 'flex', gap: 6 }}>
-								<button type="button" className={`chip ${bulkType === 'ai' ? 'on' : ''}`} onClick={() => setBulkType('ai')}>AI</button>
-								<button type="button" className={`chip ${bulkType === 'integration' ? 'on' : ''}`} onClick={() => setBulkType('integration')}>Integration</button>
-							</div>
-						</div>
 					</div>
 					<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
 						<div>
@@ -161,7 +154,7 @@ export default function BillingAdminPage() {
 						</div>
 					</div>
 					<button className="btn" disabled={bulkUsers.length === 0 || creditPending} onClick={() => void bulkCredit()}>
-						<Coins size={13} /> {creditPending ? 'Granting…' : `Grant ${bulkCredits} ${bulkType} credit${bulkCredits === 1 ? '' : 's'} × ${bulkUsers.length}`}
+						<Coins size={13} /> {creditPending ? 'Granting…' : `Grant ${bulkCredits} STX credit${bulkCredits === 1 ? '' : 's'} × ${bulkUsers.length}`}
 					</button>
 				</Section>
 			</div>
@@ -171,7 +164,7 @@ export default function BillingAdminPage() {
 					<Hint>
 						Sets <Code>profiles.user_type</Code> to the tier and starts a trial window on
 						<Code>profile_subscriptions</Code> (<Code>is_trial</Code>, <Code>trial_ends_at = now() + N days</Code>).
-						The hourly trial-expiry job downgrades back to free when the window passes — unless the user pays via Stripe in the meantime.
+						The hourly trial-expiry job downgrades back to Explore when the window passes — unless the user pays via Stripe in the meantime.
 					</Hint>
 					<div style={{ marginBottom: 12 }}>
 						<Label aside={`${parsedEmails.length} parsed`}>Emails — one per line, or comma separated</Label>
@@ -182,7 +175,7 @@ export default function BillingAdminPage() {
 						<div>
 							<Label>Tier</Label>
 							<div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-								{([['general', 'General'], ['raise', 'Raise'], ['scout', 'Scout'], ['growth', 'Growth'], ['pro', 'Pro']] as const).map(([v, label]) => (
+								{([['raise', 'Raise'], ['scout', 'Scout']] as const).map(([v, label]) => (
 									<button key={v} type="button" className={`chip ${accessTier === v ? 'on' : ''}`} onClick={() => setAccessTier(v)}>{label}</button>
 								))}
 							</div>

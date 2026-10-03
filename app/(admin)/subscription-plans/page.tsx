@@ -24,8 +24,10 @@ interface Plan {
 	price_amount: number;
 	currency_code: string;
 	trial_days: number;
-	ai_credits_monthly: number;
-	integration_credits_monthly: number;
+	/** The single monthly allowance. `ai_credits_monthly` and
+	 *  `integration_credits_monthly` still exist on the table but nothing reads
+	 *  them any more — the pools were merged into one STX wallet. */
+	stx_credits_monthly: number;
 	feature_highlights: string[] | null;
 	allows_overage_billing?: boolean;
 	ai_overage_price_cents?: number | null;
@@ -97,8 +99,7 @@ export default function PlansEditorialPage() {
 						</div>
 
 						<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, fontSize: 12 }}>
-							<StatCard label="AI credits / mo" value={p.ai_credits_monthly.toLocaleString()} />
-							<StatCard label="Integration credits / mo" value={p.integration_credits_monthly.toLocaleString()} />
+							<StatCard label="STX credits / mo" value={p.stx_credits_monthly.toLocaleString()} />
 							<StatCard label="Sort order" value={p.sort_order} />
 							<StatCard
 								label="Stripe"
@@ -138,8 +139,7 @@ function EditModal({ plan, onClose, onSaved }: { plan: Plan; onClose: () => void
 	const [tagline, setTagline] = useState(plan.tagline ?? '');
 	const [description, setDescription] = useState(plan.description ?? '');
 	const [highlights, setHighlights] = useState((plan.feature_highlights ?? []).join('\n'));
-	const [aiCredits, setAiCredits] = useState<string>(String(plan.ai_credits_monthly));
-	const [intCredits, setIntCredits] = useState<string>(String(plan.integration_credits_monthly));
+	const [stxCredits, setStxCredits] = useState<string>(String(plan.stx_credits_monthly));
 	const [trialDays, setTrialDays] = useState<string>(String(plan.trial_days));
 	const [allowsOverage, setAllowsOverage] = useState<boolean>(!!plan.allows_overage_billing);
 	const [aiOverage, setAiOverage] = useState<string>(plan.ai_overage_price_cents != null ? String(plan.ai_overage_price_cents) : '');
@@ -157,8 +157,7 @@ function EditModal({ plan, onClose, onSaved }: { plan: Plan; onClose: () => void
 				description: description.trim() || null,
 				feature_highlights: highlights.split('\n').map((s) => s.trim()).filter(Boolean),
 				trial_days: Number(trialDays) || 0,
-				ai_credits_monthly: Number(aiCredits) || 0,
-				integration_credits_monthly: Number(intCredits) || 0,
+				stx_credits_monthly: Number(stxCredits) || 0,
 				allows_overage_billing: allowsOverage,
 				ai_overage_price_cents: aiOverage === '' ? null : Number(aiOverage),
 				integration_overage_price_cents: intOverage === '' ? null : Number(intOverage),
@@ -191,8 +190,7 @@ function EditModal({ plan, onClose, onSaved }: { plan: Plan; onClose: () => void
 				<Field label="Description"><textarea className="search-input" style={{ minHeight: 80 }} value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
 				<Field label="Feature highlights (one per line)"><textarea className="search-input" style={{ minHeight: 120 }} value={highlights} onChange={(e) => setHighlights(e.target.value)} /></Field>
 				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 100px', gap: 12 }}>
-					<Field label="AI credits / mo"><input className="search-input" type="number" value={aiCredits} onChange={(e) => setAiCredits(e.target.value)} /></Field>
-					<Field label="Integration credits / mo"><input className="search-input" type="number" value={intCredits} onChange={(e) => setIntCredits(e.target.value)} /></Field>
+					<Field label="STX credits / mo"><input className="search-input" type="number" value={stxCredits} onChange={(e) => setStxCredits(e.target.value)} /></Field>
 					<Field label="Trial days"><input className="search-input" type="number" value={trialDays} onChange={(e) => setTrialDays(e.target.value)} /></Field>
 					<Field label="Sort"><input className="search-input" type="number" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} /></Field>
 				</div>
@@ -218,23 +216,22 @@ function CreateModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 	const [name, setName] = useState('');
 	const [tagline, setTagline] = useState('');
 	const [description, setDescription] = useState('');
-	const [tier, setTier] = useState<'free' | 'general' | 'raise' | 'scout' | 'growth' | 'pro'>('general');
+	const [tier, setTier] = useState<'explore' | 'raise' | 'scout'>('raise');
 	const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('yearly');
 	const [priceAmount, setPriceAmount] = useState('0'); // cents
 	const [currency, setCurrency] = useState('EUR');
 	const [trialDays, setTrialDays] = useState('0');
-	const [aiCredits, setAiCredits] = useState('0');
-	const [intCredits, setIntCredits] = useState('0');
+	const [stxCredits, setStxCredits] = useState('0');
 	const [highlights, setHighlights] = useState('');
 	const [sortOrder, setSortOrder] = useState('0');
 	const [pending, setPending] = useState(false);
 
-	// tier_detail is derived from tier + interval (matches the server enum). The
-	// new plans (general/raise/scout) only have *_yearly enum members, so force
-	// yearly for them to avoid a 400 on `${tier}_monthly`.
-	const isNewTier = tier === 'general' || tier === 'raise' || tier === 'scout';
-	const effectiveInterval: 'monthly' | 'yearly' = isNewTier ? 'yearly' : billingInterval;
-	const tierDetail = tier === 'free' ? 'free' : `${tier}_${effectiveInterval}`;
+	// tier_detail is derived from tier (matches the server enum). Atlas sells
+	// yearly only, and `raise`/`scout` have no `*_monthly` enum member, so the
+	// interval is forced — picking monthly would 400 on `${tier}_monthly`.
+	// Explore is the free base tier and its detail label carries no interval.
+	const effectiveInterval: 'monthly' | 'yearly' = 'yearly';
+	const tierDetail = tier === 'explore' ? 'explore' : `${tier}_${effectiveInterval}`;
 
 	const submit = async () => {
 		setPending(true);
@@ -250,8 +247,7 @@ function CreateModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 				price_amount: Number(priceAmount) || 0,
 				currency_code: currency.trim().toUpperCase() || 'EUR',
 				trial_days: Number(trialDays) || 0,
-				ai_credits_monthly: Number(aiCredits) || 0,
-				integration_credits_monthly: Number(intCredits) || 0,
+				stx_credits_monthly: Number(stxCredits) || 0,
 				feature_highlights: highlights.split('\n').map((s) => s.trim()).filter(Boolean),
 				is_active: true,
 				sort_order: Number(sortOrder) || 0,
@@ -285,7 +281,7 @@ function CreateModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 				<Field label="Description"><textarea className="search-input" style={{ minHeight: 60 }} value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
 				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 					<Field label="Tier">
-						<Select value={tier} onChange={(v) => setTier(v as 'free' | 'general' | 'raise' | 'scout' | 'growth' | 'pro')} width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: 'free', label: 'free' }, { value: 'general', label: 'general' }, { value: 'raise', label: 'raise' }, { value: 'scout', label: 'scout' }, { value: 'growth', label: 'growth (legacy)' }, { value: 'pro', label: 'pro (legacy)' }]} />
+						<Select value={tier} onChange={(v) => setTier(v as 'explore' | 'raise' | 'scout')} width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: 'explore', label: 'explore' }, { value: 'raise', label: 'raise' }, { value: 'scout', label: 'scout' }]} />
 					</Field>
 					<Field label="Billing interval">
 						<Select value={billingInterval} onChange={(v) => setBillingInterval(v as 'monthly' | 'yearly')} width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: 'monthly', label: 'monthly' }, { value: 'yearly', label: 'yearly' }]} />
@@ -297,8 +293,7 @@ function CreateModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 					<Field label="Trial days"><input className="search-input" type="number" value={trialDays} onChange={(e) => setTrialDays(e.target.value)} /></Field>
 				</div>
 				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 100px', gap: 12 }}>
-					<Field label="AI credits / mo"><input className="search-input" type="number" value={aiCredits} onChange={(e) => setAiCredits(e.target.value)} /></Field>
-					<Field label="Integration credits / mo"><input className="search-input" type="number" value={intCredits} onChange={(e) => setIntCredits(e.target.value)} /></Field>
+					<Field label="STX credits / mo"><input className="search-input" type="number" value={stxCredits} onChange={(e) => setStxCredits(e.target.value)} /></Field>
 					<Field label="Sort"><input className="search-input" type="number" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} /></Field>
 				</div>
 				<Field label="Feature highlights (one per line)"><textarea className="search-input" style={{ minHeight: 100 }} value={highlights} onChange={(e) => setHighlights(e.target.value)} /></Field>

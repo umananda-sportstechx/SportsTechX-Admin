@@ -17,15 +17,15 @@ interface FeatureRow {
 	description: string | null;
 	category: string | null;
 	sort_order: number;
-	free: boolean;
-	growth: boolean;
-	pro: boolean;
+	explore: boolean;
+	raise: boolean;
+	scout: boolean;
 	is_active: boolean;
 }
 
-type Tier = 'free' | 'growth' | 'pro';
+type Tier = 'explore' | 'raise' | 'scout';
 
-const TIERS: Tier[] = ['free', 'growth', 'pro'];
+const TIERS: Tier[] = ['explore', 'raise', 'scout'];
 
 interface FeaturesResponse { data: FeatureRow[] }
 
@@ -49,7 +49,7 @@ export default function FeaturesAdminPage() {
 	};
 
 	const toggleTier = async (row: FeatureRow, tier: Tier) => {
-		const next = { free: row.free, growth: row.growth, pro: row.pro, [tier]: !row[tier] };
+		const next = { explore: row.explore, raise: row.raise, scout: row.scout, [tier]: !row[tier] };
 		const optimistic: FeaturesResponse = {
 			data: (data?.data ?? []).map((r) => (r.id === row.id ? { ...r, ...next } : r)),
 		};
@@ -178,7 +178,7 @@ function FeatureModal({ initial, onClose, onSaved }: { initial: FeatureRow | nul
 	const [description, setDescription] = useState(initial?.description ?? '');
 	const [category, setCategory] = useState(initial?.category ?? '');
 	const [sortOrder, setSortOrder] = useState(initial?.sort_order ?? 999);
-	const [tiers, setTiers] = useState({ free: initial?.free ?? false, growth: initial?.growth ?? true, pro: initial?.pro ?? true });
+	const [tiers, setTiers] = useState({ explore: initial?.explore ?? false, raise: initial?.raise ?? true, scout: initial?.scout ?? true });
 	const [pending, setPending] = useState(false);
 
 	const submit = async () => {

@@ -21,7 +21,9 @@ interface CreditPack {
 	slug: string;
 	name: string;
 	description: string | null;
-	credit_type: 'ai' | 'integration' | string;
+	/** Legacy packs still carry 'ai' or 'integration'; new ones are 'stx'. All
+	 *  of them credit the same wallet. */
+	credit_type: string;
 	credit_amount: number;
 	price_amount: number; // cents
 	currency_code: string;
@@ -46,7 +48,6 @@ export default function CreditPacksAdminPage() {
 	const [slug, setSlug] = useState('');
 	const [name, setName] = useState('');
 	const [description, setDescription] = useState('');
-	const [creditType, setCreditType] = useState<'ai' | 'integration'>('ai');
 	const [creditAmount, setCreditAmount] = useState(1000);
 	const [priceEuros, setPriceEuros] = useState(10);
 	const [sortOrder, setSortOrder] = useState(0);
@@ -58,7 +59,8 @@ export default function CreditPacksAdminPage() {
 		try {
 			await api('POST', '/api/admin/credit-packs', {
 				slug: slug.trim(), name: name.trim(), description: description.trim() || null,
-				credit_type: creditType, credit_amount: creditAmount,
+				// One wallet — a pack's credit_type is only a ledger label now.
+				credit_type: 'stx', credit_amount: creditAmount,
 				price_amount: Math.round(priceEuros * 100), currency_code: 'EUR', sort_order: sortOrder,
 			});
 			toast.success('Credit pack created (Stripe price minted)');
@@ -107,13 +109,7 @@ export default function CreditPacksAdminPage() {
 						<input className="search-input" style={{ width: '100%', fontFamily: 'var(--font-mono)' }} placeholder="ai-1k"
 							value={slug} onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))} />
 					</Field>
-					<Field label="Name"><input className="search-input" style={{ width: '100%' }} placeholder="1,000 AI Credits" value={name} onChange={(e) => setName(e.target.value)} /></Field>
-					<Field label="Credit type">
-						<div style={{ display: 'flex', gap: 6 }}>
-							<button type="button" className={`chip ${creditType === 'ai' ? 'on' : ''}`} onClick={() => setCreditType('ai')}>AI</button>
-							<button type="button" className={`chip ${creditType === 'integration' ? 'on' : ''}`} onClick={() => setCreditType('integration')}>Integration</button>
-						</div>
-					</Field>
+					<Field label="Name"><input className="search-input" style={{ width: '100%' }} placeholder="1,000 STX Credits" value={name} onChange={(e) => setName(e.target.value)} /></Field>
 					<Field label="Credits"><input className="search-input" type="number" min={1} style={{ width: '100%' }} value={creditAmount} onChange={(e) => setCreditAmount(Math.max(1, Number(e.target.value) || 1))} /></Field>
 					<Field label="Price (EUR)"><input className="search-input" type="number" min={0.5} step={0.5} style={{ width: '100%' }} value={priceEuros} onChange={(e) => setPriceEuros(Math.max(0.5, Number(e.target.value) || 0.5))} /></Field>
 					<Field label="Sort order"><input className="search-input" type="number" style={{ width: '100%' }} value={sortOrder} onChange={(e) => setSortOrder(Number(e.target.value) || 0)} /></Field>

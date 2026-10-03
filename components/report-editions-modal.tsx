@@ -16,7 +16,7 @@ interface Edition {
 	title: string | null; description: string | null; summary_points: string | null;
 	cover_url: string | null; pdf_url: string | null; drive_link: string | null;
 }
-const emptyEdition = () => ({ language_code: '', access_tier: 'free', title: '', description: '', summary_points: '', cover_url: '', pdf_url: '', drive_link: '' });
+const emptyEdition = () => ({ language_code: '', access_tier: 'explore', title: '', description: '', summary_points: '', cover_url: '', pdf_url: '', drive_link: '' });
 
 /**
  * Manage a report's language/tier editions (report_versions). The English/free
@@ -71,7 +71,7 @@ export function ReportEditionsModal({ id, onClose }: { id: string; onClose: () =
 									<td>{e.pdf_url ? '✓' : '—'}</td>
 									<td style={{ textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
 										<button className="btn ghost" onClick={() => edit(e)}>Edit</button>
-										{!(e.language_code === 'en' && e.access_tier === 'free') && (
+										{!(e.language_code === 'en' && e.access_tier === 'explore') && (
 											<button className="btn ghost" style={{ color: 'var(--accent)' }} onClick={() => void remove(e)}><Trash2 size={12} /></button>
 										)}
 									</td>
@@ -88,7 +88,7 @@ export function ReportEditionsModal({ id, onClose }: { id: string; onClose: () =
 						    editing so a change can't silently fork a new edition. */}
 						<input className="search-input" placeholder="Lang (en, fr…)" value={draft.language_code} disabled={!!editing} title={editing ? 'Delete and re-add to change the language' : undefined} onChange={(e) => set('language_code', e.target.value)} />
 						<select className="search-input" value={draft.access_tier} disabled={!!editing} onChange={(e) => set('access_tier', e.target.value)}>
-							{['free', 'growth', 'pro'].map((t) => <option key={t} value={t}>{t}</option>)}
+							{['explore', 'raise', 'scout'].map((t) => <option key={t} value={t}>{t}</option>)}
 						</select>
 						<input className="search-input" placeholder="Title (in this language)" value={draft.title} onChange={(e) => set('title', e.target.value)} />
 					</div>

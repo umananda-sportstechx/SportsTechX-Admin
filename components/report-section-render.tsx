@@ -78,7 +78,7 @@ function SectionHeader({ eyebrow, title }: { eyebrow?: unknown; title?: unknown 
 
 // ─── Types matching the server `/sections` response ─────────────────────────
 
-export type Tier = 'free' | 'growth' | 'pro';
+export type Tier = 'explore' | 'raise' | 'scout';
 
 interface BaseSection {
 	id: string;
@@ -153,14 +153,14 @@ function LockedCard({ section }: { section: LockedSection }) {
 				padding: 'var(--space-4)',
 				position: 'relative',
 				background: 'linear-gradient(180deg, var(--bg-1) 0%, var(--bg-2) 100%)',
-				borderColor: section.access_tier === 'pro' ? '#fbbf24' : '#60a5fa',
+				borderColor: section.access_tier === 'scout' ? '#fbbf24' : '#60a5fa',
 			}}
 		>
 			<div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
 				<Lock size={14} />
 				<span style={{
 					fontFamily: 'var(--font-mono)', fontSize: 11, textTransform: 'uppercase',
-					letterSpacing: '0.1em', color: section.access_tier === 'pro' ? '#d97706' : '#0284c7',
+					letterSpacing: '0.1em', color: section.access_tier === 'scout' ? '#d97706' : '#0284c7',
 				}}>
 					{tierLabel} only
 				</span>

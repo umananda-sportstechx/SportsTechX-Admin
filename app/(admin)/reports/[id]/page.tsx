@@ -64,7 +64,7 @@ interface Section {
 	report_id: string;
 	kind: SectionKind;
 	position: number;
-	access_tier: 'free' | 'growth' | 'pro';
+	access_tier: 'explore' | 'raise' | 'scout';
 	title: string | null;
 	slug: string | null;
 	is_published: boolean;
@@ -173,7 +173,7 @@ export default function ReportSectionsEditorPage(
 			const created = await api<Section>('POST', `/api/admin/reports/${reportId}/sections`, {
 				kind,
 				content: KIND_DEFAULTS[kind],
-				access_tier: 'free',
+				access_tier: 'explore',
 				is_published: false,
 			});
 			toast.success(`${KIND_LABELS[kind]} added`);
@@ -397,7 +397,7 @@ function SectionCard({ section: s, isActive, onSelect }: { section: Section; isA
 				</div>
 				<div style={{ fontSize: 10, color: 'var(--fg-muted)', display: 'flex', gap: 6, marginTop: 2 }}>
 					<span>{KIND_LABELS[s.kind]}</span>
-					<span style={{ color: s.access_tier === 'pro' ? '#d97706' : s.access_tier === 'growth' ? '#0284c7' : 'var(--fg-muted)' }}>
+					<span style={{ color: s.access_tier === 'scout' ? '#d97706' : s.access_tier === 'raise' ? '#0284c7' : 'var(--fg-muted)' }}>
 						· {s.access_tier}
 					</span>
 					{!s.is_published && <span>· draft</span>}
@@ -503,9 +503,9 @@ function SectionEditor({
 					onChange={(e) => patch({ access_tier: e.target.value as Section['access_tier'] })}
 					title="Tier required to see this section"
 				>
-					<option value="free">free</option>
-					<option value="growth">growth</option>
-					<option value="pro">pro</option>
+					<option value="explore">explore</option>
+					<option value="raise">raise</option>
+					<option value="scout">scout</option>
 				</select>
 				<button
 					className="btn ghost"
@@ -525,12 +525,12 @@ function SectionEditor({
 			<div style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--fg-muted)', fontSize: 12 }}>
 				<span>{KIND_LABELS[draft.kind]}</span>
 				{draft.is_live_data && <span>· live data</span>}
-				{draft.access_tier !== 'free' && (
-					<span style={{ color: draft.access_tier === 'pro' ? '#d97706' : '#0284c7' }}>
+				{draft.access_tier !== 'explore' && (
+					<span style={{ color: draft.access_tier === 'scout' ? '#d97706' : '#0284c7' }}>
 						<Lock size={11} style={{ verticalAlign: '-1px' }} /> tier-gated to {draft.access_tier}+
 					</span>
 				)}
-				{draft.access_tier === 'free' && <span><Unlock size={11} style={{ verticalAlign: '-1px' }} /> visible to all</span>}
+				{draft.access_tier === 'explore' && <span><Unlock size={11} style={{ verticalAlign: '-1px' }} /> visible to all</span>}
 			</div>
 
 			{/* Per-kind body */}

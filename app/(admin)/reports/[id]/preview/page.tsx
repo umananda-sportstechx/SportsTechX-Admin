@@ -20,11 +20,11 @@ import { SectionRenderer, type Section, type Tier } from '@/components/report-se
  * lock-cards, all of it.
  */
 
-const TIERS: Tier[] = ['free', 'growth', 'pro'];
+const TIERS: Tier[] = ['explore', 'raise', 'scout'];
 
 export default function ReportPreviewPage({ params }: { params: Promise<{ id: string }> }) {
 	const { id } = use(params);
-	const [tier, setTier] = useState<Tier>('free');
+	const [tier, setTier] = useState<Tier>('explore');
 
 	const { data, isLoading, error } = useSWR<{ data: Section[] }>(
 		[`/api/reports/${id}/sections`, { as: tier }],

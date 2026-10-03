@@ -27,7 +27,7 @@ interface UserAnalytics {
 	report_downloads: { total: number; unique_users: number; last_30d: number; in_range?: number; unique_users_in_range?: number; top_reports: Bucket[]; daily_trend: Bucket[]; by_day_of_week?: Bucket[] };
 }
 const FREQ_BUCKETS: Record<string, 'never' | 'once' | '2-5' | '6+'> = { 'never (0)': 'never', once: 'once', '2-5': '2-5', '6+': '6+' };
-const TIERS = ['free', 'general', 'raise', 'scout', 'growth', 'pro'] as const;
+const TIERS = ['explore', 'raise', 'scout'] as const;
 const ROLES = ['user', 'admin'] as const;
 
 interface User {

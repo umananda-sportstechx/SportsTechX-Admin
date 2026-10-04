@@ -43,7 +43,7 @@ export default function UserDetailsPage() {
 						<div className="card" style={{ padding: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
 							<div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
 								<span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 700 }}>{user.email}</span>
-								<span className="tag">{user.user_type ?? 'free'}</span>
+								<span className="tag">{user.user_type ?? 'explore'}</span>
 								{user.user_role === 'admin' && <span className="tag pos">admin</span>}
 								{user.is_trial
 									? <span className="tag warn">trial{user.trial_ends_at ? ` · ends ${fmt(user.trial_ends_at)}` : ''}</span>

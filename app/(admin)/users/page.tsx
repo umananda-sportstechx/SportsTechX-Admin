@@ -315,7 +315,7 @@ export function UsersView({ view }: { view: 'directory' | 'stats' | 'charts' }) 
 									<td>{u.display_name ?? '—'}</td>
 									<td style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{u.company_name ?? '—'}</td>
 									<td>
-										<span className="tag">{u.user_type ?? 'free'}</span>
+										<span className="tag">{u.user_type ?? 'explore'}</span>
 										{u.is_trial
 											? <span className="tag warn" title={u.trial_ends_at ? `Trial ends ${fmtDate(u.trial_ends_at)}` : 'On trial'} style={{ marginLeft: 4 }}>trial{u.trial_ends_at ? ` · ends ${fmtDate(u.trial_ends_at)}` : ''}</span>
 											: u.active_subscription ? <span className="tag pos" style={{ marginLeft: 4 }}>paid</span> : null}
@@ -327,7 +327,7 @@ export function UsersView({ view }: { view: 'directory' | 'stats' | 'charts' }) 
 									<td className="num">
 										{u.is_trial && u.trial_ends_at
 											? <span className={new Date(u.trial_ends_at) < new Date() ? 'tag' : 'tag warn'} title={`Access expires ${fmtDate(u.trial_ends_at)}`}>{fmtDate(u.trial_ends_at)}</span>
-											: (u.user_type && u.user_type !== 'free')
+											: (u.user_type && u.user_type !== 'explore')
 												? <span style={{ color: 'var(--fg-muted)', fontSize: 12 }}>Permanent</span>
 												: <span style={{ color: 'var(--fg-muted)' }}>—</span>}
 									</td>

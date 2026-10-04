@@ -121,9 +121,9 @@ export default function FeaturesAdminPage() {
 							<th>Name</th>
 							<th>Slug</th>
 							<th>Category</th>
-							<th style={{ textAlign: 'center' }}>Free</th>
-							<th style={{ textAlign: 'center' }}>Growth</th>
-							<th style={{ textAlign: 'center' }}>Pro</th>
+							<th style={{ textAlign: 'center' }}>Explore</th>
+							<th style={{ textAlign: 'center' }}>Raise</th>
+							<th style={{ textAlign: 'center' }}>Scout</th>
 							<th />
 						</tr>
 					</thead>

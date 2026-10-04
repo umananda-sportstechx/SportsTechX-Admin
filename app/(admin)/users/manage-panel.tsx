@@ -314,7 +314,7 @@ function BillingSection({ profileId }: { profileId: string }) {
 
 function TierChangeSection({ user }: { user: ManageUser }) {
 	const { mutate } = useSWRConfig();
-	const [tier, setTier] = useState(user.user_type ?? 'free');
+	const [tier, setTier] = useState(user.user_type ?? 'explore');
 	const [pending, setPending] = useState(false);
 	const update = async () => {
 		setPending(true);
@@ -328,7 +328,7 @@ function TierChangeSection({ user }: { user: ManageUser }) {
 	return (
 		<div>
 			<div className="co-stat-label" style={{ marginBottom: 8 }}>Permanent tier</div>
-			<Select value={tier} onChange={setTier} width="100%" style={{ display: 'block', width: '100%', marginBottom: 8 }} options={['free', 'general', 'raise', 'scout', 'growth', 'pro'].map((t) => ({ value: t, label: t }))} />
+			<Select value={tier} onChange={setTier} width="100%" style={{ display: 'block', width: '100%', marginBottom: 8 }} options={['explore', 'raise', 'scout'].map((t) => ({ value: t, label: t }))} />
 			<button className="btn" disabled={pending || tier === user.user_type} onClick={() => void update()}>
 				{pending ? 'Saving…' : 'Save tier'}
 			</button>

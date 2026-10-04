@@ -219,7 +219,7 @@ export default function AiUsagePage() {
 													<>
 														<div>{u.profile_name || u.profile_email || u.profile_id.slice(0, 8)}</div>
 														<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>
-															{u.profile_is_admin ? 'Admin' : (u.profile_tier ?? 'free')}
+															{u.profile_is_admin ? 'Admin' : (u.profile_tier ?? 'explore')}
 														</div>
 													</>
 												) : <span style={{ color: 'var(--fg-muted)' }}>system / background</span>}
@@ -297,7 +297,7 @@ function UserCell({ row, router }: { row: LedgerRow; router: ReturnType<typeof u
 
 	const name = row.profile_name || row.profile_email || `${row.profile_id.slice(0, 8)}…`;
 	const isAdmin = !!row.profile_is_admin;
-	const tier = (row.profile_tier ?? 'free').toLowerCase();
+	const tier = (row.profile_tier ?? 'explore').toLowerCase();
 	const badge = isAdmin ? 'Admin' : tier === 'explore' ? 'Explore · top-up/granted' : tier;
 	const badgeColor = isAdmin ? 'var(--accent)' : tier === 'explore' ? 'var(--fg-muted)' : 'var(--fg-2)';
 

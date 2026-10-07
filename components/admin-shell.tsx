@@ -7,7 +7,7 @@ import {
 	LayoutDashboard, Briefcase, Users, FilePlus, FileText, Layers,
 	Activity, ShoppingCart, LogOut, CreditCard, ToggleLeft,
 	Banknote, Sparkles, Tag, BookOpen, Menu, BarChart3, Gauge,
-	Receipt, Package, Handshake, Download, Coins, ChevronDown, Sun, Moon, Newspaper,
+	Receipt, Package, Handshake, Download, Coins, ChevronDown, Sun, Moon, Newspaper, Undo2,
 	Images,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
@@ -65,6 +65,9 @@ const SALES_NAV: NavItem[] = [
 	{ label: 'Billing', href: '/billing', Icon: CreditCard },
 	{ label: 'Plans', href: '/subscription-plans', Icon: Tag },
 	{ label: 'Credit packs', href: '/credit-packs', Icon: Package },
+	// Pro-rata refunds owed after an in-app downgrade — a money-out queue, so
+	// it sits with the other billing surfaces rather than in the review group.
+	{ label: 'Refunds', href: '/refunds', Icon: Undo2 },
 ];
 
 const PERFORMANCE_NAV: NavItem[] = [

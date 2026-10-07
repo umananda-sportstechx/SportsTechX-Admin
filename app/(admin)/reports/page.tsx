@@ -31,7 +31,13 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const emptyDraft = {
 	title: '', short_title: '', slug: '', description: '', summary_points: '', drive_link: '', pdf_url: '',
 	report_month: '', report_year: String(new Date().getFullYear()), show_on_dashboard: false, has_sections: true,
+	tags: '',
 };
+
+/** Topic tags are a `text[]` on `reports`, edited here as a comma-separated
+ *  field — they drive the Topic facet on the public Reports library, which
+ *  stays empty until reports are tagged. Free text, not a fixed vocabulary. */
+const parseTags = (s: string): string[] => [...new Set(s.split(',').map((t) => t.trim()).filter(Boolean))];
 
 /** Slugify a title/code into a URL-safe report slug. */
 const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -67,6 +73,7 @@ export default function ReportsAdminPage() {
 				report_month: report_month ? Number(report_month) : undefined,
 				report_year: report_year ? Number(report_year) : undefined,
 				show_on_dashboard: rest.show_on_dashboard,
+				tags: parseTags(rest.tags),
 			});
 			if (has_sections) {
 				await api('PATCH', `/api/admin/reports/${created.id}/flags`, { has_sections: true });
@@ -129,6 +136,7 @@ export default function ReportsAdminPage() {
 					</label>
 				</div>
 				<input className="search-input" placeholder="Drive link" value={draft.drive_link} onChange={(e) => setDraft({ ...draft, drive_link: e.target.value })} style={{ marginTop: 8 }} />
+				<input className="search-input" placeholder="Topic tags, comma separated (e.g. Europe, Funding, Venues)" value={draft.tags} onChange={(e) => setDraft({ ...draft, tags: e.target.value })} style={{ marginTop: 8 }} />
 				<div style={{ marginTop: 8 }}>
 					<div className="co-stat-label" style={{ marginBottom: 4 }}>PDF</div>
 					<ReportPdfInput value={draft.pdf_url} onChange={(u) => setDraft({ ...draft, pdf_url: u })} />
@@ -240,6 +248,7 @@ function ReportAnalytics() {
 interface ReportEdit {
 	id: string; title: string; short_title?: string | null; slug?: string | null; report_month?: number | null; report_year?: number | null;
 	show_on_dashboard?: boolean; description?: string | null; summary_points?: string | null; drive_link?: string | null; pdf_url?: string | null; cover_url?: string | null;
+	tags?: string[] | null;
 }
 
 function EditReportModal({ id, onClose, onSaved }: { id: string; onClose: () => void; onSaved: () => void }) {
@@ -256,6 +265,7 @@ function EditReportForm({ id, initial, onClose, onSaved }: { id: string; initial
 		show_on_dashboard: !!initial.show_on_dashboard,
 		drive_link: initial.drive_link ?? '', pdf_url: initial.pdf_url ?? '', cover_url: initial.cover_url ?? '',
 		description: initial.description ?? '', summary_points: initial.summary_points ?? '',
+		tags: (initial.tags ?? []).join(', '),
 	});
 	const [pending, setPending] = useState(false);
 	const set = (k: keyof typeof f, v: string | boolean) => setF((p) => ({ ...p, [k]: v }));
@@ -274,6 +284,8 @@ function EditReportForm({ id, initial, onClose, onSaved }: { id: string; initial
 				cover_url: f.cover_url.trim() || undefined,
 				description: f.description.trim() || undefined,
 				summary_points: f.summary_points.trim() || undefined,
+				// Always sent, so clearing the field clears the tags.
+				tags: parseTags(f.tags),
 			});
 			toast.success('Report updated');
 			onSaved();
@@ -300,6 +312,7 @@ function EditReportForm({ id, initial, onClose, onSaved }: { id: string; initial
 					</label>
 				</div>
 				<input className="search-input" placeholder="Drive link" value={f.drive_link} onChange={(e) => set('drive_link', e.target.value)} />
+				<input className="search-input" placeholder="Topic tags, comma separated (e.g. Europe, Funding, Venues)" value={f.tags} onChange={(e) => set('tags', e.target.value)} />
 				<div><div className="co-stat-label" style={{ marginBottom: 4 }}>PDF</div><ReportPdfInput value={f.pdf_url} onChange={(u) => set('pdf_url', u)} /></div>
 				<div><div className="co-stat-label" style={{ marginBottom: 4 }}>Cover image</div><ImageInput value={f.cover_url} onChange={(u) => set('cover_url', u)} pathPrefix="reports/covers" /></div>
 				<textarea className="search-input" placeholder="Description" value={f.description} onChange={(e) => set('description', e.target.value)} style={{ minHeight: 70, resize: 'vertical' }} />

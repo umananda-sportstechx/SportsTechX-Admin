@@ -54,7 +54,7 @@ export default function MarketRoundupAdminPage() {
 			<PageHeader
 				kicker="Client Market page"
 				title="Market roundup"
-				subtitle="Author the monthly editorial header and curated news for /raise/market → Monthly Roundup. The numbers (capital, deals, donuts) are computed live from deal data."
+				subtitle="Author the monthly editorial header and curated news for /app/intelligence/roundup. The numbers (capital, deals, donuts) are computed live from deal data."
 			/>
 
 			<div className="filter-bar" style={{ marginBottom: 12 }}>

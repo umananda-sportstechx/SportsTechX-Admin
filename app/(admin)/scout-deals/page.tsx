@@ -435,6 +435,8 @@ function ReviewModal({ id, onClose, onSaved, ask }: {
 							</div>
 						</Section2>
 
+						<InterestPanel dealId={id} companyName={d.company_name} anonymous={d.company_anonymous} />
+
 						<Section2 title="Decision">
 							{d.review_notes && (
 								<Row label="Previous note">{d.review_notes}</Row>
@@ -454,6 +456,102 @@ function ReviewModal({ id, onClose, onSaved, ask }: {
 				)}
 			</AsyncState>
 		</Modal>
+	);
+}
+
+interface InterestRow {
+	id: string;
+	kind: string;
+	note: string | null;
+	status: string;
+	disclosed_at: string | null;
+	created_at: string;
+	fund_name: string | null;
+	scout_email: string | null;
+}
+
+const INTEREST_STATUSES = ['received', 'source_confirmed', 'shared', 'connected', 'declined'] as const;
+const interestChip: Record<string, string> = {
+	received: 'warn', source_confirmed: 'warn', shared: 'on', connected: 'on', declined: '',
+};
+
+/**
+ * Who has asked about this deal, and whether they have been told who it is.
+ *
+ * **Disclosure is deliberately not a status.** The spec has STX "first confirm
+ * that further information can be shared", so releasing one investor's view is
+ * its own decision — bundling it into a status change would let an admin widen
+ * someone's access while merely moving a row along. The server keeps the two
+ * fields separate for that reason, and so does this panel.
+ *
+ * It is also **one-way**: `disclosed_at` is set only if not already set, so a
+ * re-run cannot move or retract it. Once disclosed, the button becomes a fact.
+ *
+ * This is per-deal rather than a global queue because that is the only endpoint
+ * there is — the dashboard-level counts come from `/stats` instead.
+ */
+function InterestPanel({ dealId, companyName, anonymous }: {
+	dealId: string;
+	companyName: string | null;
+	anonymous: boolean;
+}) {
+	const ask = useConfirm();
+	const { data, error, isLoading, mutate } = useSWR<InterestRow[]>(`/api/admin/scout-deals/${dealId}/interest`);
+	const [pending, setPending] = useState<string | null>(null);
+	const rows = data ?? [];
+
+	const act = async (r: InterestRow, status: string, disclose = false) => {
+		const who = r.fund_name ?? r.scout_email ?? 'this investor';
+		if (disclose && !(await ask({
+			title: 'Release the company’s identity?',
+			message: `${who} will be told that this deal is ${companyName ?? 'this company'}${anonymous ? ', which is currently hidden from them' : ''}. This cannot be undone, and the company is emailed.`,
+			confirmLabel: 'Disclose',
+			danger: true,
+		}))) return;
+
+		setPending(r.id);
+		try {
+			await api('PATCH', `/api/admin/scout-deals/interest/${r.id}`, { status, ...(disclose ? { disclose: true } : {}) });
+			toast.success(disclose ? `Disclosed to ${who}` : `Marked ${status.replace(/_/g, ' ')}`);
+			void mutate();
+		} catch (e) { toast.error((e as Error).message); }
+		finally { setPending(null); }
+	};
+
+	return (
+		<Section2 title={`Interest${rows.length ? ` · ${rows.length}` : ''}`}>
+			<AsyncState loading={isLoading} error={error} empty={rows.length === 0} emptyMsg="No one has asked about this deal yet." onRetry={() => void mutate()}>
+				{rows.map((r) => (
+					<div key={r.id} style={{ borderTop: '1px solid var(--border)', padding: '8px 0', fontSize: 12 }}>
+						<div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+							<strong>{r.fund_name ?? '—'}</strong>
+							<span style={{ color: 'var(--fg-muted)' }}>{r.scout_email ?? ''}</span>
+							<span className={`chip ${interestChip[r.status] ?? ''}`}>{r.status.replace(/_/g, ' ')}</span>
+							<Tag variant="pill">{r.kind}</Tag>
+							{r.disclosed_at
+								? <Tag variant="pos">disclosed {new Date(r.disclosed_at).toLocaleDateString()}</Tag>
+								: <Tag>not disclosed</Tag>}
+							<span style={{ marginLeft: 'auto', color: 'var(--fg-muted)' }}>{new Date(r.created_at).toLocaleDateString()}</span>
+						</div>
+						{r.note && <div style={{ color: 'var(--fg-2)', margin: '4px 0' }}>{r.note}</div>}
+						<div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
+							<Select
+								value={r.status} onChange={(v) => void act(r, v)} ariaLabel="Interest status"
+								width={180} disabled={pending === r.id}
+								options={INTEREST_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))}
+							/>
+							{/* One-way, and emailed — so it is never a side effect of the
+							    dropdown above. */}
+							{!r.disclosed_at && (
+								<button className="btn ghost" disabled={pending === r.id} onClick={() => void act(r, r.status, true)}>
+									Disclose identity
+								</button>
+							)}
+						</div>
+					</div>
+				))}
+			</AsyncState>
+		</Section2>
 	);
 }
 

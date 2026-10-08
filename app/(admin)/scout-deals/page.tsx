@@ -1,0 +1,471 @@
+'use client';
+
+import { useState } from 'react';
+import useSWR from 'swr';
+import { toast } from 'sonner';
+import { RefreshCw, Star, ShieldAlert } from 'lucide-react';
+import { api } from '@/lib/api';
+import { Select } from '@/components/select';
+import { Modal } from '@/components/modal';
+import { useConfirm } from '@/components/confirm';
+import { PageHeader, AsyncState, StatCard, StatsPanel, Tag, Pager } from '@/components/atoms';
+import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
+
+/**
+ * Deal Flow — the eligibility queue.
+ *
+ * The spec is deliberate about what this is: an **eligibility check, not
+ * investment due diligence or endorsement**. The listing copy says so, and this
+ * screen should not grow features that imply otherwise.
+ *
+ * This is also the only place a founder's contact details surface anywhere in
+ * the product — every Scout-facing projection omits those columns — because the
+ * person making the introduction needs them. Treat that panel accordingly.
+ *
+ * Two deliberate omissions, both enforced server-side:
+ *   - Assignment is **not a lock**. Both existing admin queues work that way and
+ *     two admins can open the same deal, so this does not pretend otherwise.
+ *   - Disclosure of a requester's identity is a *separate* act on the interest
+ *     queue, never a side effect of a status reaching `live` here.
+ */
+const DEAL_STATUSES = ['draft', 'pending', 'reviewing', 'live', 'changes_requested', 'closed'] as const;
+const SOURCES = ['circle', 'verified_raise'] as const;
+
+/** Terminal transitions stamp `reviewed_by`/`reviewed_at` on the server. */
+const TERMINAL = new Set(['live', 'closed', 'changes_requested']);
+
+const statusChip: Record<string, string> = {
+	draft: '', pending: 'warn', reviewing: 'warn',
+	live: 'on', changes_requested: 'bad', closed: '',
+};
+
+interface DealRow {
+	id: string;
+	source: string;
+	status: string;
+	company_name: string | null;
+	company_website: string | null;
+	company_hq: string | null;
+	company_anonymous: boolean;
+	submitter_anonymous: boolean;
+	founder_consent: boolean;
+	round_type: string | null;
+	currency_code: string | null;
+	target_amount: string | null;
+	is_featured: boolean;
+	featured_until: string | null;
+	submitted_at: string | null;
+	created_at: string;
+	submitter_fund: string | null;
+	submitter_email: string | null;
+	interest_count: number;
+}
+
+/** The detail read adds founder contact and the `live_*` overlay. */
+interface DealDetail extends DealRow {
+	company_description: string | null;
+	founder_contact_name: string | null;
+	founder_contact_email: string | null;
+	founder_contact_phone: string | null;
+	instrument: string | null;
+	committed_amount: string | null;
+	ticket_min: string | null;
+	ticket_max: string | null;
+	valuation: string | null;
+	target_close_date: string | null;
+	lead_status: string | null;
+	lead_investor: string | null;
+	member_relationship: string | null;
+	member_commitment: string | null;
+	member_perspective: string | null;
+	materials_access: string | null;
+	deck_path: string | null;
+	one_pager_path: string | null;
+	review_notes: string | null;
+	reviewed_at: string | null;
+	raise_id: string | null;
+	live_round_type: string | null;
+	live_currency_code: string | null;
+	live_target_amount: string | null;
+	live_committed_amount: string | null;
+	live_valuation: string | null;
+	live_target_close_date: string | null;
+	raise_dealflow_status: string | null;
+	founder_account_email: string | null;
+}
+
+interface Stats {
+	pending: number; reviewing: number; live: number;
+	changes_requested: number; closed: number;
+	from_circle: number; verified_raises: number; featured: number;
+	interest_total: number; disclosed: number;
+}
+interface ListResp { data: DealRow[]; total: number; totalPages?: number }
+
+const LIMIT = 25;
+const money = (amount: string | null, ccy: string | null) => {
+	if (!amount) return null;
+	const n = Number(amount);
+	if (!Number.isFinite(n)) return null;
+	return new Intl.NumberFormat(undefined, {
+		style: 'currency', currency: (ccy || 'eur').toUpperCase(), maximumFractionDigits: 0,
+	}).format(n);
+};
+
+export default function ScoutDealsPage() {
+	const ask = useConfirm();
+	const [status, setStatus] = useState('pending');
+	const [source, setSource] = useState('');
+	const [assigned, setAssigned] = useState('');
+	const [page, setPage] = useState(1);
+	const [openId, setOpenId] = useState<string | null>(null);
+
+	const list = useSWR<ListResp>(
+		['/api/admin/scout-deals', {
+			status: status || undefined,
+			source: source || undefined,
+			assigned_to: assigned || undefined,
+			limit: LIMIT,
+			offset: (page - 1) * LIMIT,
+		}],
+		{ dedupingInterval: 15_000 },
+	);
+	const stats = useSWR<Stats>('/api/admin/scout-deals/stats', { dedupingInterval: 30_000 });
+	const rows = list.data?.data ?? [];
+
+	const refresh = () => { void list.mutate(); void stats.mutate(); };
+
+	return (
+		<div>
+			<PageHeader
+				kicker="Review queue"
+				title="Deal Flow"
+				subtitle="Raises shared with the Investor Circle. This is an eligibility check — that the round is real and the founder consented — not due diligence or an endorsement."
+				action={<button className="btn ghost" onClick={refresh}><RefreshCw size={12} /> Refresh</button>}
+			/>
+
+			<StatsPanel title="Queue">
+				<StatStrip cols={5}>
+					<StatCard label="Pending" value={stats.data?.pending ?? '—'} loading={stats.isLoading} urgent={(stats.data?.pending ?? 0) > 0} />
+					<StatCard label="Reviewing" value={stats.data?.reviewing ?? '—'} loading={stats.isLoading} />
+					<StatCard label="Live" value={stats.data?.live ?? '—'} loading={stats.isLoading} tone="green" />
+					<StatCard label="Changes requested" value={stats.data?.changes_requested ?? '—'} loading={stats.isLoading} />
+					<StatCard label="Closed" value={stats.data?.closed ?? '—'} loading={stats.isLoading} />
+					<StatCard label="Verified raises" value={stats.data?.verified_raises ?? '—'} loading={stats.isLoading} sub="founder opted in" />
+					<StatCard label="From the Circle" value={stats.data?.from_circle ?? '—'} loading={stats.isLoading} sub="member submitted" />
+					<StatCard label="Featured" value={stats.data?.featured ?? '—'} loading={stats.isLoading} />
+					<StatCard label="Interest requests" value={stats.data?.interest_total ?? '—'} loading={stats.isLoading} />
+					<StatCard label="Disclosed" value={stats.data?.disclosed ?? '—'} loading={stats.isLoading} sub="identity released" />
+				</StatStrip>
+			</StatsPanel>
+
+			<FilterBar>
+				<FilterSelect
+					value={status} onChange={(v) => { setStatus(v); setPage(1); }}
+					allLabel="All statuses" options={DEAL_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))}
+				/>
+				<FilterSelect
+					value={source} onChange={(v) => { setSource(v); setPage(1); }}
+					allLabel="Any source" options={SOURCES.map((s) => ({ value: s, label: s === 'circle' ? 'From the Circle' : 'Verified raise' }))}
+				/>
+				<FilterSelect
+					value={assigned} onChange={(v) => { setAssigned(v); setPage(1); }}
+					allLabel="Anyone" options={[{ value: 'unassigned', label: 'Unassigned' }]}
+				/>
+			</FilterBar>
+
+			<div className="card" style={{ padding: 'var(--space-4)' }}>
+				<AsyncState
+					loading={list.isLoading} error={list.error} empty={rows.length === 0}
+					emptyMsg={status === 'pending' ? 'Nothing waiting for review.' : 'No deals match these filters.'}
+					onRetry={() => void list.mutate()}
+				>
+					<table className="data-table">
+						<thead>
+							<tr>
+								<th>Submitted</th><th>Company</th><th>Source</th><th>Submitter</th>
+								<th>Round</th><th>Interest</th><th>Status</th><th>Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{rows.map((r) => (
+								<tr key={r.id}>
+									<td style={{ whiteSpace: 'nowrap', color: 'var(--fg-muted)', fontSize: 12 }}>
+										{new Date(r.submitted_at ?? r.created_at).toLocaleDateString()}
+									</td>
+									<td>
+										<div style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+											{r.company_name ?? '—'}
+											{r.is_featured && <Star size={12} aria-label="Featured" style={{ color: 'var(--warn, #c90)' }} />}
+										</div>
+										<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>
+											{r.company_hq ?? ''}
+											{/* What investors actually see, which is not what this table shows. */}
+											{r.company_anonymous && <> · <Tag variant="pill">company hidden</Tag></>}
+										</div>
+									</td>
+									<td style={{ fontSize: 12 }}>
+										{r.source === 'verified_raise' ? <Tag variant="pos">verified raise</Tag> : <Tag>circle</Tag>}
+									</td>
+									<td>
+										<div style={{ fontSize: 12 }}>{r.submitter_fund ?? (r.source === 'verified_raise' ? 'Founder opt-in' : '—')}</div>
+										<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>
+											{r.submitter_email ?? ''}
+											{r.submitter_anonymous && <> · <Tag variant="pill">submitter hidden</Tag></>}
+										</div>
+									</td>
+									<td style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
+										{r.round_type ?? '—'}
+										{money(r.target_amount, r.currency_code) && (
+											<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{money(r.target_amount, r.currency_code)}</div>
+										)}
+									</td>
+									<td style={{ fontSize: 12 }}>{r.interest_count || '—'}</td>
+									<td>
+										<span className={`chip ${statusChip[r.status] ?? ''}`}>{r.status.replace(/_/g, ' ')}</span>
+										{!r.founder_consent && (
+											<div style={{ fontSize: 11, color: 'var(--danger, #c33)', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+												<ShieldAlert size={11} /> no consent
+											</div>
+										)}
+									</td>
+									<td>
+										<button className="btn" onClick={() => setOpenId(r.id)}>Review</button>
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+					<Pager page={page} totalPages={list.data?.totalPages} onPage={setPage} />
+				</AsyncState>
+			</div>
+
+			{openId && (
+				<ReviewModal
+					id={openId}
+					onClose={() => setOpenId(null)}
+					onSaved={() => { setOpenId(null); refresh(); }}
+					ask={ask}
+				/>
+			)}
+		</div>
+	);
+}
+
+function Row({ label, children }: { label: string; children: React.ReactNode }) {
+	return (
+		<div style={{ display: 'flex', gap: 10, padding: '4px 0', fontSize: 12 }}>
+			<div style={{ flex: '0 0 150px', color: 'var(--fg-muted)' }}>{label}</div>
+			<div style={{ flex: 1, color: 'var(--fg-2)' }}>{children ?? '—'}</div>
+		</div>
+	);
+}
+
+function ReviewModal({ id, onClose, onSaved, ask }: {
+	id: string;
+	onClose: () => void;
+	onSaved: () => void;
+	ask: (arg: { title?: string; message: string; confirmLabel?: string; danger?: boolean } | string) => Promise<boolean>;
+}) {
+	const { data: d, error, isLoading, mutate } = useSWR<DealDetail>(`/api/admin/scout-deals/${id}`);
+	const [next, setNext] = useState('');
+	const [notes, setNotes] = useState('');
+	const [busy, setBusy] = useState(false);
+	const [featuredUntil, setFeaturedUntil] = useState('');
+
+	// Seed the form from the row once it arrives, without clobbering edits.
+	const current = d?.status ?? '';
+	const chosen = next || current;
+
+	const save = async () => {
+		if (!d) return;
+		// `changes_requested` is the one transition whose whole purpose is to tell
+		// the submitter what to fix — an empty note makes it unactionable.
+		if (chosen === 'changes_requested' && !notes.trim()) {
+			toast.error('Add a note saying what needs to change.');
+			return;
+		}
+		// Publishing is the consequential one: it is what investors begin to see.
+		if (chosen === 'live' && !(await ask({
+			title: 'Publish to the Investor Circle?',
+			message: `${d.company_name ?? 'This deal'} becomes visible to Scout members.${d.company_anonymous ? ' The company name stays hidden from them.' : ''}`,
+			confirmLabel: 'Publish',
+		}))) return;
+
+		setBusy(true);
+		try {
+			await api('PATCH', `/api/admin/scout-deals/${id}/review`, {
+				status: chosen,
+				review_notes: notes.trim() || null,
+			});
+			toast.success(`Marked ${chosen.replace(/_/g, ' ')}`);
+			onSaved();
+		} catch (e) { toast.error((e as Error).message); }
+		finally { setBusy(false); }
+	};
+
+	const toggleFeatured = async () => {
+		if (!d) return;
+		setBusy(true);
+		try {
+			await api('PATCH', `/api/admin/scout-deals/${id}/featured`, {
+				is_featured: !d.is_featured,
+				featured_until: !d.is_featured && featuredUntil ? featuredUntil : null,
+			});
+			toast.success(d.is_featured ? 'Removed from Featured' : 'Added to Featured');
+			void mutate();
+		} catch (e) { toast.error((e as Error).message); }
+		finally { setBusy(false); }
+	};
+
+	return (
+		<Modal
+			title={d?.company_name ?? 'Deal'}
+			onClose={onClose}
+			width={720}
+			footer={
+				<>
+					<button className="btn ghost" onClick={onClose}>Cancel</button>
+					<Select
+						value={chosen}
+						onChange={setNext}
+						ariaLabel="Status"
+						width={190}
+						options={DEAL_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))}
+					/>
+					{/* A note with no transition is a legitimate triage action, so this
+					    stays enabled when only the note changed. */}
+					<button className="btn" disabled={busy || !d || (chosen === current && !notes.trim())} onClick={() => void save()}>
+						{busy ? 'Saving…' : TERMINAL.has(chosen) && chosen !== current ? 'Save decision' : 'Save note'}
+					</button>
+				</>
+			}
+		>
+			<AsyncState loading={isLoading} error={error} empty={!d} emptyMsg="Deal not found." onRetry={() => void mutate()}>
+				{d && (
+					<>
+						{!d.founder_consent && (
+							<div className="card" style={{ padding: 10, marginBottom: 12, borderColor: 'var(--danger, #c33)' }}>
+								<div style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+									<ShieldAlert size={13} /> <strong>No founder consent recorded.</strong>
+								</div>
+								<div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 4 }}>
+									The database refuses to publish without it, so this cannot go live until the
+									submitter confirms consent.
+								</div>
+							</div>
+						)}
+
+						<Section2 title="Company">
+							<Row label="Name">{d.company_name}</Row>
+							<Row label="Website">
+								{d.company_website
+									? <a href={d.company_website} target="_blank" rel="noopener noreferrer">{d.company_website}</a>
+									: null}
+							</Row>
+							<Row label="HQ">{d.company_hq}</Row>
+							<Row label="Description">{d.company_description}</Row>
+						</Section2>
+
+						<Section2 title="Round">
+							{/* A verified raise copies no numbers on opt-in — the Scout read paths
+							    project them from raise_profiles, so show that overlay or an admin
+							    reviews a row of NULLs. */}
+							<Row label="Type">{d.round_type ?? d.live_round_type}</Row>
+							<Row label="Instrument">{d.instrument}</Row>
+							<Row label="Target">
+								{money(d.target_amount, d.currency_code)
+									?? money(d.live_target_amount, d.live_currency_code)}
+							</Row>
+							<Row label="Committed">
+								{money(d.committed_amount, d.currency_code)
+									?? money(d.live_committed_amount, d.live_currency_code)}
+							</Row>
+							<Row label="Valuation">{d.valuation ?? d.live_valuation}</Row>
+							<Row label="Target close">{d.target_close_date ?? d.live_target_close_date}</Row>
+							<Row label="Lead">{d.lead_investor ?? d.lead_status}</Row>
+							<Row label="Ticket">
+								{[money(d.ticket_min, d.currency_code), money(d.ticket_max, d.currency_code)].filter(Boolean).join(' – ') || null}
+							</Row>
+						</Section2>
+
+						{d.source === 'circle' && (
+							<Section2 title="Submitting member">
+								<Row label="Fund">{d.submitter_fund}</Row>
+								<Row label="Account">{d.submitter_email}</Row>
+								<Row label="Relationship">{d.member_relationship}</Row>
+								<Row label="Their commitment">{money(d.member_commitment, d.currency_code)}</Row>
+								<Row label="Their view">{d.member_perspective}</Row>
+							</Section2>
+						)}
+
+						{/* The one place these columns surface anywhere in the product. */}
+						<Section2 title="Founder contact — admin only">
+							<Row label="Name">{d.founder_contact_name}</Row>
+							<Row label="Email">{d.founder_contact_email}</Row>
+							<Row label="Phone">{d.founder_contact_phone}</Row>
+							<Row label="Atlas account">{d.founder_account_email}</Row>
+						</Section2>
+
+						<Section2 title="What investors see">
+							<Row label="Company name">{d.company_anonymous ? 'Hidden' : 'Shown'}</Row>
+							<Row label="Submitter">{d.submitter_anonymous ? 'Hidden' : 'Shown'}</Row>
+							<Row label="Materials">{d.materials_access}</Row>
+							<Row label="Documents">
+								{[d.deck_path && 'deck', d.one_pager_path && 'one-pager'].filter(Boolean).join(', ') || 'none uploaded'}
+							</Row>
+							{d.source === 'verified_raise' && <Row label="Founder's own status">{d.raise_dealflow_status}</Row>}
+						</Section2>
+
+						<Section2 title="Featured">
+							<div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+								<button className="btn ghost" disabled={busy} onClick={() => void toggleFeatured()}>
+									<Star size={12} /> {d.is_featured ? 'Remove from Featured' : 'Add to Featured'}
+								</button>
+								{!d.is_featured && (
+									<input
+										type="date" className="search-input" style={{ height: 32, flex: '0 0 160px' }}
+										value={featuredUntil} onChange={(e) => setFeaturedUntil(e.target.value)}
+										aria-label="Featured until"
+									/>
+								)}
+								{d.is_featured && d.featured_until && (
+									<span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>until {d.featured_until}</span>
+								)}
+							</div>
+						</Section2>
+
+						<Section2 title="Decision">
+							{d.review_notes && (
+								<Row label="Previous note">{d.review_notes}</Row>
+							)}
+							{d.reviewed_at && <Row label="Last reviewed">{new Date(d.reviewed_at).toLocaleString()}</Row>}
+							<textarea
+								className="search-input"
+								style={{ width: '100%', minHeight: 72, padding: 8, marginTop: 6 }}
+								placeholder={chosen === 'changes_requested'
+									? 'Required — what does the submitter need to change?'
+									: 'Review note (optional)'}
+								value={notes}
+								onChange={(e) => setNotes(e.target.value)}
+							/>
+						</Section2>
+					</>
+				)}
+			</AsyncState>
+		</Modal>
+	);
+}
+
+/** Local section heading — `Section` from atoms renders its own card chrome,
+ *  which nests badly inside a modal. */
+function Section2({ title, children }: { title: string; children: React.ReactNode }) {
+	return (
+		<div style={{ marginBottom: 14 }}>
+			<div style={{ fontWeight: 700, fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--fg-muted)', marginBottom: 4 }}>
+				{title}
+			</div>
+			{children}
+		</div>
+	);
+}

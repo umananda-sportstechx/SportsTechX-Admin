@@ -484,6 +484,10 @@ const interestChip: Record<string, string> = {
  * someone's access while merely moving a row along. The server keeps the two
  * fields separate for that reason, and so does this panel.
  *
+ * The notification goes to the **requesting investor**, not to the company —
+ * `interestRecipient` resolves the scout's own profile email. Confirming with
+ * the company is the human step the spec describes, and nothing here does it.
+ *
  * It is also **one-way**: `disclosed_at` is set only if not already set, so a
  * re-run cannot move or retract it. Once disclosed, the button becomes a fact.
  *
@@ -498,13 +502,15 @@ function InterestPanel({ dealId, companyName, anonymous }: {
 	const ask = useConfirm();
 	const { data, error, isLoading, mutate } = useSWR<InterestRow[]>(`/api/admin/scout-deals/${dealId}/interest`);
 	const [pending, setPending] = useState<string | null>(null);
+	/** Chosen-but-not-yet-applied status, per row. */
+	const [draft, setDraft] = useState<Record<string, string>>({});
 	const rows = data ?? [];
 
 	const act = async (r: InterestRow, status: string, disclose = false) => {
 		const who = r.fund_name ?? r.scout_email ?? 'this investor';
 		if (disclose && !(await ask({
 			title: 'Release the company’s identity?',
-			message: `${who} will be told that this deal is ${companyName ?? 'this company'}${anonymous ? ', which is currently hidden from them' : ''}. This cannot be undone, and the company is emailed.`,
+			message: `${who} will be told that this deal is ${companyName ?? 'this company'}${anonymous ? ', which is currently hidden from them' : ''}. They are emailed about it, and this cannot be undone. The company is NOT notified — tell them yourself if that was the agreement.`,
 			confirmLabel: 'Disclose',
 			danger: true,
 		}))) return;
@@ -513,6 +519,7 @@ function InterestPanel({ dealId, companyName, anonymous }: {
 		try {
 			await api('PATCH', `/api/admin/scout-deals/interest/${r.id}`, { status, ...(disclose ? { disclose: true } : {}) });
 			toast.success(disclose ? `Disclosed to ${who}` : `Marked ${status.replace(/_/g, ' ')}`);
+			setDraft((p) => { const { [r.id]: _drop, ...rest } = p; return rest; });
 			void mutate();
 		} catch (e) { toast.error((e as Error).message); }
 		finally { setPending(null); }
@@ -535,11 +542,21 @@ function InterestPanel({ dealId, companyName, anonymous }: {
 						</div>
 						{r.note && <div style={{ color: 'var(--fg-2)', margin: '4px 0' }}>{r.note}</div>}
 						<div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
+							{/* Picking a status does NOT apply it. The server emails the
+							    investor on every transition, so a mis-click on a dropdown
+							    would send real mail — it takes a deliberate Apply. */}
 							<Select
-								value={r.status} onChange={(v) => void act(r, v)} ariaLabel="Interest status"
-								width={180} disabled={pending === r.id}
+								value={draft[r.id] ?? r.status}
+								onChange={(v) => setDraft((p) => ({ ...p, [r.id]: v }))}
+								ariaLabel="Interest status" width={180} disabled={pending === r.id}
 								options={INTEREST_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))}
 							/>
+							<button
+								className="btn" disabled={pending === r.id || (draft[r.id] ?? r.status) === r.status}
+								onClick={() => void act(r, draft[r.id] ?? r.status)}
+							>
+								{pending === r.id ? 'Working…' : 'Apply'}
+							</button>
 							{/* One-way, and emailed — so it is never a side effect of the
 							    dropdown above. */}
 							{!r.disclosed_at && (

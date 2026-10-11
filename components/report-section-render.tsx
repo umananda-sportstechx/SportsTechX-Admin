@@ -17,7 +17,7 @@ import {
 /**
  * Visual renderer for report sections — the in-app preview surface.
  *
- * Near-mirror of the public client renderer (client/app/(app)/reports/
+ * Near-mirror of the public client renderer (client/app/(dashboard)/reports/
  * [idOrSlug]/page.tsx). Kept as a parallel implementation in admin because
  * the two apps are independent Next builds with separate dependency trees;
  * sharing through a workspace package is a v2 cleanup. If you touch one,

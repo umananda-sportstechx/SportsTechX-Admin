@@ -81,7 +81,32 @@ export default function BillingAdminPage() {
 		finally { setCreditPending(false); }
 	};
 
+	const [trialEmails, setTrialEmails] = useState('');
+	const [trialPlanKey, setTrialPlanKey] = useState('raise_yearly');
+	const [bulkTrialDays, setBulkTrialDays] = useState(14);
+	const [bulkTrialPending, setBulkTrialPending] = useState(false);
+	const [bulkTrialResults, setBulkTrialResults] = useState<BulkGrantAccessResponse | null>(null);
+
 	const parsedEmails = accessEmails.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
+
+	/**
+	 * The bulk sibling of "Grant trial" above. Profile-only — it sets the tier
+	 * and the trial window without creating a Stripe subscription, which is
+	 * what you want for comped accounts and pilots.
+	 */
+	const bulkGrantTrial = async () => {
+		const emails = trialEmails.split(/[\n,;]+/).map((e) => e.trim().toLowerCase()).filter(Boolean);
+		if (emails.length === 0) { toast.error('Add at least one email'); return; }
+		setBulkTrialPending(true);
+		try {
+			const res = await api<BulkGrantAccessResponse>('POST', '/api/admin/billing/bulk-grant-trial', {
+				emails, planKey: trialPlanKey, trialDays: bulkTrialDays,
+			});
+			setBulkTrialResults(res);
+			toast.success(`Granted ${res.summary.succeeded}/${res.summary.total} trials`);
+		} catch (e) { toast.error((e as Error).message ?? 'Could not grant trials'); }
+		finally { setBulkTrialPending(false); }
+	};
 
 	const bulkGrantAccess = async () => {
 		setAccessPending(true);
@@ -123,6 +148,42 @@ export default function BillingAdminPage() {
 					<button className="btn" disabled={!trialProfile.trim() || trialPending} onClick={() => void grantTrial()}>
 						<CalendarPlus size={13} /> {trialPending ? 'Granting…' : `Grant ${trialDays}-day trial`}
 					</button>
+
+					<div style={{ marginTop: 20, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+						<Label>Bulk — by email</Label>
+						<p style={{ fontSize: 12.5, color: 'var(--fg-2)', margin: '6px 0 10px', lineHeight: 1.5 }}>
+							Sets the tier <i>and</i> the trial window for many accounts at once. Profile-only — no Stripe
+							subscription is created, so this is the one for comps and pilots. One email per line.
+						</p>
+						<textarea
+							className="search-input" rows={3} style={{ width: '100%', marginBottom: 10, fontFamily: 'var(--font-mono)', fontSize: 12 }}
+							placeholder={'someone@example.com" + "'}
+							value={trialEmails} onChange={(e) => setTrialEmails(e.target.value)}
+						/>
+						<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+							<div>
+								<Label>Plan</Label>
+								<select className="search-input" style={{ width: '100%' }} value={trialPlanKey} onChange={(e) => setTrialPlanKey(e.target.value)}>
+									<option value="raise_yearly">Raise (yearly)</option>
+									<option value="scout_yearly">Scout (yearly)</option>
+								</select>
+							</div>
+							<div>
+								<Label>Trial length (days)</Label>
+								<input className="search-input" type="number" min={1} max={365} style={{ width: '100%' }}
+									value={bulkTrialDays} onChange={(e) => setBulkTrialDays(Math.max(1, Math.min(365, Number(e.target.value) || 1)))} />
+							</div>
+						</div>
+						<button className="btn" disabled={bulkTrialPending} onClick={() => void bulkGrantTrial()}>
+							<CalendarPlus size={13} /> {bulkTrialPending ? 'Granting…' : 'Grant trials'}
+						</button>
+						{bulkTrialResults && (
+							<div style={{ marginTop: 12, fontSize: 12, color: 'var(--fg-muted)' }}>
+								{bulkTrialResults.summary.succeeded}/{bulkTrialResults.summary.total} succeeded
+								{bulkTrialResults.summary.failed > 0 && ` · ${bulkTrialResults.summary.failed} failed`}
+							</div>
+						)}
+					</div>
 				</Section>
 
 				<Section title="Bulk credit grant" meta="Non-expiring top-up unless an expiry is set">
@@ -219,6 +280,17 @@ export default function BillingAdminPage() {
 	);
 }
 
+interface ResyncResult { email: string; result: unknown }
+
+/** The endpoint returns whatever the sync produced, per email — show its status. */
+function summarise(result: unknown): string {
+	if (result && typeof result === 'object') {
+		const r = result as { status?: unknown; message?: unknown };
+		if (typeof r.status === 'string') return r.message ? `${r.status}: ${String(r.message)}` : r.status;
+	}
+	return 'done';
+}
+
 interface Funnel {
 	overall: { total: number; ever_trialed: number; paid: number; free_to_trial_pct: number; trial_to_paid_pct: number
 	paid_from_trial?: number;
@@ -231,6 +303,27 @@ interface Funnel {
 function OpsAndFunnel() {
 	const { data, isLoading, mutate } = useSWR<Funnel>(['/api/admin/billing/conversion-funnel'], { dedupingInterval: 60_000 });
 	const [running, setRunning] = useState(false);
+	const [resyncEmails, setResyncEmails] = useState('');
+	const [resyncing, setResyncing] = useState(false);
+	const [resyncOut, setResyncOut] = useState<ResyncResult[] | null>(null);
+
+	/**
+	 * The "customer paid but their tier is wrong" fix. Pulls every Stripe
+	 * subscription for each customer and runs it through the same upsert the
+	 * webhook uses, deactivating rows Stripe no longer acknowledges. Takes
+	 * emails because that is what an operator has in front of them.
+	 */
+	const resync = async () => {
+		const emails = resyncEmails.split(/[\n,;]+/).map((e) => e.trim().toLowerCase()).filter(Boolean);
+		if (emails.length === 0) { toast.error('Add at least one email'); return; }
+		setResyncing(true);
+		try {
+			const res = await api<ResyncResult[]>('POST', '/api/admin/billing/resync-subscriptions', { emails });
+			setResyncOut(res);
+			toast.success(`Resynced ${res.length} account(s)`);
+		} catch (e) { toast.error((e as Error).message ?? 'Could not resync'); }
+		finally { setResyncing(false); }
+	};
 	const runSweep = async () => {
 		setRunning(true);
 		try { await api('POST', '/api/admin/billing/run-trial-expiry'); toast.success('Trial-expiry sweep queued'); }
@@ -271,6 +364,32 @@ function OpsAndFunnel() {
 					<button className="btn" disabled={running} onClick={() => void runSweep()}>
 						<RefreshCw size={13} /> {running ? 'Queuing…' : 'Run trial-expiry sweep'}
 					</button>
+
+					<div style={{ marginTop: 20, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+						<Label>Resync subscriptions from Stripe</Label>
+						<p style={{ fontSize: 12.5, color: 'var(--fg-2)', margin: '6px 0 10px', lineHeight: 1.5 }}>
+							For &ldquo;they paid but their tier is wrong&rdquo;. Re-reads Stripe and replays it through the
+							webhook&apos;s own upsert. One email per line, up to 50.
+						</p>
+						<textarea
+							className="search-input" rows={3} style={{ width: '100%', marginBottom: 10, fontFamily: 'var(--font-mono)', fontSize: 12 }}
+							placeholder={'someone@example.com\nanother@example.com'}
+							value={resyncEmails} onChange={(e) => setResyncEmails(e.target.value)}
+						/>
+						<button className="btn" disabled={resyncing} onClick={() => void resync()}>
+							<RefreshCw size={13} /> {resyncing ? 'Resyncing…' : 'Resync from Stripe'}
+						</button>
+						{resyncOut && (
+							<div style={{ marginTop: 12, maxHeight: 200, overflow: 'auto', fontSize: 11.5, fontFamily: 'var(--font-mono)', display: 'grid', gap: 2 }}>
+								{resyncOut.map((r, i) => (
+									<div key={i} style={{ display: 'flex', gap: 8, padding: '3px 6px', borderRadius: 4, background: 'var(--bg-2)' }}>
+										<span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.email}</span>
+										<span style={{ color: 'var(--fg-muted)' }}>{summarise(r.result)}</span>
+									</div>
+								))}
+							</div>
+						)}
+					</div>
 				</Section>
 			</div>
 		</div>

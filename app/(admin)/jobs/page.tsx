@@ -40,7 +40,7 @@ const secs = (n: number | null): string => {
 };
 const when = (v: string | null): string => (v ? new Date(v).toLocaleString() : '—');
 
-type EndpointKey = 'apolloBatch' | 'attioSync' | 'recommendations' | 'apolloEnrich' | 'digestEmail' | 'sweepStuck' | 'embedReports';
+type EndpointKey = 'apolloBatch' | 'attioSync' | 'recommendations' | 'apolloEnrich' | 'digestEmail' | 'sweepStuck' | 'embedReports' | 'companySignals';
 
 const ENDPOINTS: Array<{ key: EndpointKey; label: string; desc: string; path: string; needsId?: boolean }> = [
 	{
@@ -80,6 +80,15 @@ const ENDPOINTS: Array<{ key: EndpointKey; label: string; desc: string; path: st
 		label: 'Backfill report embeddings',
 		desc: 'Re-embed every published report so semantic search and chat can find them.',
 		path: '/api/admin/embeddings/backfill-reports',
+	},
+	{
+		// Same shape as the jobs above and simply missed. Worth a manual trigger
+		// because the first run over ~7,400 deals is the one that makes the
+		// Scout Signals feed non-empty — otherwise it stays blank for an hour.
+		key: 'companySignals',
+		label: 'Derive company signals',
+		desc: 'Rebuild the Scout signals feed now (otherwise hourly at :40).',
+		path: '/api/admin/jobs/company-signals',
 	},
 	{
 		key: 'sweepStuck',

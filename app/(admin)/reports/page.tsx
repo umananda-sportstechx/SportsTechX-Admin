@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { Trash2, FileText, Eye, EyeOff, Pencil, Languages } from 'lucide-react';
+import { Trash2, FileText, Eye, EyeOff, Pencil, Languages, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Select } from '@/components/select';
 import { useConfirm } from '@/components/confirm';
@@ -99,6 +99,21 @@ export default function ReportsAdminPage() {
 			setRemovePending(false);
 		}
 	};
+	/**
+	 * Re-embed one report. The panel already calls the all-reports backfill from
+	 * the Jobs page, so an editor who fixed a single report had to either
+	 * re-embed every report or reach for curl.
+	 */
+	const [reindexing, setReindexing] = useState<string | null>(null);
+	const reindex = async (id: string, title: string) => {
+		setReindexing(id);
+		try {
+			await api('POST', `/api/admin/embeddings/reports/${id}/reindex`);
+			toast.success(`Re-embedding "${title}" — semantic search and chat will pick it up shortly`);
+		} catch (e) { toast.error((e as Error).message ?? 'Could not reindex'); }
+		finally { setReindexing(null); }
+	};
+
 	const togglePublished = async (id: string, next: boolean) => {
 		try {
 			await api('PATCH', `/api/admin/reports/${id}/flags`, { is_published: next });
@@ -201,6 +216,14 @@ export default function ReportsAdminPage() {
 										title={r.is_published === false ? 'Publish' : 'Move to draft'}
 									>
 										{r.is_published === false ? <><Eye size={12} /> Publish</> : <><EyeOff size={12} /> Unpublish</>}
+									</button>
+									<button
+										className="btn ghost"
+										disabled={reindexing === r.id}
+										onClick={() => void reindex(r.id, r.title)}
+										title="Re-embed this report for semantic search and chat"
+									>
+										<RefreshCw size={12} /> {reindexing === r.id ? 'Reindexing…' : 'Reindex'}
 									</button>
 									<button className="btn ghost" disabled={removePending} onClick={async () => { if (await ask(`Delete ${r.title}?`)) void remove(r.id); }}>
 										<Trash2 size={12} />

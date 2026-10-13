@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import useSWR from 'swr';
 import { toast } from 'sonner';
-import { RefreshCw, Star, ShieldAlert } from 'lucide-react';
+import { RefreshCw, Star, ShieldAlert, Building2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Select } from '@/components/select';
 import { Modal } from '@/components/modal';
@@ -46,6 +47,8 @@ interface DealRow {
 	company_name: string | null;
 	company_website: string | null;
 	company_hq: string | null;
+	company_id: string | null;
+	pipeline_entry_id: string | null;
 	company_anonymous: boolean;
 	submitter_anonymous: boolean;
 	founder_consent: boolean;
@@ -285,6 +288,12 @@ function ReviewModal({ id, onClose, onSaved, ask }: {
 			toast.error('Add a note saying what needs to change.');
 			return;
 		}
+		// A new company must be in Atlas before the deal can go live. The server
+		// enforces this too (409); catching it here gives a clear next step.
+		if (chosen === 'live' && !d.company_id) {
+			toast.error('Add this company to the directory first — open its Startups-pipeline entry, research and add it, then set the deal live.');
+			return;
+		}
 		// Publishing is the consequential one: it is what investors begin to see.
 		if (chosen === 'live' && !(await ask({
 			title: 'Publish to the Investor Circle?',
@@ -352,6 +361,19 @@ function ReviewModal({ id, onClose, onSaved, ask }: {
 								<div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 4 }}>
 									The database refuses to publish without it, so this cannot go live until the
 									submitter confirms consent.
+								</div>
+							</div>
+						)}
+
+						{!d.company_id && (
+							<div className="card" style={{ padding: 10, marginBottom: 12, borderColor: 'var(--warn, #b80)' }}>
+								<div style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+									<Building2 size={13} /> <strong>New company — not in Atlas yet.</strong>
+								</div>
+								<div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 4 }}>
+									This deal can’t go live until the company is in the directory. Research and add it from the{' '}
+									<Link href="/startups-pipeline" style={{ textDecoration: 'underline' }}>Startups pipeline</Link>
+									{d.pipeline_entry_id ? ' (its entry is already queued there)' : ''} — once added, the deal links to it automatically and you can publish.
 								</div>
 							</div>
 						)}

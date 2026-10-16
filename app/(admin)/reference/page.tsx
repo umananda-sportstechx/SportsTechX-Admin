@@ -10,14 +10,24 @@ import { useConfirm } from '@/components/confirm';
 import { PageHeader, PillTabs } from '@/components/atoms';
 import { Select } from '@/components/select';
 
-type Kind = 'sectors' | 'sports' | 'tech-tags' | 'round-types';
+type Kind = 'sectors' | 'sports' | 'tech-tags' | 'round-types' | 'countries';
 
 const TABS: { key: Kind; label: string }[] = [
 	{ key: 'sectors', label: 'Sectors' },
 	{ key: 'sports', label: 'Sports' },
 	{ key: 'tech-tags', label: 'Tech tags' },
 	{ key: 'round-types', label: 'Round types' },
+	{ key: 'countries', label: 'Countries' },
 ];
+
+const CONTINENTS = ['Africa', 'Asia', 'Europe', 'North America', 'Oceania', 'South America'] as const;
+const REGIONS = [
+	'Australia and New Zealand', 'Caribbean', 'Central America', 'Central Asia',
+	'Eastern Africa', 'Eastern Asia', 'Eastern Europe', 'Melanesia', 'Micronesia',
+	'Middle Africa', 'Northern Africa', 'Northern America', 'Northern Europe',
+	'Polynesia', 'South America', 'South-Eastern Asia', 'Southern Africa',
+	'Southern Asia', 'Southern Europe', 'Western Africa', 'Western Asia', 'Western Europe',
+] as const;
 
 interface RefRow {
 	id: string;
@@ -26,6 +36,9 @@ interface RefRow {
 	parent_id?: string | null;
 	description?: string | null;
 	sort_order?: number | null;
+	iso2?: string | null;
+	continent?: string | null;
+	region?: string | null;
 }
 
 interface RefResponse { data: RefRow[] }
@@ -79,8 +92,9 @@ export default function ReferenceAdminPage() {
 	};
 
 	const rows = data?.data ?? [];
-	const showParent = kind !== 'round-types';
+	const showParent = kind !== 'round-types' && kind !== 'countries';
 	const showSortOrder = kind === 'sectors' || kind === 'round-types';
+	const showCountryCols = kind === 'countries';
 	const filtered = q.trim() ? rows.filter((r) => `${r.name} ${r.slug}`.toLowerCase().includes(q.trim().toLowerCase())) : null;
 	const tree = filtered ? filtered.map((r) => ({ ...r, depth: 0 })) : orderTree(rows);
 
@@ -118,6 +132,9 @@ export default function ReferenceAdminPage() {
 						<tr>
 							<th>Name</th>
 							<th>Slug</th>
+							{showCountryCols && <th>ISO2</th>}
+							{showCountryCols && <th>Continent</th>}
+							{showCountryCols && <th>Region</th>}
 							{showParent && <th>Parent</th>}
 							{showSortOrder && <th>Sort</th>}
 							<th />
@@ -132,6 +149,9 @@ export default function ReferenceAdminPage() {
 								<tr key={r.id}>
 									<td style={{ paddingLeft: 14 + r.depth * 24 }}><span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{r.depth > 0 && <span style={{ color: 'var(--fg-muted)', fontSize: 12 }}>↳</span>}<span style={{ fontWeight: r.depth === 0 ? 700 : 600, fontSize: r.depth === 0 ? 14 : 13, color: r.depth === 0 ? 'var(--fg)' : r.depth === 1 ? 'var(--fg-2)' : 'var(--fg-muted)' }}>{r.name}</span>{kind === 'sectors' && <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '1px 6px', borderRadius: 999, color: r.depth === 0 ? 'var(--accent)' : 'var(--fg-muted)', background: r.depth === 0 ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : 'var(--bg-3)' }}>{['Sector', 'Sub-sector', 'Sub-sub'][Math.min(r.depth, 2)]}</span>}</span></td>
 									<td style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{r.slug}</td>
+									{showCountryCols && <td style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{r.iso2 ?? '—'}</td>}
+									{showCountryCols && <td style={{ fontSize: 12 }}>{r.continent ?? '—'}</td>}
+									{showCountryCols && <td style={{ fontSize: 12 }}>{r.region ?? '—'}</td>}
 									{showParent && <td style={{ color: 'var(--fg-muted)' }}>{parent?.name ?? '—'}</td>}
 									{showSortOrder && <td>{r.sort_order ?? '—'}</td>}
 									<td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
@@ -154,11 +174,15 @@ function RefModal({ kind, initial, parents, onClose, onSaved }: { kind: Kind; in
 	const [parentId, setParentId] = useState<string>(initial?.parent_id ?? '');
 	const [description, setDescription] = useState<string>(initial?.description ?? '');
 	const [sortOrder, setSortOrder] = useState<string>(initial?.sort_order != null ? String(initial.sort_order) : '0');
+	const [iso2, setIso2] = useState(initial?.iso2 ?? '');
+	const [continent, setContinent] = useState(initial?.continent ?? '');
+	const [region, setRegion] = useState(initial?.region ?? '');
 	const [pending, setPending] = useState(false);
 
-	const showParent = kind !== 'round-types';
+	const showParent = kind !== 'round-types' && kind !== 'countries';
 	const showDescription = kind === 'sectors';
 	const showSort = kind === 'sectors' || kind === 'round-types';
+	const showCountryFields = kind === 'countries';
 
 	const submit = async () => {
 		setPending(true);
@@ -168,6 +192,11 @@ function RefModal({ kind, initial, parents, onClose, onSaved }: { kind: Kind; in
 			if (showParent) body.parent_id = parentId || null;
 			if (showDescription) body.description = description.trim() || null;
 			if (showSort) body.sort_order = Number(sortOrder) || 0;
+			if (showCountryFields) {
+				body.iso2 = iso2.trim().toUpperCase() || null;
+				body.continent = continent || null;
+				body.region = region || null;
+			}
 			if (initial) await api('PATCH', `/api/admin/reference/${kind}/${initial.id}`, body);
 			else await api('POST', `/api/admin/reference/${kind}`, body);
 			toast.success(initial ? 'Saved' : 'Created');
@@ -200,6 +229,17 @@ function RefModal({ kind, initial, parents, onClose, onSaved }: { kind: Kind; in
 				)}
 				{showDescription && <Field label="Description"><textarea className="search-input" style={{ minHeight: 60 }} value={description} onChange={(e) => setDescription(e.target.value)} /></Field>}
 				{showSort && <Field label="Sort"><input className="search-input" type="number" value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} /></Field>}
+				{showCountryFields && (
+					<>
+						<Field label="ISO 3166-1 alpha-2"><input className="search-input" style={{ fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }} maxLength={2} value={iso2} onChange={(e) => setIso2(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))} /></Field>
+						<Field label="Continent">
+							<Select value={continent} onChange={setContinent} width="100%" style={{ display: 'block', width: '100%' }} placeholder="Select continent" options={CONTINENTS.map((c) => ({ value: c, label: c }))} />
+						</Field>
+						<Field label="Region">
+							<Select value={region} onChange={setRegion} searchable width="100%" style={{ display: 'block', width: '100%' }} placeholder="Select region" options={REGIONS.map((r) => ({ value: r, label: r }))} />
+						</Field>
+					</>
+				)}
 			</div>
 		</Modal>
 	);

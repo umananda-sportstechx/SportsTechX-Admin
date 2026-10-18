@@ -6,7 +6,6 @@ import { toast } from 'sonner';
 import { RefreshCw } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader, AsyncState } from '@/components/atoms';
-import { FilterBar, FilterSelect } from '@/components/filters';
 
 interface StrategySession {
 	id: string;
@@ -21,17 +20,16 @@ interface StrategySession {
 }
 interface Resp { data: StrategySession[] }
 
-const STATUSES = ['booked', 'available', 'locked'] as const;
-
 export default function StrategySessionsPage() {
-	// Default to 'booked' — the queue that needs a human to confirm a time.
-	const [status, setStatus] = useState('booked');
 	const [when, setWhen] = useState<Record<string, string>>({});
 	const [link, setLink] = useState<Record<string, string>>({});
 	const [pending, setPending] = useState<string | null>(null);
 
+	// Only 'booked' rows exist (bookStrategy always inserts 'booked'; locked/
+	// available are states the home service derives, never persisted), so there's
+	// nothing to filter — the "requested"/"confirmed" chip carries the distinction.
 	const { data, error, isLoading, mutate } = useSWR<Resp>(
-		['/api/admin/strategy-sessions', { status: status || undefined, limit: 100 }],
+		['/api/admin/strategy-sessions', { status: 'booked', limit: 100 }],
 		{ dedupingInterval: 15_000 },
 	);
 	const rows = data?.data ?? [];
@@ -59,10 +57,6 @@ export default function StrategySessionsPage() {
 				subtitle="Quarterly Raise sessions founders have requested. Set a date and time to confirm each — the founder's page updates immediately."
 				action={<button className="btn ghost" onClick={() => void mutate()}><RefreshCw size={12} /> Refresh</button>}
 			/>
-
-			<FilterBar>
-				<FilterSelect value={status} onChange={setStatus} allLabel="All statuses" options={STATUSES.map((s) => ({ value: s, label: s }))} />
-			</FilterBar>
 
 			<div className="card" style={{ padding: 'var(--space-4)' }}>
 				<AsyncState loading={isLoading} error={error} empty={rows.length === 0} emptyMsg="No strategy sessions in this view." onRetry={() => void mutate()}>

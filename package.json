@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "cross-env NODE_OPTIONS=--max-old-space-size=8192 next dev -p 3001",
+    "prebuild": "node -e \"require('fs').rmSync('.next/cache',{recursive:true,force:true})\"",
     "build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 next build",
     "start": "next start -p 3001",
     "lint": "eslint"

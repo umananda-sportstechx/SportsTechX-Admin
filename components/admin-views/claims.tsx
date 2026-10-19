@@ -38,8 +38,13 @@ interface Claim {
 	shareable_token?: string | null;
 	picked_up_by_email?: string | null;
 	is_actively_raising?: boolean | null;
+	report_id?: string | null;
+	report_status?: string | null;
 	created_at: string;
 }
+
+/** The report page lives in the Atlas app, not the admin panel. */
+const ATLAS_BASE = process.env.NEXT_PUBLIC_ATLAS_URL ?? 'https://atlas.sportstechx.com';
 
 const TYPE_FILTERS: Array<{ label: string; key: string }> = [
 	{ label: 'All types', key: '' },
@@ -201,6 +206,13 @@ export function ClaimsView({ embedded = false, lockType }: { embedded?: boolean;
 							{cl.status === 'verified' && (
 								<>
 									{cl.shareable_token && <button className="btn ghost" disabled={pendingId === cl.id} onClick={() => copyShare(cl.shareable_token!)} title="Copy verified share link">Copy link</button>}
+									{cl.report_id && cl.report_status === 'ready' && (
+										<a className="btn ghost" style={{ color: 'var(--pos)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+											href={`${ATLAS_BASE}/verified-reports/${cl.report_id}`} target="_blank" rel="noopener noreferrer"
+											title="Open the verified-company (Locker Room) report in Atlas">View report <ExternalLink size={10} /></a>
+									)}
+									{cl.report_status === 'pending' && <span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Report generating…</span>}
+									{cl.report_status === 'error' && <span style={{ fontSize: 11, color: 'var(--accent)' }}>Report failed — regenerate</span>}
 									<button className="btn ghost" disabled={pendingId === cl.id} onClick={() => void regenerate(cl.id)} title="Re-run the verified-company report">Regenerate report</button>
 								</>
 							)}

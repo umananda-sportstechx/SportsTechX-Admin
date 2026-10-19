@@ -28,7 +28,8 @@ import { ThemeControls } from '@/components/reports/theme-controls';
 type SectionKind =
 	| 'hero' | 'narrative' | 'kpi_grid' | 'trend_card_list' | 'people_grid'
 	| 'company_grid' | 'deal_table' | 'data_chart'
-	| 'poll' | 'quote' | 'embed' | 'ecosystem_map';
+	| 'poll' | 'quote' | 'embed' | 'ecosystem_map'
+	| 'accordion' | 'sector_bubble';
 
 const KIND_LABELS: Record<SectionKind, string> = {
 	hero: 'Hero',
@@ -43,6 +44,8 @@ const KIND_LABELS: Record<SectionKind, string> = {
 	quote: 'Quote',
 	embed: 'Embed',
 	ecosystem_map: 'Ecosystem map (live)',
+	accordion: 'Accordion',
+	sector_bubble: 'Sector bubble (drilldown)',
 };
 
 const KIND_DEFAULTS: Record<SectionKind, Record<string, unknown>> = {
@@ -58,6 +61,10 @@ const KIND_DEFAULTS: Record<SectionKind, Record<string, unknown>> = {
 	quote: { author: '', body: { type: 'doc', content: [] } },
 	embed: { provider: 'youtube', url: '' },
 	ecosystem_map: { query: {} },
+	// No dedicated editor yet → these use the raw-JSON fallback body; both render
+	// in the preview. Empty arrays are valid (schemas are .max()-only, no .min()).
+	accordion: { intro: '', groups: [] },
+	sector_bubble: { nodes: [] },
 };
 
 /** Icon keys usable in hero/kpi/trend cards (must match the client ICONS map). */

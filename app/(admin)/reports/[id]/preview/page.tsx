@@ -3,109 +3,142 @@
 import Link from 'next/link';
 import { use, useState } from 'react';
 import useSWR from 'swr';
-import { ArrowLeft, Eye, Lock } from 'lucide-react';
-import { SectionRenderer, type Section, type Tier } from '@/components/report-section-render';
+import { ArrowLeft, Eye, Lock, Moon, Sun, Smartphone, Tablet, Monitor } from 'lucide-react';
+import { ReportPreview } from '@/components/reports/report-preview';
+import type { Section, Tier } from '@/components/reports/report-kit/types';
+import type { ReportThemeOverride } from '@/components/reports/report-kit/report-theme';
 
 /**
  * Preview-as-tier page for sections-based reports.
  *
- * Hits the SAME public endpoint a real user would
- * (`/api/reports/:id/sections`) with the admin-only `?as=free|growth|pro`
- * override, so what we render here is exactly what the server would return
- * to that tier. Admin JWT travels via the SWR auth header — the server
- * checks `Principal.isAdmin` before honouring `?as`.
+ * Renders with the REAL client report renderers (`@/components/reports/*`), so
+ * what the admin sees is pixel-identical to the public app — not the old
+ * approximate admin-only renderer. Sections come from the SAME public endpoint
+ * a real user hits (`/api/reports/:id/sections`) with the admin-only
+ * `?as=explore|raise|scout` override, so tier gating + locked cards match
+ * production exactly (the server honours `?as` only for `Principal.isAdmin`).
  *
- * Uses the shared <SectionRenderer> so the visual surface matches the
- * public client app: hero with bg image, KPI grids, charts, blurred
- * lock-cards, all of it.
+ * Chrome adds what a real report page has: a theme (from `reports.theme`), a
+ * dark/light toggle, and a device-width frame so the admin can check mobile.
  */
 
 const TIERS: Tier[] = ['explore', 'raise', 'scout'];
+const DEVICES = [
+	{ key: 'desktop', label: 'Desktop', icon: Monitor, width: 0 },
+	{ key: 'tablet', label: 'Tablet', icon: Tablet, width: 834 },
+	{ key: 'phone', label: 'Phone', icon: Smartphone, width: 390 },
+] as const;
+type DeviceKey = (typeof DEVICES)[number]['key'];
 
 export default function ReportPreviewPage({ params }: { params: Promise<{ id: string }> }) {
 	const { id } = use(params);
-	const [tier, setTier] = useState<Tier>('explore');
+	const [tier, setTier] = useState<Tier>('scout');
+	const [device, setDevice] = useState<DeviceKey>('desktop');
+
+	// The report row carries the theme + its default dark/light preference.
+	const { data: report } = useSWR<{ title: string; theme: ReportThemeOverride | null }>(
+		[`/api/admin/reports/${id}/edit`],
+		{ revalidateOnFocus: false },
+	);
+	const [isDark, setIsDark] = useState<boolean | null>(null);
+	const dark = isDark ?? report?.theme?.default_dark ?? true;
 
 	const { data, isLoading, error } = useSWR<{ data: Section[] }>(
 		[`/api/reports/${id}/sections`, { as: tier }],
-		{ dedupingInterval: 30_000 },
+		{ dedupingInterval: 15_000 },
 	);
 	const sections = data?.data ?? [];
 	const visibleCount = sections.filter((s) => !s.is_locked).length;
 	const lockedCount = sections.filter((s) => s.is_locked).length;
+	const frameWidth = DEVICES.find((d) => d.key === device)!.width;
 
 	return (
-		<div style={{ display: 'flex', flexDirection: 'column', gap: 20, minHeight: 'calc(100vh - var(--topbar-h) - 40px)' }}>
-			{/* ── Sticky tier-selector toolbar ─────────────────────────────── */}
+		<div style={{ display: 'flex', flexDirection: 'column', gap: 0, minHeight: 'calc(100vh - var(--topbar-h) - 40px)' }}>
+			{/* ── Toolbar ─────────────────────────────────────────────────────── */}
 			<div
 				style={{
-					position: 'sticky',
-					top: 0,
-					zIndex: 5,
-					padding: '12px 0',
-					background: 'var(--bg-1)',
-					borderBottom: '1px solid var(--border)',
-					display: 'flex',
-					alignItems: 'center',
-					justifyContent: 'space-between',
-					gap: 12,
-					flexWrap: 'wrap',
+					position: 'sticky', top: 0, zIndex: 5, padding: '10px 0', marginBottom: 16,
+					background: 'var(--bg-1)', borderBottom: '1px solid var(--border)',
+					display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap',
 				}}
 			>
-				<div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-					<Link href={`/reports/${id}`} className="btn ghost"><ArrowLeft size={12} /> Back to editor</Link>
+				<div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+					<Link href={`/reports/${id}`} className="btn ghost"><ArrowLeft size={12} /> Editor</Link>
 					<div>
-						<div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-							Preview as
-						</div>
-						<div style={{ fontSize: 18, fontWeight: 700, textTransform: 'capitalize' }}>{tier} user</div>
+						<div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Previewing as</div>
+						<div style={{ fontSize: 16, fontWeight: 700, textTransform: 'capitalize' }}>{tier} user</div>
 					</div>
 				</div>
-				<div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-					<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
-						<Eye size={11} style={{ verticalAlign: -1 }} /> {visibleCount} visible
+
+				<div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+					<span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
+						<Eye size={11} style={{ verticalAlign: -1 }} /> {visibleCount}
 						{lockedCount > 0 && <> · <Lock size={11} style={{ verticalAlign: -1 }} /> {lockedCount} locked</>}
-					</div>
-					<div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--bg-2)', border: '1px solid var(--border)' }}>
+					</span>
+
+					{/* Tier */}
+					<Segmented>
 						{TIERS.map((t) => (
-							<button
-								key={t}
-								onClick={() => setTier(t)}
-								style={{
-									padding: '6px 14px',
-									background: tier === t ? 'var(--accent)' : 'transparent',
-									color: tier === t ? 'var(--accent-fg)' : 'var(--fg)',
-									border: 'none',
-									cursor: 'pointer',
-									fontWeight: 600,
-									fontSize: 13,
-									textTransform: 'capitalize',
-								}}
-							>
-								{t}
-							</button>
+							<SegBtn key={t} active={tier === t} onClick={() => setTier(t)}>{t}</SegBtn>
 						))}
-					</div>
+					</Segmented>
+
+					{/* Device width */}
+					<Segmented>
+						{DEVICES.map(({ key, label, icon: Icon }) => (
+							<SegBtn key={key} active={device === key} onClick={() => setDevice(key)} title={label}><Icon size={13} /></SegBtn>
+						))}
+					</Segmented>
+
+					{/* Dark / light */}
+					<button className="btn ghost" onClick={() => setIsDark(!dark)} title={dark ? 'Switch to light' : 'Switch to dark'}>
+						{dark ? <Sun size={13} /> : <Moon size={13} />}
+					</button>
 				</div>
 			</div>
 
-			{/* ── Renderer ──────────────────────────────────────────────────── */}
-			{error && (
-				<div className="card" style={{ padding: 12, color: '#dc2626' }}>
-					Failed to load: {(error as Error).message}
-				</div>
-			)}
+			{/* ── Render surface ──────────────────────────────────────────────── */}
+			{error && <div className="card" style={{ padding: 12, color: '#dc2626' }}>Failed to load: {(error as Error).message}</div>}
 			{isLoading && sections.length === 0 && <div className="card" style={{ padding: 12 }}>Loading…</div>}
 
-			<div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 900, width: '100%', margin: '0 auto' }}>
-				{sections.map((s) => <SectionRenderer key={s.id} section={s} />)}
+			<div style={{ display: 'flex', justifyContent: 'center', background: 'var(--bg-2)', borderRadius: 'var(--radius)', padding: frameWidth ? 20 : 0 }}>
+				<div
+					style={{
+						width: frameWidth ? frameWidth : '100%',
+						maxWidth: '100%',
+						boxShadow: frameWidth ? '0 8px 40px rgba(0,0,0,0.25)' : 'none',
+						borderRadius: frameWidth ? 12 : 0,
+						overflow: 'hidden',
+					}}
+				>
+					<ReportPreview sections={sections} theme={report?.theme ?? null} isDark={dark} />
+				</div>
 			</div>
 
 			{!isLoading && sections.length === 0 && !error && (
-				<div className="card" style={{ padding: 16, color: 'var(--fg-muted)', maxWidth: 900, margin: '0 auto' }}>
-					No sections are visible to {tier} users. Either this report has no published sections, or all sections are gated above {tier}.
+				<div className="card" style={{ padding: 16, color: 'var(--fg-muted)', maxWidth: 900, margin: '16px auto' }}>
+					No sections are visible to {tier} users — either nothing is published yet, or every section is gated above {tier}.
 				</div>
 			)}
 		</div>
+	);
+}
+
+function Segmented({ children }: { children: React.ReactNode }) {
+	return <div style={{ display: 'flex', gap: 2, padding: 3, background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>{children}</div>;
+}
+function SegBtn({ active, onClick, children, title }: { active: boolean; onClick: () => void; children: React.ReactNode; title?: string }) {
+	return (
+		<button
+			onClick={onClick}
+			title={title}
+			style={{
+				padding: '5px 12px', background: active ? 'var(--accent)' : 'transparent', color: active ? 'var(--accent-fg)' : 'var(--fg)',
+				border: 'none', borderRadius: 'calc(var(--radius) - 3px)', cursor: 'pointer', fontWeight: 600, fontSize: 12,
+				textTransform: 'capitalize', display: 'inline-flex', alignItems: 'center', gap: 4,
+			}}
+		>
+			{children}
+		</button>
 	);
 }

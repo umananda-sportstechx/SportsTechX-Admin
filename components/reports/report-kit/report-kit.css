@@ -1,0 +1,52 @@
+/* Report rendering kit — scoped under .rk-report. Chrome-less report pages set
+   the --rk-* vars from the resolved theme (ReportView); these classes read them.
+   Report fonts are loaded as a plain stylesheet (NOT next/font) to avoid the
+   Turbopack google-font build flake and to keep the reports' exact typography. */
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap');
+
+.rk-report {
+	--rk-font-display: 'Bebas Neue', var(--a-font), sans-serif;
+	--rk-font-mono: 'DM Mono', var(--a-mono), monospace;
+	--rk-font-body: var(--a-body), system-ui, sans-serif;
+	background: var(--rk-bg);
+	color: var(--rk-fg);
+	font-family: var(--rk-font-body);
+	min-height: 100vh;
+	transition: background 0.3s ease, color 0.3s ease;
+}
+.rk-report * { box-sizing: border-box; }
+
+/* Section rhythm */
+.rk-section { max-width: 1160px; margin: 0 auto; padding: 64px 24px; }
+.rk-section--full { max-width: none; padding-left: 0; padding-right: 0; }
+
+/* Editorial header: mono eyebrow + Bebas title + accent bar */
+.rk-eyebrow { font-family: var(--rk-font-mono); font-size: 12px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--rk-accent); margin-bottom: 10px; }
+.rk-title { font-family: var(--rk-font-display); font-size: clamp(30px, 4.2vw, 52px); line-height: 0.95; letter-spacing: 0.01em; margin: 0; color: var(--rk-title); }
+.rk-accent-bar { height: 3px; width: 46px; margin-top: 14px; border-radius: 2px; background: linear-gradient(to right, var(--rk-accent), color-mix(in srgb, var(--rk-accent) 33%, transparent)); }
+
+/* Reveal-on-scroll */
+.rk-reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
+.rk-reveal.is-shown { opacity: 1; transform: none; }
+
+/* Hover lift for cards */
+.rk-hoverlift { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.rk-hoverlift:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(0,0,0,0.18); }
+
+/* Tables */
+.rk-table { width: 100%; border-collapse: collapse; border: 1px solid var(--rk-border); border-radius: 8px; overflow: hidden; }
+.rk-table thead th { background: var(--rk-title); color: #fff; font-family: var(--rk-font-mono); font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; text-align: left; padding: 13px 16px; font-weight: 500; }
+.rk-table thead th.num { text-align: right; }
+.rk-table tbody td { padding: 14px 16px; font-size: 13px; border-top: 1px solid var(--rk-border); }
+.rk-table tbody tr:nth-child(even) { background: var(--rk-row-alt); }
+.rk-table td.num { text-align: right; font-family: var(--rk-font-mono); color: var(--rk-accent); font-weight: 500; }
+
+/* Sticky report nav (the report's own, not the Atlas shell) */
+.rk-nav { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 18px; padding: 12px 24px; background: var(--rk-nav-bg); backdrop-filter: blur(10px); border-bottom: 1px solid var(--rk-border); }
+.rk-nav__links { display: flex; gap: 18px; overflow-x: auto; flex: 1; }
+.rk-nav__link { font-family: var(--rk-font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--rk-fg-muted); text-decoration: none; white-space: nowrap; cursor: pointer; background: none; border: 0; }
+.rk-nav__link:hover, .rk-nav__link.is-active { color: var(--rk-accent); }
+.rk-iconbtn { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--rk-border); background: none; color: var(--rk-fg); cursor: pointer; flex-shrink: 0; }
+.rk-iconbtn:hover { background: var(--rk-bg-card-hover); }
+
+@media (max-width: 720px) { .rk-section { padding: 44px 16px; } }

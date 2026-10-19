@@ -1,10 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { use, useState } from 'react';
+import { use, useState, useEffect, useMemo } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { Trash2, Plus, GripVertical, Lock, Unlock, Eye, EyeOff, X, Sparkles } from 'lucide-react';
+import { Trash2, Plus, GripVertical, Lock, Unlock, Eye, EyeOff, X, Sparkles, Moon, Sun, SlidersHorizontal, PanelRightClose, PanelRightOpen, ExternalLink, CheckCircle2, AlertTriangle, ArrowLeft } from 'lucide-react';
 import {
 	DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors,
 	closestCenter,
@@ -18,6 +18,10 @@ import { useConfirm } from '@/components/confirm';
 import { TiptapEditor } from '@/components/tiptap-editor';
 import { CompanyPicker, SectorPicker, PollPicker } from '@/components/section-pickers';
 import { ImageInput } from '@/components/image-input';
+import { ReportPreview } from '@/components/reports/report-preview';
+import type { Section as RkSection } from '@/components/reports/report-kit/types';
+import type { ReportThemeOverride } from '@/components/reports/report-kit/report-theme';
+import { ThemeControls } from '@/components/reports/theme-controls';
 
 // ---- types matching the server registry --------------------------------------
 
@@ -150,6 +154,14 @@ function AiGenerateModal(
 
 // ---- page --------------------------------------------------------------------
 
+interface ReportMeta {
+	id: string;
+	title: string;
+	is_published: boolean;
+	has_sections: boolean;
+	theme: ReportThemeOverride | null;
+}
+
 export default function ReportSectionsEditorPage(
 	{ params }: { params: Promise<{ id: string }> },
 ) {
@@ -160,13 +172,42 @@ export default function ReportSectionsEditorPage(
 		{ revalidateOnFocus: false },
 	);
 	const sections = data?.data ?? [];
+	const { data: report } = useSWR<ReportMeta>(
+		[`/api/admin/reports/${reportId}/edit`],
+		{ revalidateOnFocus: false },
+	);
 
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const [aiOpen, setAiOpen] = useState(false);
+	const [activeDraft, setActiveDraft] = useState<Section | null>(null);
+	const [theme, setTheme] = useState<ReportThemeOverride | null>(null);
+	const [themeLoaded, setThemeLoaded] = useState(false);
+	const [themeOpen, setThemeOpen] = useState(false);
+	const [showPreview, setShowPreview] = useState(true);
+	const [previewDark, setPreviewDark] = useState<boolean | null>(null);
 	const active = sections.find((s) => s.id === activeId) ?? null;
 
+	// Adopt the report's saved theme once, then the local copy is the source of
+	// truth (ThemeControls live-edits it; "Save theme" persists it).
+	useEffect(() => {
+		if (report && !themeLoaded) { setTheme(report.theme ?? null); setThemeLoaded(true); }
+	}, [report, themeLoaded]);
+	const dark = previewDark ?? theme?.default_dark ?? true;
+
 	const reload = () => mutate((k) => Array.isArray(k) && typeof k[0] === 'string' && k[0].includes(`/admin/reports/${reportId}/sections`));
+	const reloadReport = () => mutate([`/api/admin/reports/${reportId}/edit`]);
+
+	// What the preview renders: the saved list with the active section's unsaved
+	// draft merged in, mapped to the renderer's Section shape. Admin sees all
+	// sections unlocked (tier simulation lives on the full-preview page).
+	const previewSections = useMemo<RkSection[]>(
+		() => sections.map((s) => ({ ...(activeDraft && activeDraft.id === s.id ? activeDraft : s), is_locked: false } as RkSection)),
+		[sections, activeDraft],
+	);
+
+	const publishedCount = sections.filter((s) => s.is_published).length;
+	const draftCount = sections.length - publishedCount;
 
 	const onAddKind = async (kind: SectionKind) => {
 		try {
@@ -204,55 +245,164 @@ export default function ReportSectionsEditorPage(
 		}
 	};
 
+	const setReportPublished = async (next: boolean) => {
+		try {
+			await api('PATCH', `/api/admin/reports/${reportId}/flags`, { is_published: next });
+			toast.success(next ? 'Report published' : 'Report unpublished');
+			reloadReport();
+		} catch (e) {
+			toast.error((e as Error).message);
+		}
+	};
+
 	if (isLoading && sections.length === 0) {
 		return <div style={{ padding: 'var(--space-5)' }}>Loading…</div>;
 	}
 
 	return (
-		<div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 16, minHeight: 'calc(100vh - var(--topbar-h) - 40px)' }}>
-			<aside style={{ borderRight: '1px solid var(--border)', paddingRight: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
-				<ReportCoverEditor reportId={reportId} />
-				<div>
-					<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 6 }}>
-						<div style={{ fontWeight: 700, fontSize: 14 }}>Sections</div>
-						<div style={{ display: 'flex', gap: 4 }}>
-							<Link href={`/reports/${reportId}/preview`} className="btn ghost" title="Preview as user">
-								<Eye size={12} />
-							</Link>
-							<button className="btn" onClick={() => setPickerOpen(!pickerOpen)} title="Add section">
-								<Plus size={12} /> Add
-							</button>
-							<button className="btn ghost" onClick={() => setAiOpen(true)} title="Generate sections with AI">
-								<Sparkles size={12} /> AI
-							</button>
+		<div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 'calc(100vh - var(--topbar-h) - 40px)' }}>
+			<PublishBar
+				report={report}
+				reportId={reportId}
+				publishedCount={publishedCount}
+				draftCount={draftCount}
+				onPublishToggle={setReportPublished}
+				onOpenTheme={() => setThemeOpen(true)}
+				showPreview={showPreview}
+				onTogglePreview={() => setShowPreview((v) => !v)}
+			/>
+
+			<div style={{ display: 'grid', gridTemplateColumns: showPreview ? '248px minmax(0,1fr) minmax(0,1fr)' : '248px minmax(0,1fr)', gap: 16, flex: 1, minHeight: 0 }}>
+				<aside style={{ borderRight: '1px solid var(--border)', paddingRight: 12, display: 'flex', flexDirection: 'column', gap: 12, overflow: 'auto', minHeight: 0 }}>
+					<ReportCoverEditor reportId={reportId} />
+					<div style={{ position: 'relative' }}>
+						<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 6 }}>
+							<div style={{ fontWeight: 700, fontSize: 14 }}>Sections</div>
+							<div style={{ display: 'flex', gap: 4 }}>
+								<button className="btn" onClick={() => setPickerOpen(!pickerOpen)} title="Add section">
+									<Plus size={12} /> Add
+								</button>
+								<button className="btn ghost" onClick={() => setAiOpen(true)} title="Generate sections with AI">
+									<Sparkles size={12} /> AI
+								</button>
+							</div>
 						</div>
+						{pickerOpen && <KindPicker onPick={onAddKind} onClose={() => setPickerOpen(false)} />}
+						{aiOpen && <AiGenerateModal reportId={reportId} onClose={() => setAiOpen(false)} onDone={reload} />}
+						<SectionList
+							sections={sections}
+							activeId={activeId}
+							onSelect={setActiveId}
+							onReorder={onReorder}
+						/>
 					</div>
-					{pickerOpen && <KindPicker onPick={onAddKind} onClose={() => setPickerOpen(false)} />}
-					{aiOpen && <AiGenerateModal reportId={reportId} onClose={() => setAiOpen(false)} onDone={reload} />}
-					<SectionList
-						sections={sections}
-						activeId={activeId}
-						onSelect={setActiveId}
-						onReorder={onReorder}
-					/>
-				</div>
-			</aside>
-			<main style={{ overflow: 'hidden' }}>
-				{active ? (
-					<SectionEditor
-						key={active.id}
-						section={active}
-						onSaved={reload}
-						onDeleted={() => { setActiveId(null); reload(); }}
-					/>
-				) : (
-					<div style={{ padding: 'var(--space-5)', color: 'var(--fg-muted)' }}>
-						{sections.length === 0
-							? 'No sections yet. Click "Add" to create your first section.'
-							: 'Select a section to edit.'}
-					</div>
+				</aside>
+
+				<main style={{ overflow: 'auto', minWidth: 0, minHeight: 0 }}>
+					{active ? (
+						<SectionEditor
+							key={active.id}
+							section={active}
+							onSaved={reload}
+							onDeleted={() => { setActiveId(null); setActiveDraft(null); reload(); }}
+							onDraftChange={setActiveDraft}
+						/>
+					) : (
+						<div style={{ padding: 'var(--space-5)', color: 'var(--fg-muted)' }}>
+							{sections.length === 0
+								? 'No sections yet. Click "Add" to create your first section.'
+								: 'Select a section to edit.'}
+						</div>
+					)}
+				</main>
+
+				{showPreview && (
+					<section style={{ borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
+						<div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 0 8px 12px' }}>
+							<div style={{ fontWeight: 700, fontSize: 14, flex: 1 }}>Live preview</div>
+							<button className="btn ghost" onClick={() => setPreviewDark(!dark)} title={dark ? 'Light' : 'Dark'}>{dark ? <Sun size={12} /> : <Moon size={12} />}</button>
+							<Link href={`/reports/${reportId}/preview`} className="btn ghost" title="Full preview (tiers + devices)"><ExternalLink size={12} /></Link>
+						</div>
+						<div style={{ flex: 1, overflow: 'auto', marginLeft: 12, border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
+							<ReportPreview sections={previewSections} theme={theme} isDark={dark} />
+						</div>
+					</section>
 				)}
-			</main>
+			</div>
+
+			{themeOpen && (
+				<SlideOver onClose={() => setThemeOpen(false)}>
+					<ThemeControls reportId={reportId} value={theme} onChange={setTheme} onClose={() => { setThemeOpen(false); reloadReport(); }} />
+				</SlideOver>
+			)}
+		</div>
+	);
+}
+
+// ---- publish / readiness bar -------------------------------------------------
+
+function PublishBar({
+	report, reportId, publishedCount, draftCount, onPublishToggle, onOpenTheme, showPreview, onTogglePreview,
+}: {
+	report: ReportMeta | undefined;
+	reportId: string;
+	publishedCount: number;
+	draftCount: number;
+	onPublishToggle: (next: boolean) => void;
+	onOpenTheme: () => void;
+	showPreview: boolean;
+	onTogglePreview: () => void;
+}) {
+	const published = report?.is_published ?? false;
+	// A published report with zero published sections shows an empty page to users.
+	const warnEmptyPublished = published && publishedCount === 0;
+	return (
+		<div className="card" style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+			<Link href="/reports" className="btn ghost" title="All reports"><ArrowLeft size={14} /></Link>
+			<div style={{ minWidth: 0 }}>
+				<div style={{ fontWeight: 700, fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 360 }}>{report?.title ?? 'Report'}</div>
+				<div style={{ fontSize: 11, color: 'var(--fg-muted)', display: 'flex', gap: 8, marginTop: 2 }}>
+					<span>{publishedCount} published</span>
+					{draftCount > 0 && <span>· {draftCount} draft{draftCount === 1 ? '' : 's'}</span>}
+				</div>
+			</div>
+
+			<div style={{ flex: 1 }} />
+
+			{warnEmptyPublished && (
+				<span style={{ fontSize: 12, color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+					<AlertTriangle size={13} /> Live, but no sections are published
+				</span>
+			)}
+			<span
+				style={{
+					fontSize: 12, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5,
+					color: published ? '#16a34a' : 'var(--fg-muted)',
+				}}
+			>
+				{published ? <CheckCircle2 size={14} /> : <EyeOff size={14} />} {published ? 'Published' : 'Draft'}
+			</span>
+
+			<button className="btn ghost" onClick={onOpenTheme} title="Report theme"><SlidersHorizontal size={12} /> Theme</button>
+			<button className="btn ghost" onClick={onTogglePreview} title={showPreview ? 'Hide preview' : 'Show preview'}>
+				{showPreview ? <PanelRightClose size={12} /> : <PanelRightOpen size={12} />}
+			</button>
+			<Link href={`/reports/${reportId}/preview`} className="btn ghost"><Eye size={12} /> Full preview</Link>
+			<button className="btn" onClick={() => onPublishToggle(!published)}>
+				{published ? 'Unpublish' : 'Publish report'}
+			</button>
+		</div>
+	);
+}
+
+// ---- right-side slide-over panel --------------------------------------------
+
+function SlideOver({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+	return (
+		<div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 60, display: 'flex', justifyContent: 'flex-end' }}>
+			<div onClick={(e) => e.stopPropagation()} style={{ width: 360, maxWidth: '90vw', height: '100%', background: 'var(--bg-1)', borderLeft: '1px solid var(--border)', padding: 16, overflow: 'auto', boxShadow: '-8px 0 40px rgba(0,0,0,0.2)' }}>
+				{children}
+			</div>
 		</div>
 	);
 }
@@ -410,15 +560,20 @@ function SectionCard({ section: s, isActive, onSelect }: { section: Section; isA
 // ---- editor panel ------------------------------------------------------------
 
 function SectionEditor({
-	section: initial, onSaved, onDeleted,
+	section: initial, onSaved, onDeleted, onDraftChange,
 }: {
 	section: Section;
 	onSaved: () => void;
 	onDeleted: () => void;
+	onDraftChange: (s: Section) => void;
 }) {
 	const ask = useConfirm();
 	const [draft, setDraft] = useState<Section>(initial);
 	const [saving, setSaving] = useState(false);
+
+	// Feed every in-progress edit up to the page so the live preview re-renders
+	// without waiting for a save.
+	useEffect(() => { onDraftChange(draft); }, [draft, onDraftChange]);
 
 	const patch = (p: Partial<Section>) => setDraft((d) => ({ ...d, ...p }));
 	const patchContent = (p: Record<string, unknown>) =>

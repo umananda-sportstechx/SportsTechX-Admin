@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { use, useState, useEffect, useMemo } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { Trash2, Plus, GripVertical, Lock, Unlock, Eye, EyeOff, X, Sparkles, Moon, Sun, SlidersHorizontal, PanelRightClose, PanelRightOpen, ExternalLink, CheckCircle2, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { Trash2, Plus, GripVertical, Lock, Unlock, Eye, EyeOff, X, Sparkles, Moon, Sun, SlidersHorizontal, PanelRightClose, PanelRightOpen, ExternalLink, CheckCircle2, AlertTriangle, ArrowLeft, Info, FileText } from 'lucide-react';
 import {
 	DndContext, type DragEndEvent, PointerSensor, useSensor, useSensors,
 	closestCenter,
@@ -22,6 +22,15 @@ import { ReportPreview } from '@/components/reports/report-preview';
 import type { Section as RkSection } from '@/components/reports/report-kit/types';
 import type { ReportThemeOverride } from '@/components/reports/report-kit/report-theme';
 import { ThemeControls } from '@/components/reports/theme-controls';
+import { ReportDetailsForm } from '@/components/reports/report-details-form';
+
+/**
+ * Reports that render on the live site from a bespoke hardcoded page (not the
+ * section system). Their sections exist in the DB but DON'T drive the live page,
+ * so the editor shows a banner: edits here won't change the live report, and the
+ * preview can't match it. Add a slug here if another report gets a custom page.
+ */
+const HARDCODED_REPORT_SLUGS = new Set(['gster26']);
 
 // ---- types matching the server registry --------------------------------------
 
@@ -164,6 +173,14 @@ function AiGenerateModal(
 interface ReportMeta {
 	id: string;
 	title: string;
+	slug: string | null;
+	short_title: string | null;
+	report_month: number | null;
+	report_year: number | null;
+	tags: string[];
+	description: string | null;
+	cover_url: string | null;
+	show_on_dashboard: boolean;
 	is_published: boolean;
 	has_sections: boolean;
 	theme: ReportThemeOverride | null;
@@ -193,7 +210,9 @@ export default function ReportSectionsEditorPage(
 	const [themeOpen, setThemeOpen] = useState(false);
 	const [showPreview, setShowPreview] = useState(true);
 	const [previewDark, setPreviewDark] = useState<boolean | null>(null);
+	const [detailsOpen, setDetailsOpen] = useState(false);
 	const active = sections.find((s) => s.id === activeId) ?? null;
+	const isHardcoded = !!report?.slug && HARDCODED_REPORT_SLUGS.has(report.slug);
 
 	// Adopt the report's saved theme once, then the local copy is the source of
 	// truth (ThemeControls live-edits it; "Save theme" persists it).
@@ -275,13 +294,22 @@ export default function ReportSectionsEditorPage(
 				draftCount={draftCount}
 				onPublishToggle={setReportPublished}
 				onOpenTheme={() => setThemeOpen(true)}
+				onOpenDetails={() => setDetailsOpen(true)}
 				showPreview={showPreview}
 				onTogglePreview={() => setShowPreview((v) => !v)}
 			/>
 
+			{isHardcoded && (
+				<div className="card" style={{ padding: '10px 12px', display: 'flex', gap: 10, alignItems: 'flex-start', borderLeft: '3px solid #b45309', background: 'color-mix(in srgb, #b45309 7%, var(--bg-1))' }}>
+					<Info size={15} style={{ color: '#b45309', flexShrink: 0, marginTop: 1 }} />
+					<div style={{ fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.5 }}>
+						<strong>This report renders from a custom-built page on the live site.</strong> The sections below are stored but <strong>don&rsquo;t drive the live report</strong>, so editing them here won&rsquo;t change what users see, and this preview can&rsquo;t match the real page.
+					</div>
+				</div>
+			)}
+
 			<div style={{ display: 'grid', gridTemplateColumns: showPreview ? '248px minmax(0,1fr) minmax(0,1fr)' : '248px minmax(0,1fr)', gap: 16, flex: 1, minHeight: 0 }}>
 				<aside style={{ borderRight: '1px solid var(--border)', paddingRight: 12, display: 'flex', flexDirection: 'column', gap: 12, overflow: 'auto', minHeight: 0 }}>
-					<ReportCoverEditor reportId={reportId} />
 					<div style={{ position: 'relative' }}>
 						<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 6 }}>
 							<div style={{ fontWeight: 700, fontSize: 14 }}>Sections</div>
@@ -315,10 +343,19 @@ export default function ReportSectionsEditorPage(
 							onDraftChange={setActiveDraft}
 						/>
 					) : (
-						<div style={{ padding: 'var(--space-5)', color: 'var(--fg-muted)' }}>
-							{sections.length === 0
-								? 'No sections yet. Click "Add" to create your first section.'
-								: 'Select a section to edit.'}
+						<div style={{ padding: 'var(--space-5)', color: 'var(--fg-muted)', display: 'grid', gap: 10, placeItems: 'start', maxWidth: 420 }}>
+							<FileText size={22} style={{ opacity: 0.5 }} />
+							{sections.length === 0 ? (
+								<>
+									<div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg)' }}>No sections yet</div>
+									<div style={{ fontSize: 13, lineHeight: 1.5 }}>Use <strong>Add</strong> to place a section (hero, chart, people grid…), or <strong>AI</strong> to draft a few from a brief. They&rsquo;ll appear in the list on the left and render live on the right.</div>
+								</>
+							) : (
+								<>
+									<div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg)' }}>Select a section to edit</div>
+									<div style={{ fontSize: 13, lineHeight: 1.5 }}>Pick one from the list on the left. Your edits show instantly in the live preview on the right; drag to reorder.</div>
+								</>
+							)}
 						</div>
 					)}
 				</main>
@@ -326,9 +363,12 @@ export default function ReportSectionsEditorPage(
 				{showPreview && (
 					<section style={{ borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
 						<div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 0 8px 12px' }}>
-							<div style={{ fontWeight: 700, fontSize: 14, flex: 1 }}>Live preview</div>
+							<div style={{ minWidth: 0, flex: 1 }}>
+								<div style={{ fontWeight: 700, fontSize: 14 }}>Live preview</div>
+								<div style={{ fontSize: 10, color: 'var(--fg-muted)' }}>Updates as you type · all sections shown</div>
+							</div>
 							<button className="btn ghost" onClick={() => setPreviewDark(!dark)} title={dark ? 'Light' : 'Dark'}>{dark ? <Sun size={12} /> : <Moon size={12} />}</button>
-							<Link href={`/reports/${reportId}/preview`} className="btn ghost" title="Full preview (tiers + devices)"><ExternalLink size={12} /></Link>
+							<Link href={`/reports/${reportId}/preview`} className="btn ghost" title="Full preview — tier gating + device widths"><ExternalLink size={12} /> Full</Link>
 						</div>
 						<div style={{ flex: 1, overflow: 'auto', marginLeft: 12, border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
 							<ReportPreview sections={previewSections} theme={theme} isDark={dark} />
@@ -342,6 +382,22 @@ export default function ReportSectionsEditorPage(
 					<ThemeControls reportId={reportId} value={theme} onChange={setTheme} onClose={() => { setThemeOpen(false); reloadReport(); }} />
 				</SlideOver>
 			)}
+
+			{detailsOpen && report && (
+				<SlideOver onClose={() => setDetailsOpen(false)}>
+					<ReportDetailsForm
+						reportId={reportId}
+						initial={{
+							title: report.title, short_title: report.short_title, slug: report.slug,
+							report_month: report.report_month, report_year: report.report_year,
+							tags: report.tags, description: report.description, cover_url: report.cover_url,
+							show_on_dashboard: report.show_on_dashboard,
+						}}
+						onClose={() => setDetailsOpen(false)}
+						onSaved={() => { reloadReport(); void mutate((k) => Array.isArray(k) && k[0] === '/api/reports'); }}
+					/>
+				</SlideOver>
+			)}
 		</div>
 	);
 }
@@ -349,7 +405,7 @@ export default function ReportSectionsEditorPage(
 // ---- publish / readiness bar -------------------------------------------------
 
 function PublishBar({
-	report, reportId, publishedCount, draftCount, onPublishToggle, onOpenTheme, showPreview, onTogglePreview,
+	report, reportId, publishedCount, draftCount, onPublishToggle, onOpenTheme, onOpenDetails, showPreview, onTogglePreview,
 }: {
 	report: ReportMeta | undefined;
 	reportId: string;
@@ -357,6 +413,7 @@ function PublishBar({
 	draftCount: number;
 	onPublishToggle: (next: boolean) => void;
 	onOpenTheme: () => void;
+	onOpenDetails: () => void;
 	showPreview: boolean;
 	onTogglePreview: () => void;
 }) {
@@ -390,6 +447,7 @@ function PublishBar({
 				{published ? <CheckCircle2 size={14} /> : <EyeOff size={14} />} {published ? 'Published' : 'Draft'}
 			</span>
 
+			<button className="btn ghost" onClick={onOpenDetails} title="Title, cover, slug, tags…"><FileText size={12} /> Details</button>
 			<button className="btn ghost" onClick={onOpenTheme} title="Report theme"><SlidersHorizontal size={12} /> Theme</button>
 			<button className="btn ghost" onClick={onTogglePreview} title={showPreview ? 'Hide preview' : 'Show preview'}>
 				{showPreview ? <PanelRightClose size={12} /> : <PanelRightOpen size={12} />}
@@ -410,52 +468,6 @@ function SlideOver({ children, onClose }: { children: React.ReactNode; onClose: 
 			<div onClick={(e) => e.stopPropagation()} style={{ width: 360, maxWidth: '90vw', height: '100%', background: 'var(--bg-1)', borderLeft: '1px solid var(--border)', padding: 16, overflow: 'auto', boxShadow: '-8px 0 40px rgba(0,0,0,0.2)' }}>
 				{children}
 			</div>
-		</div>
-	);
-}
-
-// ---- report cover (shown on the public listing page) ----------------------
-
-function ReportCoverEditor({ reportId }: { reportId: string }) {
-	const { mutate } = useSWRConfig();
-	const { data: report } = useSWR<{ id: string; cover_url?: string | null }>(
-		[`/api/reports/${reportId}`],
-		{ revalidateOnFocus: false },
-	);
-	const [pending, setPending] = useState(false);
-
-	const persistCover = async (url: string) => {
-		setPending(true);
-		try {
-			await api('PATCH', `/api/admin/reports/${reportId}`, { cover_url: url || null });
-			// Invalidate every cache entry for this report so the listing
-			// grid + detail page both pick up the new cover immediately.
-			void mutate((k) =>
-				Array.isArray(k) && typeof k[0] === 'string'
-				&& (k[0] === '/api/reports' || k[0] === `/api/reports/${reportId}`));
-			toast.success('Cover saved');
-		} catch (e) {
-			toast.error((e as Error).message);
-		} finally {
-			setPending(false);
-		}
-	};
-
-	return (
-		<div className="card" style={{ padding: 10, display: 'grid', gap: 6 }}>
-			<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-				<div style={{ fontWeight: 700, fontSize: 13 }}>Report cover</div>
-				{pending && <span style={{ fontSize: 10, color: 'var(--fg-muted)' }}>Saving…</span>}
-			</div>
-			<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>
-				Shown on the reports listing card.
-			</div>
-			<ImageInput
-				value={report?.cover_url ?? ''}
-				onChange={(url) => void persistCover(url)}
-				pathPrefix={`reports/${reportId}`}
-				placeholder="https://… or upload"
-			/>
 		</div>
 	);
 }

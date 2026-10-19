@@ -877,7 +877,10 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 		try {
 			const body: Record<string, unknown> = {
 				name: form.name.trim(),
-				website: form.website.trim(),
+				// On edit, only send website when it actually changed — re-sending an
+				// unchanged (possibly legacy/odd) value would re-run URL validation and
+				// could fail a save that never touched the website.
+				website: (!isEdit || form.website.trim() !== (initial.website ?? '').trim()) ? form.website.trim() : undefined,
 				slug: form.slug.trim() || undefined,
 				description: form.description.trim() || undefined,
 				custom_logo_url: form.custom_logo_url.trim() || undefined,

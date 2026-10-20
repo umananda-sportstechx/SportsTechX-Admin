@@ -1,10 +1,39 @@
 'use client';
 
-import { SWRConfig } from 'swr';
+import { SWRConfig, type Cache } from 'swr';
 import { ThemeProvider } from 'next-themes';
 import { Toaster } from 'sonner';
 import { AuthSessionProvider } from '@/hooks/use-auth-session';
 import { swrFetcher, ApiError } from '@/lib/api';
+
+/**
+ * Bounded (LRU) SWR cache.
+ *
+ * SWR's default cache is an unbounded `Map`, and with `keepPreviousData: true`
+ * every distinct key ever requested is retained for the whole session: each
+ * debounced search term (`{q:'a'}`, `{q:'ab'}`, …), every filter permutation,
+ * every pagination page, every entity-picker lookup. Over a long admin session
+ * of filtering + tab-hopping that Map grows without bound → heap growth → GC
+ * pressure → the panel gets progressively laggier the longer it's used. Capping
+ * it (evicting the least-recently-written keys past a limit) keeps the
+ * keep-previous-data UX while stopping the unbounded growth.
+ */
+function boundedCache(max = 500): Cache {
+	const map = new Map<string, unknown>();
+	return {
+		get: (key) => map.get(key),
+		set: (key, value) => {
+			map.delete(key); // re-insert to mark most-recently-used
+			map.set(key, value);
+			if (map.size > max) {
+				const oldest = map.keys().next().value;
+				if (oldest !== undefined) map.delete(oldest);
+			}
+		},
+		delete: (key) => { map.delete(key); },
+		keys: () => map.keys(),
+	} as Cache;
+}
 
 /**
  * App-wide providers. Two global concerns:
@@ -28,6 +57,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
 			<SWRConfig
 				value={{
 					fetcher: swrFetcher,
+					// `() =>` so SWR's `provider(prevCache)` arg doesn't land on `max`.
+					provider: () => boundedCache(),
 					dedupingInterval: 60_000,
 					revalidateOnFocus: false,
 					revalidateOnReconnect: false,

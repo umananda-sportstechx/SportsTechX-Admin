@@ -19,6 +19,11 @@ export function useAdminRealtime(): void {
 	useEffect(() => {
 		let stopped = false;
 		let ctrl: AbortController | null = null;
+		// Exponential backoff so a persistently-failing stream (proxy/Redis hiccup,
+		// an env where /api/events isn't reachable) reconnects at 4s→8s→…→60s
+		// instead of hammering a failed request every 4s forever. Reset on connect.
+		let backoff = 4_000;
+		const bump = () => { backoff = Math.min(backoff * 2, 60_000); };
 
 		const onEvent = (type: string): void => {
 			if (type === 'pipeline_synced') {
@@ -31,10 +36,11 @@ export function useAdminRealtime(): void {
 				try {
 					const { data: { session } } = await getSupabaseBrowser().auth.getSession();
 					const token = session?.access_token;
-					if (!token) { await sleep(4_000); continue; }
+					if (!token) { await sleep(backoff); bump(); continue; }
 					ctrl = new AbortController();
 					const res = await fetch('/api/events', { headers: { Authorization: `Bearer ${token}` }, signal: ctrl.signal });
-					if (!res.ok || !res.body) { await sleep(4_000); continue; }
+					if (!res.ok || !res.body) { await sleep(backoff); bump(); continue; }
+					backoff = 4_000; // connected — reset the backoff
 					const reader = res.body.getReader();
 					const dec = new TextDecoder();
 					let buf = '';
@@ -51,7 +57,7 @@ export function useAdminRealtime(): void {
 						}
 					}
 				} catch { /* network/abort — reconnect */ }
-				if (!stopped) await sleep(4_000);
+				if (!stopped) { await sleep(backoff); bump(); }
 			}
 		};
 		void run();

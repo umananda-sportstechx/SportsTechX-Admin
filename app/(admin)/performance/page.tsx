@@ -74,8 +74,10 @@ export default function PerformancePage() {
 	const [routeQ, setRouteQ] = useState('');
 	const [sortKey, setSortKey] = useState<SortKey>('total');
 
-	const http = useSWR<HttpResponse>(['/api/admin/performance/http', { range }], { dedupingInterval: 15_000, refreshInterval: 30_000 });
-	const { data, error, isLoading, mutate } = useSWR<PerfResponse>(['/api/admin/performance', { range }], { dedupingInterval: 15_000, refreshInterval: 30_000 });
+	// 60s refresh: this page re-renders two heavy payloads + hand-drawn charts +
+	// a large route table each tick; 30s was needless churn for a monitoring view.
+	const http = useSWR<HttpResponse>(['/api/admin/performance/http', { range }], { dedupingInterval: 15_000, refreshInterval: 60_000 });
+	const { data, error, isLoading, mutate } = useSWR<PerfResponse>(['/api/admin/performance', { range }], { dedupingInterval: 15_000, refreshInterval: 60_000 });
 
 	const h = http.data?.summary;
 	const httpErrRate = h && h.total > 0 ? (h.errors / h.total) * 100 : 0;

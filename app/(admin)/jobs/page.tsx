@@ -108,7 +108,7 @@ export default function JobsPage() {
 
 	const history = useSWR<HistoryResp>(
 		['/api/admin/jobs/history', { status: status || undefined, q: dq || undefined, page, limit: 50 }],
-		{ dedupingInterval: 15_000, refreshInterval: 30_000 },
+		{ dedupingInterval: 15_000, refreshInterval: 60_000 },
 	);
 	const rows = history.data?.rows ?? [];
 	const byStatus = history.data?.by_status ?? [];

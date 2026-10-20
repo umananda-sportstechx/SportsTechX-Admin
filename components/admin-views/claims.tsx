@@ -337,7 +337,7 @@ function DeckAnalysisPanel({ claimId }: { claimId: string }) {
 		{
 			refreshInterval: (d) => {
 				const s = d?.analysis?.status;
-				return s === 'pending' || s === 'processing' ? 3000 : 0;
+				return s === 'pending' || s === 'processing' ? 5000 : 0;
 			},
 		},
 	);

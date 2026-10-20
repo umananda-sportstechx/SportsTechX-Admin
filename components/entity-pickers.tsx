@@ -118,6 +118,14 @@ function MultiCheckPicker({
 	const menuRef = useRef<HTMLDivElement>(null);
 	const byId = new Map(rows.map((s) => [s.id, s] as const));
 	const selectedNames = value.map((id) => byId.get(id)?.name).filter(Boolean) as string[];
+	// Summary shown on the collapsed control. Keyed off value.length (the real
+	// selection), not just resolvable names — so when the reference list is still
+	// loading (or a selected id can't be matched yet) it reads "N selected" rather
+	// than the misleading "nothing selected" placeholder.
+	const summary = value.length === 0 ? placeholder
+		: selectedNames.length === 0 ? `${value.length} selected`
+			: selectedNames.length === value.length && value.length <= 3 ? selectedNames.join(', ')
+				: `${selectedNames.slice(0, 2).join(', ')} +${value.length - Math.min(2, selectedNames.length)} more`;
 	const toggle = (id: string) =>
 		onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id]);
 	const shown = query ? rows.filter((r) => r.name.toLowerCase().includes(query.toLowerCase())) : rows;
@@ -164,12 +172,8 @@ function MultiCheckPicker({
 				onClick={() => setOpen(!open)}
 				style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
 			>
-				<span style={{ color: selectedNames.length === 0 ? 'var(--fg-muted)' : 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-					{selectedNames.length === 0
-						? placeholder
-						: selectedNames.length <= 3
-							? selectedNames.join(', ')
-							: `${selectedNames.slice(0, 2).join(', ')} +${selectedNames.length - 2} more`}
+				<span style={{ color: value.length === 0 ? 'var(--fg-muted)' : 'var(--fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+					{summary}
 				</span>
 				<ChevronDown size={12} style={{ flexShrink: 0, transition: 'transform .15s', transform: open ? 'rotate(180deg)' : 'none' }} />
 			</button>

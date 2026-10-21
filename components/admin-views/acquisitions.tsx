@@ -237,6 +237,27 @@ function AcquisitionForm({ id, initial, onClose, onSaved, onStage }: { id: strin
 	const setParty = (party: 'acquiree' | 'acquirer', patch: Partial<PartyForm>) =>
 		setForm((f) => ({ ...f, [party]: { ...f[party], ...patch } }));
 
+	// When a party is a company in our catalog, pull its sector / business model /
+	// HQ / sports from the company record instead of making the admin re-type them.
+	// Reuses the existing company edit endpoint; the snapshot the acquisition stores
+	// is still populated (from the auto-filled form), the admin just doesn't retype.
+	const fillFromCompany = async (party: 'acquiree' | 'acquirer', companyId: string) => {
+		if (!companyId) return;
+		try {
+			const c = await api<{
+				sector_id?: string | null; business_model?: string | null;
+				hq_country?: string | null; hq_city?: string | null; hq_continent?: string | null; hq_region?: string | null; hq_state?: string | null;
+				sport_ids?: string[];
+			}>('GET', `/api/admin/companies/${companyId}/edit`);
+			setParty(party, {
+				sector_id: c.sector_id ?? '',
+				business_model: c.business_model ?? '',
+				hq: { country: c.hq_country ?? '', city: c.hq_city ?? '', continent: c.hq_continent ?? '', region: c.hq_region ?? '', state: c.hq_state ?? '' },
+				sport_ids: c.sport_ids ?? [],
+			});
+		} catch { /* leave fields as-is — the admin can still save */ }
+	};
+
 	const submit = async () => {
 		setPending(true);
 		try {
@@ -286,28 +307,40 @@ function AcquisitionForm({ id, initial, onClose, onSaved, onStage }: { id: strin
 
 	const partyTab = (party: 'acquiree' | 'acquirer') => {
 		const p = form[party];
+		// A party linked to a company in our catalog inherits that company's sector /
+		// business model / HQ / sports (auto-filled on pick), so we don't ask for them
+		// again. Only a free-text party (no company) needs them entered by hand.
+		const linked = party === 'acquiree' ? !!form.acquiree_company_id : !!form.acquirer_company_id;
 		return (
 			<>
 				{party === 'acquiree' ? (
 					stageMode ? (
 						<div style={{ fontSize: 13, color: 'var(--fg-muted)', marginBottom: 4 }}>The new company is the acquiree — it will be linked when you save it.</div>
 					) : (
-						<Field label="Acquiree company *" hint="required — the company that was acquired"><CompanySelectOne value={form.acquiree_company_id} onChange={(v) => set('acquiree_company_id', v)} /></Field>
+						<Field label="Acquiree company *" hint="required — the company that was acquired"><CompanySelectOne value={form.acquiree_company_id} onChange={(v) => { set('acquiree_company_id', v); void fillFromCompany('acquiree', v); }} /></Field>
 					)
 				) : (
 					<>
-						<Field label="Acquirer company" hint="the buyer — pick from the catalog, or type a free-text name below if not listed"><CompanySelectOne value={form.acquirer_company_id} onChange={(v) => set('acquirer_company_id', v)} /></Field>
+						<Field label="Acquirer company" hint="the buyer — pick from the catalog, or type a free-text name below if not listed"><CompanySelectOne value={form.acquirer_company_id} onChange={(v) => { set('acquirer_company_id', v); void fillFromCompany('acquirer', v); }} /></Field>
 						{!form.acquirer_company_id && (
 							<Field label="…or acquirer name (free text)"><input className="search-input" value={form.acquirer_name} onChange={(e) => set('acquirer_name', e.target.value)} /></Field>
 						)}
 					</>
 				)}
-				<Field label="Sector"><SectorCascade value={p.sector_id} onChange={(v) => setParty(party, { sector_id: v })} /></Field>
-				<Field label="Business model" hint="who they sell to — B2B, B2C or B2B2C">
-					<Select value={p.business_model} onChange={(v) => setParty(party, { business_model: v })} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...BUSINESS_MODELS.map((b) => ({ value: b, label: b.toUpperCase() }))]} />
-				</Field>
-				<Field label="Location"><LocationFields value={p.hq} onChange={(v) => setParty(party, { hq: v })} /></Field>
-				<Field label="Sports"><SportsPicker value={p.sport_ids} onChange={(v) => setParty(party, { sport_ids: v })} /></Field>
+				{linked ? (
+					<div style={{ fontSize: 12.5, color: 'var(--fg-muted)', padding: '2px 0 4px' }}>
+						Sector, business model, location and sports are taken from the linked company — no need to re-enter them.
+					</div>
+				) : (
+					<>
+						<Field label="Sector"><SectorCascade value={p.sector_id} onChange={(v) => setParty(party, { sector_id: v })} /></Field>
+						<Field label="Business model" hint="who they sell to — B2B, B2C or B2B2C">
+							<Select value={p.business_model} onChange={(v) => setParty(party, { business_model: v })} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...BUSINESS_MODELS.map((b) => ({ value: b, label: b.toUpperCase() }))]} />
+						</Field>
+						<Field label="Location"><LocationFields value={p.hq} onChange={(v) => setParty(party, { hq: v })} /></Field>
+						<Field label="Sports"><SportsPicker value={p.sport_ids} onChange={(v) => setParty(party, { sport_ids: v })} /></Field>
+					</>
+				)}
 				<label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
 					<input type="checkbox" checked={p.is_sportstech} onChange={(e) => setParty(party, { is_sportstech: e.target.checked })} /> Is SportsTech <span style={{ color: 'var(--fg-muted)' }}>— tick if this party operates in sports-tech</span>
 				</label>

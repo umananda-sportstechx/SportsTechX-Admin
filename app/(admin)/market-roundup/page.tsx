@@ -8,7 +8,9 @@ import { api } from '@/lib/api';
 import { Select } from '@/components/select';
 import { useConfirm } from '@/components/confirm';
 import { Modal } from '@/components/modal';
-import { PageHeader, AsyncState } from '@/components/atoms';
+import { PageHeader, AsyncState, StatCard, Section } from '@/components/atoms';
+import { StatStrip } from '@/components/filters';
+import { PieDonut, PieLegend, toSegments } from '@/components/charts';
 
 interface Edition { id: string; year: number; month: number; title: string | null; summary: string | null; is_published: boolean }
 interface NewsItem {
@@ -93,6 +95,10 @@ export default function MarketRoundupAdminPage() {
 				</div>
 			</AsyncState>
 
+			<div style={{ marginTop: 24 }}>
+				<RoundupPreview year={year} month={month} />
+			</div>
+
 			{(creating || editItem) && (
 				<NewsModal
 					year={year} month={month} item={editItem}
@@ -101,6 +107,105 @@ export default function MarketRoundupAdminPage() {
 				/>
 			)}
 		</div>
+	);
+}
+
+interface Grouping { label: string; deal_count: number; total_amount: number }
+interface RoundupData {
+	mode: 'funding' | 'ma'; perspective?: 'acquiree' | 'acquirer';
+	stats: { total_amount: number; count: number; largest_amount: number; largest_company: string | null; prev_total_amount: number; prev_count: number };
+	by_sector: Grouping[]; by_sub_sector?: Grouping[]; by_business_model: Grouping[]; by_geo: Grouping[];
+}
+interface PreviewDealRow { id: string; company_name?: string | null; round_type_name?: string | null; acquiree_name?: string | null; acquirer_name?: string | null; amount_usd?: number | string | null }
+
+const fmtUsdP = (n: number): string => (n >= 1e9 ? `$${(n / 1e9).toFixed(1)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : `$${Math.round(n).toLocaleString()}`);
+const pad2 = (n: number) => String(n).padStart(2, '0');
+function deltaPct(cur?: number, prev?: number): number | null {
+	if (cur == null || prev == null || prev === 0) return null;
+	return Math.round(((cur - prev) / prev) * 100);
+}
+
+/**
+ * Read-only computed preview of what the client /roundup page shows for this
+ * month — KPIs + the sector/business-model/country donuts + the month's deal
+ * table. Reuses the public GET /api/market/roundup endpoint (same data the
+ * client renders), so admins can review the full roundup here. No write path.
+ */
+function RoundupPreview({ year, month }: { year: number; month: number }) {
+	const [mode, setMode] = useState<'funding' | 'ma'>('funding');
+	const [metric, setMetric] = useState<'amount' | 'count'>('amount');
+	const [sectorView, setSectorView] = useState<'sector' | 'sub'>('sector');
+	const [perspective, setPerspective] = useState<'acquiree' | 'acquirer'>('acquiree');
+
+	const { data, isLoading, error } = useSWR<RoundupData>(['/api/market/roundup', { year, month, mode, ...(mode === 'ma' ? { perspective } : {}) }], { dedupingInterval: 10_000 });
+	const start = `${year}-${pad2(month)}-01`;
+	const end = `${year}-${pad2(month)}-${pad2(new Date(Date.UTC(year, month, 0)).getUTCDate())}`;
+	const dealsList = useSWR<{ data: PreviewDealRow[] }>(mode === 'funding'
+		? ['/api/deals', { from: start, to: end, sort: '-amount_usd', limit: 10 }]
+		: ['/api/acquisitions', { from: start, to: end, sort: '-amount_usd', limit: 10 }], { dedupingInterval: 10_000 });
+
+	const s = data?.stats;
+	const total = s?.total_amount ?? 0;
+	const count = s?.count ?? 0;
+	const avg = count > 0 ? total / count : 0;
+	const val = (g: Grouping) => (metric === 'amount' ? g.total_amount : g.deal_count);
+	const toSeg = (g: Grouping[]) => toSegments(g.slice(0, 8).map((x) => ({ label: x.label, value: val(x) })));
+	const sectorG = (sectorView === 'sector' ? data?.by_sector : (data?.by_sub_sector ?? data?.by_sector)) ?? [];
+	const donuts: { title: string; rows: Grouping[] }[] = data
+		? [
+			{ title: sectorView === 'sector' ? 'By sector' : 'By sub-sector', rows: sectorG },
+			{ title: 'By business model', rows: data.by_business_model },
+			{ title: 'By country', rows: data.by_geo },
+		]
+		: [];
+	const rows = dealsList.data?.data ?? [];
+
+	return (
+		<Section title="Roundup preview" meta="computed live — exactly what the client /roundup shows">
+			<div className="filter-bar" style={{ marginBottom: 12, gap: 8 }}>
+				<Select value={mode} onChange={(v) => setMode(v as 'funding' | 'ma')} width={120} options={[{ value: 'funding', label: 'Funding' }, { value: 'ma', label: 'M&A' }]} />
+				<Select value={metric} onChange={(v) => setMetric(v as 'amount' | 'count')} width={120} options={[{ value: 'amount', label: 'Amount' }, { value: 'count', label: 'Count' }]} />
+				<Select value={sectorView} onChange={(v) => setSectorView(v as 'sector' | 'sub')} width={140} options={[{ value: 'sector', label: 'Sector' }, { value: 'sub', label: 'Sub-sector' }]} />
+				{mode === 'ma' && <Select value={perspective} onChange={(v) => setPerspective(v as 'acquiree' | 'acquirer')} width={140} options={[{ value: 'acquiree', label: 'Acquiree' }, { value: 'acquirer', label: 'Acquirer' }]} />}
+			</div>
+			<AsyncState loading={isLoading} error={error} empty={!!data && count === 0} emptyMsg="No deals recorded for this month.">
+				<StatStrip cols={3}>
+					<StatCard label={mode === 'ma' ? 'M&A value' : 'Capital raised'} value={fmtUsdP(total)} delta={deltaPct(total, s?.prev_total_amount)} />
+					<StatCard label="Avg deal size" value={fmtUsdP(avg)} />
+					<StatCard label={mode === 'ma' ? 'Acquisitions' : 'Disclosed deals'} value={count.toLocaleString()} delta={deltaPct(count, s?.prev_count)} />
+				</StatStrip>
+				<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 16, marginTop: 16 }}>
+					{donuts.map((d) => (
+						<div className="card" key={d.title} style={{ padding: 16 }}>
+							<div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>{d.title}</div>
+							{d.rows.length === 0 ? <div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>No data.</div> : (
+								<>
+									<div style={{ display: 'grid', placeItems: 'center' }}><PieDonut mode="donut" size={150} segments={toSeg(d.rows)} /></div>
+									<PieLegend segments={toSeg(d.rows)} />
+								</>
+							)}
+						</div>
+					))}
+				</div>
+				<div className="card" style={{ marginTop: 16, padding: 'var(--space-4)' }}>
+					<div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>{mode === 'ma' ? 'Acquisitions this month' : 'Funding rounds this month'}</div>
+					{rows.length === 0 ? <div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>No {mode === 'ma' ? 'acquisitions' : 'rounds'} this month.</div> : (
+						<table className="data-table">
+							<thead><tr><th>{mode === 'ma' ? 'Acquiree' : 'Company'}</th><th>{mode === 'ma' ? 'Acquirer' : 'Round'}</th><th style={{ textAlign: 'right' }}>Amount</th></tr></thead>
+							<tbody>
+								{rows.map((r) => (
+									<tr key={r.id}>
+										<td>{(mode === 'ma' ? r.acquiree_name : r.company_name) ?? '—'}</td>
+										<td>{(mode === 'ma' ? r.acquirer_name : r.round_type_name) ?? '—'}</td>
+										<td className="num">{r.amount_usd == null || Number(r.amount_usd) === 0 ? (mode === 'ma' ? 'Undisclosed' : '—') : fmtUsdP(Number(r.amount_usd))}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					)}
+				</div>
+			</AsyncState>
+		</Section>
 	);
 }
 

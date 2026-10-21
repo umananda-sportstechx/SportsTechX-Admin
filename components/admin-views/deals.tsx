@@ -13,10 +13,10 @@ import { PageHeader, AsyncState, Loading, StatCard, RichStatCard, StatsPanel, Se
 import { ComboBarLine, PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip, FilterRange, RefSlugFilter, SectorTierFilter } from '@/components/filters';
 import { CsvImportButton, CsvTemplateButton, CsvCheckButton } from '@/components/csv-import';
-import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
+import { Field } from '@/components/tabbed-form';
 import {
 	CompanySelectOne, RoundTypeSelect, CurrencySelect, InvestorPicker,
-	EMPTY_LOCATION, type DealInvestor, type LocationValue,
+	type DealInvestor,
 } from '@/components/entity-pickers';
 
 interface Deal {
@@ -181,14 +181,13 @@ export function DealsView({ embedded = false }: { embedded?: boolean }) {
 
 interface DealForm {
 	company_id: string; round_type_id: string; announced_date: string; amount: string;
-	currency_code: string; deal_size_bucket: string; status: string; sector_id: string;
-	business_model: string; source_url: string; transaction_url: string; hq: LocationValue;
-	sport_ids: string[]; investors: DealInvestor[];
+	currency_code: string; deal_size_bucket: string; status: string;
+	source_url: string; transaction_url: string; investors: DealInvestor[];
 }
 const EMPTY_DEAL: DealForm = {
 	company_id: '', round_type_id: '', announced_date: '', amount: '', currency_code: '',
-	deal_size_bucket: '', status: 'active', sector_id: '', business_model: '', source_url: '', transaction_url: '',
-	hq: { ...EMPTY_LOCATION }, sport_ids: [], investors: [],
+	deal_size_bucket: '', status: 'active', source_url: '', transaction_url: '',
+	investors: [],
 };
 
 interface DealEdit {
@@ -204,10 +203,8 @@ function toDealForm(h: DealEdit): DealForm {
 		announced_date: h.announced_date ? String(h.announced_date).slice(0, 10) : '',
 		amount: h.amount ?? h.amount_usd ?? '', currency_code: h.currency_code ?? '',
 		deal_size_bucket: h.deal_size_bucket ?? '', status: h.status ?? 'active',
-		sector_id: h.sector_id ?? '', business_model: h.business_model ?? '',
 		source_url: h.source_url ?? '', transaction_url: h.transaction_url ?? '',
-		hq: { country: h.hq_country ?? '', city: h.hq_city ?? '', continent: h.hq_continent ?? '', region: h.hq_region ?? '', state: h.hq_state ?? '' },
-		sport_ids: h.sport_ids ?? [], investors: h.investors ?? [],
+		investors: h.investors ?? [],
 	};
 }
 
@@ -226,7 +223,6 @@ export function DealModal({ id, onClose, onSaved, lockedCompanyId, onStage }: { 
 function DealForm({ id, initial, onClose, onSaved, onStage }: { id: string | null; initial: DealForm; onClose: () => void; onSaved: () => void; onStage?: (d: StagedDeal) => void }) {
 	const isEdit = !!id;
 	const stageMode = !!onStage;
-	const [tab, setTab] = useTabs('deal');
 	const [form, setForm] = useState<DealForm>(initial);
 	const [pending, setPending] = useState(false);
 
@@ -277,48 +273,36 @@ function DealForm({ id, initial, onClose, onSaved, onStage }: { id: string | nul
 				</>
 			}
 		>
-			{(
-				<TabbedForm
-					active={tab}
-					onChange={setTab}
-					tabs={[
-						{ key: 'deal', label: 'Deal', node: (
-							<>
-								{stageMode ? (
-									<div style={{ fontSize: 13, color: 'var(--fg-muted)', marginBottom: 4 }}>This round will be linked to the new company when you save it.</div>
-								) : (
-									<Field label="Company"><CompanySelectOne value={form.company_id} onChange={(v) => set('company_id', v)} /></Field>
-								)}
-								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-									<Field label="Round type"><RoundTypeSelect value={form.round_type_id} onChange={(v) => set('round_type_id', v)} /></Field>
-									<Field label="Announced date" hint="sets the FX year used to convert the amount to USD"><input className="search-input" type="date" value={form.announced_date} onChange={(e) => set('announced_date', e.target.value)} /></Field>
-								</div>
-								<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 1fr', gap: 12 }}>
-									<Field label="Amount" hint="in the currency at right — converted to USD automatically"><input className="search-input" type="number" value={form.amount} onChange={(e) => set('amount', e.target.value)} placeholder="e.g. 5000000" /></Field>
-									<Field label="Currency" hint="of the amount"><CurrencySelect value={form.currency_code} onChange={(v) => set('currency_code', v)} /></Field>
-									<Field label="Size bucket" hint="leave blank — auto-derived from the USD amount">
-										<Select value={form.deal_size_bucket} onChange={(v) => set('deal_size_bucket', v)} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...SIZE_BUCKETS.map((b) => ({ value: b, label: b.replace(/_/g, ' ') }))]} />
-									</Field>
-								</div>
-								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-									<Field label="Source URL"><input className="search-input" value={form.source_url} onChange={(e) => set('source_url', e.target.value)} placeholder="https://" /></Field>
-									<Field label="Transaction URL"><input className="search-input" value={form.transaction_url} onChange={(e) => set('transaction_url', e.target.value)} placeholder="https://" /></Field>
-								</div>
-								<Field label="Status">
-									<Select value={form.status} onChange={(v) => set('status', v)} width="100%" style={{ display: 'block', width: '100%' }} options={STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))} />
-								</Field>
-							</>
-						) },
-						{ key: 'investors', label: 'Investors', hint: form.investors.length, node: (
-							<Field label="Investors" hint="star marks the lead"><InvestorPicker value={form.investors} onChange={(v) => set('investors', v)} /></Field>
-						) },
-						// Classification (sector / business model / location / sports) was
-						// removed: those are company attributes, already set on the company
-						// and inherited by the deal (reads COALESCE deal→company), so asking
-						// for them again here was pure duplicate entry.
-					]}
-				/>
-			)}
+			{/* One flat form (no tabs), investors inline with the rest — mirrors the
+			    old IH "New Funding Round" form. Classification (sector / business
+			    model / location / sports) is intentionally absent: those are company
+			    attributes the deal inherits (reads COALESCE deal→company). */}
+			<div style={{ display: 'grid', gap: 12 }}>
+				{stageMode ? (
+					<div style={{ fontSize: 13, color: 'var(--fg-muted)', marginBottom: 4 }}>This round will be linked to the new company when you save it.</div>
+				) : (
+					<Field label="Company"><CompanySelectOne value={form.company_id} onChange={(v) => set('company_id', v)} /></Field>
+				)}
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+					<Field label="Round type"><RoundTypeSelect value={form.round_type_id} onChange={(v) => set('round_type_id', v)} /></Field>
+					<Field label="Announced date" hint="sets the FX year used to convert the amount to USD"><input className="search-input" type="date" value={form.announced_date} onChange={(e) => set('announced_date', e.target.value)} /></Field>
+				</div>
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 1fr', gap: 12 }}>
+					<Field label="Amount" hint="in the currency at right — converted to USD automatically"><input className="search-input" type="number" value={form.amount} onChange={(e) => set('amount', e.target.value)} placeholder="e.g. 5000000" /></Field>
+					<Field label="Currency" hint="of the amount"><CurrencySelect value={form.currency_code} onChange={(v) => set('currency_code', v)} /></Field>
+					<Field label="Size bucket" hint="leave blank — auto-derived from the USD amount">
+						<Select value={form.deal_size_bucket} onChange={(v) => set('deal_size_bucket', v)} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...SIZE_BUCKETS.map((b) => ({ value: b, label: b.replace(/_/g, ' ') }))]} />
+					</Field>
+				</div>
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+					<Field label="Source URL"><input className="search-input" value={form.source_url} onChange={(e) => set('source_url', e.target.value)} placeholder="https://" /></Field>
+					<Field label="Transaction URL"><input className="search-input" value={form.transaction_url} onChange={(e) => set('transaction_url', e.target.value)} placeholder="https://" /></Field>
+				</div>
+				<Field label="Status">
+					<Select value={form.status} onChange={(v) => set('status', v)} width="100%" style={{ display: 'block', width: '100%' }} options={STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))} />
+				</Field>
+				<Field label="Investors" hint="star marks the lead"><InvestorPicker value={form.investors} onChange={(v) => set('investors', v)} /></Field>
+			</div>
 		</Modal>
 	);
 }

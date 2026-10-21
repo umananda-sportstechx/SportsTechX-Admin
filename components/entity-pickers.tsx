@@ -466,7 +466,7 @@ export function LocationFields({ value, onChange, prefix }: { value: LocationVal
 								style={{ display: 'block', width: '100%', padding: '7px 10px', textAlign: 'left', background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--fg)', fontSize: 13 }}
 								onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-3)')} onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
 								<span style={{ fontWeight: 500 }}>{h.city}</span>
-								<span style={{ color: 'var(--fg-muted)' }}>{h.country ? ` · ${h.country}` : ''}{h.region ? ` · ${h.region}` : ''}</span>
+								<span style={{ color: 'var(--fg-muted)' }}>{h.state ? ` · ${h.state}` : ''}{h.country ? ` · ${h.country}` : ''}{h.region ? ` · ${h.region}` : ''}</span>
 							</button>
 						))}
 					</div>

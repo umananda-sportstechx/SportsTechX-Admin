@@ -409,8 +409,11 @@ export function LocationFields({ value, onChange, prefix }: { value: LocationVal
 	const [open, setOpen] = useState(false);
 	const debouncedQ = useDebounced(q, 200);
 	const ref = useClickOutside<HTMLDivElement>(() => setOpen(false));
+	// Scope the city typeahead to the chosen country / region / continent so e.g.
+	// picking India only surfaces Indian cities.
+	const geo = (value.country || value.region || value.continent || '').trim() || undefined;
 	const { data } = useSWR<LocHit[]>(
-		open && debouncedQ.length >= 2 ? ['/api/locations/search', { q: debouncedQ }] : null,
+		open && debouncedQ.length >= 2 ? ['/api/locations/search', { q: debouncedQ, ...(geo ? { geo } : {}) }] : null,
 		{ dedupingInterval: 30_000, keepPreviousData: true },
 	);
 	const hits = data ?? [];

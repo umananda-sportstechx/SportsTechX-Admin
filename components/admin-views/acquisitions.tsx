@@ -14,7 +14,7 @@ import { PageHeader, AsyncState, Loading, StatCard, RichStatCard, StatsPanel, Se
 import { ComboBarLine, PieDonut, PieLegend, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip, FilterRange, RefSlugFilter, SectorTierFilter } from '@/components/filters';
 import { CsvImportButton, CsvTemplateButton, CsvCheckButton } from '@/components/csv-import';
-import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
+import { Field } from '@/components/tabbed-form';
 import { CompanySelectOne, SectorCascade, SportsPicker, CurrencySelect, LocationFields, EMPTY_LOCATION, type LocationValue } from '@/components/entity-pickers';
 
 interface Acquisition {
@@ -172,22 +172,32 @@ export function AcquisitionsView({ embedded = false }: { embedded?: boolean }) {
 interface PartyForm {
 	is_sportstech: boolean; sector_id: string; business_model: string; hq: LocationValue; sport_ids: string[];
 }
+/**
+ * Role-based shape (mirrors the old IH wizard + the staged InlineMaEditor): the
+ * SUBJECT is the catalog company this deal is about; `role` says whether it is
+ * the acquiree or the acquirer; the COUNTERPARTY is the other side (a catalog
+ * company or a free-text name). On submit these map to the server's
+ * acquiree / acquirer columns by role, so a company is entered ONCE.
+ */
 interface AcqForm {
-	acquiree_company_id: string;
-	acquirer_company_id: string;
-	acquirer_name: string;
+	role: 'acquiree' | 'acquirer';
+	subject_company_id: string;
+	subject: PartyForm;
+	counterparty_company_id: string;
+	counterparty_name: string;
+	counterparty: PartyForm;
 	acquisition_date: string; amount: string; currency_code: string; acquisition_type: string; source_url: string;
-	acquiree: PartyForm; acquirer: PartyForm;
 }
 const emptyParty = (): PartyForm => ({ is_sportstech: false, sector_id: '', business_model: '', hq: { ...EMPTY_LOCATION }, sport_ids: [] });
 const EMPTY_ACQ: AcqForm = {
-	acquiree_company_id: '', acquirer_company_id: '', acquirer_name: '',
+	role: 'acquiree', subject_company_id: '', subject: { ...emptyParty(), is_sportstech: true },
+	counterparty_company_id: '', counterparty_name: '', counterparty: emptyParty(),
 	acquisition_date: '', amount: '', currency_code: '', acquisition_type: 'acquisition', source_url: '',
-	acquiree: emptyParty(), acquirer: emptyParty(),
 };
 
 interface AcqEdit {
-	acquiree_company_id?: string | null; acquirer_company_id?: string | null; acquirer_name?: string | null;
+	acquiree_company_id?: string | null; acquirer_company_id?: string | null;
+	acquiree_name_snapshot?: string | null; acquirer_name_snapshot?: string | null;
 	acquisition_date?: string | null; amount?: string | null; amount_usd?: string | null; currency_code?: string | null;
 	acquisition_type?: string | null; source_url?: string | null;
 	acquiree_is_sportstech?: boolean | null; acquirer_is_sportstech?: boolean | null;
@@ -199,19 +209,29 @@ interface AcqEdit {
 }
 
 function toAcqForm(h: AcqEdit): AcqForm {
+	const acquireeParty: PartyForm = {
+		is_sportstech: !!h.acquiree_is_sportstech, sector_id: h.acquiree_sector_id ?? '', business_model: h.acquiree_business_model ?? '',
+		hq: { country: h.acquiree_hq_country ?? '', city: h.acquiree_hq_city ?? '', continent: h.acquiree_hq_continent ?? '', region: h.acquiree_hq_region ?? '', state: h.acquiree_hq_state ?? '' }, sport_ids: h.acquiree_sport_ids ?? [],
+	};
+	const acquirerParty: PartyForm = {
+		is_sportstech: !!h.acquirer_is_sportstech, sector_id: h.acquirer_sector_id ?? '', business_model: h.acquirer_business_model ?? '',
+		hq: { country: h.acquirer_hq_country ?? '', city: h.acquirer_hq_city ?? '', continent: h.acquirer_hq_continent ?? '', region: h.acquirer_hq_region ?? '', state: h.acquirer_hq_state ?? '' }, sport_ids: h.acquirer_sport_ids ?? [],
+	};
+	// Subject = whichever side is a catalog company (prefer the acquiree); the
+	// other side becomes the counterparty. `role` names the subject's side; the
+	// admin can flip it to correct a mis-entered direction.
+	const role: 'acquiree' | 'acquirer' = !h.acquiree_company_id && h.acquirer_company_id ? 'acquirer' : 'acquiree';
+	const subjectIsAcquiree = role === 'acquiree';
 	return {
-		acquiree_company_id: h.acquiree_company_id ?? '', acquirer_company_id: h.acquirer_company_id ?? '', acquirer_name: h.acquirer_name ?? '',
+		role,
+		subject_company_id: (subjectIsAcquiree ? h.acquiree_company_id : h.acquirer_company_id) ?? '',
+		subject: subjectIsAcquiree ? acquireeParty : acquirerParty,
+		counterparty_company_id: (subjectIsAcquiree ? h.acquirer_company_id : h.acquiree_company_id) ?? '',
+		counterparty_name: (subjectIsAcquiree ? h.acquirer_name_snapshot : h.acquiree_name_snapshot) ?? '',
+		counterparty: subjectIsAcquiree ? acquirerParty : acquireeParty,
 		acquisition_date: h.acquisition_date ? String(h.acquisition_date).slice(0, 10) : '',
 		amount: h.amount ?? h.amount_usd ?? '', currency_code: h.currency_code ?? '',
 		acquisition_type: h.acquisition_type ?? 'acquisition', source_url: h.source_url ?? '',
-		acquiree: {
-			is_sportstech: !!h.acquiree_is_sportstech, sector_id: h.acquiree_sector_id ?? '', business_model: h.acquiree_business_model ?? '',
-			hq: { country: h.acquiree_hq_country ?? '', city: h.acquiree_hq_city ?? '', continent: h.acquiree_hq_continent ?? '', region: h.acquiree_hq_region ?? '', state: h.acquiree_hq_state ?? '' }, sport_ids: h.acquiree_sport_ids ?? [],
-		},
-		acquirer: {
-			is_sportstech: !!h.acquirer_is_sportstech, sector_id: h.acquirer_sector_id ?? '', business_model: h.acquirer_business_model ?? '',
-			hq: { country: h.acquirer_hq_country ?? '', city: h.acquirer_hq_city ?? '', continent: h.acquirer_hq_continent ?? '', region: h.acquirer_hq_region ?? '', state: h.acquirer_hq_state ?? '' }, sport_ids: h.acquirer_sport_ids ?? [],
-		},
 	};
 }
 
@@ -219,29 +239,27 @@ function toAcqForm(h: AcqEdit): AcqForm {
 // plus a small label snapshot for rendering the row before the company exists.
 export interface StagedAcq { body: Record<string, unknown>; label: { acquirer?: string; counterparty?: string; role?: 'acquiree' | 'acquirer'; amount?: string; year?: string } }
 
-export function AcquisitionModal({ id, onClose, onSaved, onStage }: { id: string | null; onClose: () => void; onSaved: () => void; onStage?: (a: StagedAcq) => void }) {
+export function AcquisitionModal({ id, onClose, onSaved }: { id: string | null; onClose: () => void; onSaved: () => void }) {
 	const isEdit = !!id;
 	const { data: hydrated } = useSWR<AcqEdit>(isEdit ? [`/api/admin/acquisitions/${id}/edit`] : null, { revalidateOnFocus: false });
 	if (isEdit && !hydrated) return <Modal title="Edit acquisition" onClose={onClose}><Loading msg="Loading acquisition…" /></Modal>;
-	return <AcquisitionForm id={id} initial={hydrated ? toAcqForm(hydrated) : EMPTY_ACQ} onClose={onClose} onSaved={onSaved} onStage={onStage} />;
+	return <AcquisitionForm id={id} initial={hydrated ? toAcqForm(hydrated) : EMPTY_ACQ} onClose={onClose} onSaved={onSaved} />;
 }
 
-function AcquisitionForm({ id, initial, onClose, onSaved, onStage }: { id: string | null; initial: AcqForm; onClose: () => void; onSaved: () => void; onStage?: (a: StagedAcq) => void }) {
+function AcquisitionForm({ id, initial, onClose, onSaved }: { id: string | null; initial: AcqForm; onClose: () => void; onSaved: () => void }) {
 	const isEdit = !!id;
-	const stageMode = !!onStage;
-	const [tab, setTab] = useTabs('acquiree');
 	const [form, setForm] = useState<AcqForm>(initial);
 	const [pending, setPending] = useState(false);
 
 	const set = <K extends keyof AcqForm>(k: K, v: AcqForm[K]) => setForm((f) => ({ ...f, [k]: v }));
-	const setParty = (party: 'acquiree' | 'acquirer', patch: Partial<PartyForm>) =>
-		setForm((f) => ({ ...f, [party]: { ...f[party], ...patch } }));
+	const setParty = (which: 'subject' | 'counterparty', patch: Partial<PartyForm>) =>
+		setForm((f) => ({ ...f, [which]: { ...f[which], ...patch } }));
 
-	// When a party is a company in our catalog, pull its sector / business model /
-	// HQ / sports from the company record instead of making the admin re-type them.
-	// Reuses the existing company edit endpoint; the snapshot the acquisition stores
-	// is still populated (from the auto-filled form), the admin just doesn't retype.
-	const fillFromCompany = async (party: 'acquiree' | 'acquirer', companyId: string) => {
+	// When a side is a catalog company, pull its sector / business model / HQ /
+	// sports from the company record instead of making the admin re-type them. The
+	// snapshot the acquisition stores is still populated (from the auto-filled
+	// form); the admin just doesn't retype a company that already exists.
+	const fillFromCompany = async (which: 'subject' | 'counterparty', companyId: string) => {
 		if (!companyId) return;
 		try {
 			const c = await api<{
@@ -249,7 +267,7 @@ function AcquisitionForm({ id, initial, onClose, onSaved, onStage }: { id: strin
 				hq_country?: string | null; hq_city?: string | null; hq_continent?: string | null; hq_region?: string | null; hq_state?: string | null;
 				sport_ids?: string[];
 			}>('GET', `/api/admin/companies/${companyId}/edit`);
-			setParty(party, {
+			setParty(which, {
 				sector_id: c.sector_id ?? '',
 				business_model: c.business_model ?? '',
 				hq: { country: c.hq_country ?? '', city: c.hq_city ?? '', continent: c.hq_continent ?? '', region: c.hq_region ?? '', state: c.hq_state ?? '' },
@@ -258,46 +276,35 @@ function AcquisitionForm({ id, initial, onClose, onSaved, onStage }: { id: strin
 		} catch { /* leave fields as-is — the admin can still save */ }
 	};
 
+	// Map one side (subject or counterparty) onto the server's acquiree_* / acquirer_*
+	// columns via the chosen role. Computed keys so each company is entered once.
+	const partyBody = (prefix: 'acquiree' | 'acquirer', p: PartyForm, companyId: string, name: string): Record<string, unknown> => ({
+		[`${prefix}_company_id`]: companyId || undefined,
+		[`${prefix}_name`]: !companyId && name.trim() ? name.trim() : undefined,
+		[`${prefix}_is_sportstech`]: p.is_sportstech,
+		[`${prefix}_sector_id`]: p.sector_id || undefined,
+		[`${prefix}_business_model`]: p.business_model || undefined,
+		[`${prefix}_hq_country`]: p.hq.country.trim() || undefined,
+		[`${prefix}_hq_city`]: p.hq.city.trim() || undefined,
+		[`${prefix}_hq_continent`]: p.hq.continent.trim() || undefined,
+		[`${prefix}_hq_region`]: p.hq.region.trim() || undefined,
+		[`${prefix}_hq_state`]: p.hq.state.trim() || undefined,
+		[`${prefix}_sport_ids`]: p.sport_ids,
+	});
+
 	const submit = async () => {
 		setPending(true);
 		try {
+			const other: 'acquiree' | 'acquirer' = form.role === 'acquiree' ? 'acquirer' : 'acquiree';
 			const body: Record<string, unknown> = {
-				acquiree_company_id: form.acquiree_company_id,
-				acquirer_company_id: form.acquirer_company_id || undefined,
-				acquirer_name: !form.acquirer_company_id && form.acquirer_name.trim() ? form.acquirer_name.trim() : undefined,
+				...partyBody(form.role, form.subject, form.subject_company_id, ''),
+				...partyBody(other, form.counterparty, form.counterparty_company_id, form.counterparty_name),
 				acquisition_date: form.acquisition_date || undefined,
 				amount: form.amount.trim() ? Number(form.amount) : undefined,
 				currency_code: form.currency_code || undefined,
 				acquisition_type: form.acquisition_type,
 				source_url: form.source_url.trim() || undefined,
-				acquiree_is_sportstech: form.acquiree.is_sportstech,
-				acquirer_is_sportstech: form.acquirer.is_sportstech,
-				acquiree_sector_id: form.acquiree.sector_id || undefined,
-				acquirer_sector_id: form.acquirer.sector_id || undefined,
-				acquiree_business_model: form.acquiree.business_model || undefined,
-				acquirer_business_model: form.acquirer.business_model || undefined,
-				acquiree_hq_country: form.acquiree.hq.country.trim() || undefined,
-				acquiree_hq_city: form.acquiree.hq.city.trim() || undefined,
-				acquiree_hq_continent: form.acquiree.hq.continent.trim() || undefined,
-				acquiree_hq_region: form.acquiree.hq.region.trim() || undefined,
-				acquiree_hq_state: form.acquiree.hq.state.trim() || undefined,
-				acquirer_hq_country: form.acquirer.hq.country.trim() || undefined,
-				acquirer_hq_city: form.acquirer.hq.city.trim() || undefined,
-				acquirer_hq_continent: form.acquirer.hq.continent.trim() || undefined,
-				acquirer_hq_region: form.acquirer.hq.region.trim() || undefined,
-				acquirer_hq_state: form.acquirer.hq.state.trim() || undefined,
-				acquiree_sport_ids: form.acquiree.sport_ids,
-				acquirer_sport_ids: form.acquirer.sport_ids,
 			};
-			if (onStage) {
-				// New (unsaved) company is the acquiree — hand the draft to the parent;
-				// the server fills acquiree_company_id on save.
-				const { acquiree_company_id, ...rest } = body;
-				void acquiree_company_id;
-				onStage({ body: rest, label: { acquirer: form.acquirer_name.trim() || undefined, amount: fmtAmount(form.amount || null), year: form.acquisition_date ? form.acquisition_date.slice(0, 4) : undefined } });
-				onSaved();
-				return;
-			}
 			if (isEdit) await api('PATCH', `/api/admin/acquisitions/${id}`, body);
 			else await api('POST', '/api/admin/acquisitions', body);
 			toast.success(isEdit ? 'Saved' : 'Created');
@@ -305,88 +312,71 @@ function AcquisitionForm({ id, initial, onClose, onSaved, onStage }: { id: strin
 		} catch (e) { toast.error((e as Error).message); } finally { setPending(false); }
 	};
 
-	const partyTab = (party: 'acquiree' | 'acquirer') => {
-		const p = form[party];
-		// A party linked to a company in our catalog inherits that company's sector /
-		// business model / HQ / sports (auto-filled on pick), so we don't ask for them
-		// again. Only a free-text party (no company) needs them entered by hand.
-		const linked = party === 'acquiree' ? !!form.acquiree_company_id : !!form.acquirer_company_id;
-		return (
-			<>
-				{party === 'acquiree' ? (
-					stageMode ? (
-						<div style={{ fontSize: 13, color: 'var(--fg-muted)', marginBottom: 4 }}>The new company is the acquiree — it will be linked when you save it.</div>
-					) : (
-						<Field label="Acquiree company *" hint="required — the company that was acquired"><CompanySelectOne value={form.acquiree_company_id} onChange={(v) => { set('acquiree_company_id', v); void fillFromCompany('acquiree', v); }} /></Field>
-					)
-				) : (
-					<>
-						<Field label="Acquirer company" hint="the buyer — pick from the catalog, or type a free-text name below if not listed"><CompanySelectOne value={form.acquirer_company_id} onChange={(v) => { set('acquirer_company_id', v); void fillFromCompany('acquirer', v); }} /></Field>
-						{!form.acquirer_company_id && (
-							<Field label="…or acquirer name (free text)"><input className="search-input" value={form.acquirer_name} onChange={(e) => set('acquirer_name', e.target.value)} /></Field>
-						)}
-					</>
-				)}
-				{linked ? (
-					<div style={{ fontSize: 12.5, color: 'var(--fg-muted)', padding: '2px 0 4px' }}>
-						Sector, business model, location and sports are taken from the linked company — no need to re-enter them.
-					</div>
-				) : (
-					<>
-						<Field label="Sector"><SectorCascade value={p.sector_id} onChange={(v) => setParty(party, { sector_id: v })} /></Field>
-						<Field label="Business model" hint="who they sell to — B2B, B2C or B2B2C">
-							<Select value={p.business_model} onChange={(v) => setParty(party, { business_model: v })} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...BUSINESS_MODELS.map((b) => ({ value: b, label: b.toUpperCase() }))]} />
-						</Field>
-						<Field label="Location"><LocationFields value={p.hq} onChange={(v) => setParty(party, { hq: v })} /></Field>
-						<Field label="Sports"><SportsPicker value={p.sport_ids} onChange={(v) => setParty(party, { sport_ids: v })} /></Field>
-					</>
-				)}
-				<label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
-					<input type="checkbox" checked={p.is_sportstech} onChange={(e) => setParty(party, { is_sportstech: e.target.checked })} /> Is SportsTech <span style={{ color: 'var(--fg-muted)' }}>— tick if this party operates in sports-tech</span>
-				</label>
-			</>
-		);
-	};
+	const cpLabel = form.role === 'acquiree' ? 'Acquirer' : 'Acquiree';
+	const cpLinked = !!form.counterparty_company_id;
+	const canSave = !!form.subject_company_id && (!!form.counterparty_company_id || !!form.counterparty_name.trim()) && !!form.acquisition_date;
 
 	return (
 		<Modal
-			title={isEdit ? 'Edit acquisition' : stageMode ? 'Add acquisition' : 'New acquisition'}
+			title={isEdit ? 'Edit acquisition' : 'New acquisition'}
 			onClose={onClose}
-			width={780}
+			width={680}
 			footer={
 				<>
 					<button className="btn ghost" onClick={onClose}>Cancel</button>
-					<button className="btn" disabled={(!stageMode && !form.acquiree_company_id) || pending} onClick={() => void submit()}>
-						<Save size={12} /> {pending ? 'Saving…' : stageMode ? 'Add acquisition' : 'Save'}
+					<button className="btn" disabled={!canSave || pending} onClick={() => void submit()}>
+						<Save size={12} /> {pending ? 'Saving…' : 'Save'}
 					</button>
 				</>
 			}
 		>
-			{(
-				<TabbedForm
-					active={tab}
-					onChange={setTab}
-					tabs={[
-						{ key: 'acquiree', label: 'Acquiree', hint: form.acquiree.sport_ids.length, node: partyTab('acquiree') },
-						{ key: 'acquirer', label: 'Acquirer', hint: form.acquirer.sport_ids.length, node: partyTab('acquirer') },
-						{ key: 'deal', label: 'Deal', node: (
-							<>
-								<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-									<Field label="Acquisition date" hint="sets the FX year used to convert the amount to USD"><input className="search-input" type="date" value={form.acquisition_date} onChange={(e) => set('acquisition_date', e.target.value)} /></Field>
-									<Field label="Type">
-										<Select value={form.acquisition_type} onChange={(v) => set('acquisition_type', v)} width="100%" style={{ display: 'block', width: '100%' }} options={TYPES.map((t) => ({ value: t, label: t.replace(/_/g, ' ') }))} />
-									</Field>
-								</div>
-								<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>
-									<Field label="Amount" hint="in the currency at right — converted to USD automatically"><input className="search-input" type="number" value={form.amount} onChange={(e) => set('amount', e.target.value)} placeholder="e.g. 5000000" /></Field>
-									<Field label="Currency" hint="of the amount"><CurrencySelect value={form.currency_code} onChange={(v) => set('currency_code', v)} /></Field>
-								</div>
-								<Field label="Source URL"><input className="search-input" value={form.source_url} onChange={(e) => set('source_url', e.target.value)} placeholder="https://" /></Field>
-							</>
-						) },
-					]}
-				/>
-			)}
+			<div style={{ display: 'grid', gap: 14 }}>
+				{/* Subject: the catalog company this deal is about — entered once. */}
+				<Field label="Company *" hint="the company in our catalog this deal is about"><CompanySelectOne value={form.subject_company_id} onChange={(v) => { set('subject_company_id', v); void fillFromCompany('subject', v); }} /></Field>
+
+				{/* Role: this company is EITHER the acquirer OR the acquiree. */}
+				<div>
+					<div className="co-stat-label" style={{ marginBottom: 6 }}>This company is the…</div>
+					<div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+						<button type="button" className={`btn ${form.role === 'acquiree' ? '' : 'ghost'}`} onClick={() => set('role', 'acquiree')}>Acquiree — it was acquired</button>
+						<button type="button" className={`btn ${form.role === 'acquirer' ? '' : 'ghost'}`} onClick={() => set('role', 'acquirer')}>Acquirer — it acquired another</button>
+					</div>
+				</div>
+
+				{/* Counterparty: the other side — a catalog company or a free-text name. */}
+				<Field label={`${cpLabel} (counterparty)`} hint="pick from the catalog, or type a name below if not listed"><CompanySelectOne value={form.counterparty_company_id} onChange={(v) => { set('counterparty_company_id', v); void fillFromCompany('counterparty', v); }} /></Field>
+				{cpLinked ? (
+					<div style={{ fontSize: 12.5, color: 'var(--fg-muted)' }}>Counterparty sector, business model, location and sports are taken from the linked company.</div>
+				) : (
+					<>
+						<Field label={`…or ${cpLabel.toLowerCase()} name (free text)`}><input className="search-input" value={form.counterparty_name} onChange={(e) => set('counterparty_name', e.target.value)} /></Field>
+						<Field label="Counterparty sector"><SectorCascade value={form.counterparty.sector_id} onChange={(v) => setParty('counterparty', { sector_id: v })} /></Field>
+						<Field label="Counterparty business model" hint="who they sell to — B2B, B2C or B2B2C">
+							<Select value={form.counterparty.business_model} onChange={(v) => setParty('counterparty', { business_model: v })} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...BUSINESS_MODELS.map((b) => ({ value: b, label: b.toUpperCase() }))]} />
+						</Field>
+						<Field label="Counterparty location"><LocationFields value={form.counterparty.hq} onChange={(v) => setParty('counterparty', { hq: v })} /></Field>
+						<Field label="Counterparty sports"><SportsPicker value={form.counterparty.sport_ids} onChange={(v) => setParty('counterparty', { sport_ids: v })} /></Field>
+					</>
+				)}
+
+				<div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 13 }}>
+					<label style={{ display: 'flex', gap: 6, alignItems: 'center' }}><input type="checkbox" checked={form.subject.is_sportstech} onChange={(e) => setParty('subject', { is_sportstech: e.target.checked })} /> This company is SportsTech</label>
+					<label style={{ display: 'flex', gap: 6, alignItems: 'center' }}><input type="checkbox" checked={form.counterparty.is_sportstech} onChange={(e) => setParty('counterparty', { is_sportstech: e.target.checked })} /> Counterparty is SportsTech</label>
+				</div>
+
+				{/* Deal info */}
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+					<Field label="Acquisition date *" hint="sets the FX year used to convert the amount to USD"><input className="search-input" type="date" value={form.acquisition_date} onChange={(e) => set('acquisition_date', e.target.value)} /></Field>
+					<Field label="Type">
+						<Select value={form.acquisition_type} onChange={(v) => set('acquisition_type', v)} width="100%" style={{ display: 'block', width: '100%' }} options={TYPES.map((t) => ({ value: t, label: t.replace(/_/g, ' ') }))} />
+					</Field>
+				</div>
+				<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>
+					<Field label="Amount" hint="in the currency at right — converted to USD automatically"><input className="search-input" type="number" value={form.amount} onChange={(e) => set('amount', e.target.value)} placeholder="e.g. 5000000" /></Field>
+					<Field label="Currency" hint="of the amount"><CurrencySelect value={form.currency_code} onChange={(v) => set('currency_code', v)} /></Field>
+				</div>
+				<Field label="Source URL"><input className="search-input" value={form.source_url} onChange={(e) => set('source_url', e.target.value)} placeholder="https://" /></Field>
+			</div>
 		</Modal>
 	);
 }

@@ -8,7 +8,7 @@ import {
 	Activity, ShoppingCart, LogOut, CreditCard, ToggleLeft,
 	Banknote, Sparkles, Tag, BookOpen, Menu, BarChart3, Gauge,
 	Receipt, Package, Handshake, Download, Coins, ChevronDown, Sun, Moon, Newspaper, Undo2,
-	Images, Rocket, CalendarClock,
+	Images, Rocket, CalendarClock, SlidersHorizontal,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthSession } from '@/hooks/use-auth-session';
@@ -82,6 +82,7 @@ const PERFORMANCE_NAV: NavItem[] = [
 	{ label: 'Feature flags', href: '/features', Icon: ToggleLeft },
 	{ label: 'Jobs & integrations', href: '/jobs', Icon: Activity },
 	{ label: 'Export columns', href: '/exports', Icon: Download },
+	{ label: 'System settings', href: '/system', Icon: SlidersHorizontal },
 ];
 
 const NAV_GROUPS: NavGroup[] = [

@@ -15,7 +15,7 @@ import { FilterBar, FilterSelect, StatStrip, FilterRange, RefSlugFilter, SectorT
 import { CsvImportButton, CsvTemplateButton, CsvCheckButton } from '@/components/csv-import';
 import { TabbedForm, Field, useTabs } from '@/components/tabbed-form';
 import {
-	CompanySelectOne, SectorCascade, SportsPicker, RoundTypeSelect, CurrencySelect, InvestorPicker, LocationFields,
+	CompanySelectOne, RoundTypeSelect, CurrencySelect, InvestorPicker,
 	EMPTY_LOCATION, type DealInvestor, type LocationValue,
 } from '@/components/entity-pickers';
 
@@ -243,16 +243,8 @@ function DealForm({ id, initial, onClose, onSaved, onStage }: { id: string | nul
 				currency_code: form.currency_code || undefined,
 				deal_size_bucket: form.deal_size_bucket || undefined,
 				status: form.status,
-				sector_id: form.sector_id || undefined,
-				business_model: form.business_model || undefined,
 				source_url: form.source_url.trim() || undefined,
 				transaction_url: form.transaction_url.trim() || undefined,
-				hq_country: form.hq.country.trim() || undefined,
-				hq_city: form.hq.city.trim() || undefined,
-				hq_continent: form.hq.continent.trim() || undefined,
-				hq_region: form.hq.region.trim() || undefined,
-				hq_state: form.hq.state.trim() || undefined,
-				sport_ids: form.sport_ids,
 				investors: form.investors,
 			};
 			if (onStage) {
@@ -320,16 +312,10 @@ function DealForm({ id, initial, onClose, onSaved, onStage }: { id: string | nul
 						{ key: 'investors', label: 'Investors', hint: form.investors.length, node: (
 							<Field label="Investors" hint="star marks the lead"><InvestorPicker value={form.investors} onChange={(v) => set('investors', v)} /></Field>
 						) },
-						{ key: 'class', label: 'Classification', hint: form.sport_ids.length, node: (
-							<>
-								<Field label="Sector"><SectorCascade value={form.sector_id} onChange={(v) => set('sector_id', v)} /></Field>
-								<Field label="Business model" hint="who they sell to — B2B, B2C or B2B2C">
-									<Select value={form.business_model} onChange={(v) => set('business_model', v)} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...BUSINESS_MODELS.map((b) => ({ value: b, label: b.toUpperCase() }))]} />
-								</Field>
-								<Field label="Location"><LocationFields value={form.hq} onChange={(v) => set('hq', v)} /></Field>
-								<Field label="Sports"><SportsPicker value={form.sport_ids} onChange={(v) => set('sport_ids', v)} /></Field>
-							</>
-						) },
+						// Classification (sector / business model / location / sports) was
+						// removed: those are company attributes, already set on the company
+						// and inherited by the deal (reads COALESCE deal→company), so asking
+						// for them again here was pure duplicate entry.
 					]}
 				/>
 			)}

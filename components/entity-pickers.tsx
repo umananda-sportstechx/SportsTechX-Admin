@@ -409,11 +409,13 @@ export function LocationFields({ value, onChange, prefix }: { value: LocationVal
 	const [open, setOpen] = useState(false);
 	const debouncedQ = useDebounced(q, 200);
 	const ref = useClickOutside<HTMLDivElement>(() => setOpen(false));
-	// Scope the city typeahead to the chosen country / region / continent so e.g.
-	// picking India only surfaces Indian cities.
-	const geo = (value.country || value.region || value.continent || '').trim() || undefined;
+	// No geo scoping here. In the admin the workflow is city-FIRST: picking a city
+	// auto-fills country / region / continent (see pickCity). Scoping the search by
+	// the entity's EXISTING country/region/continent hid cities that belong
+	// elsewhere — e.g. editing any non-UAE entity made "Dubai" unfindable
+	// (`?q=dubai&geo=India` → []). Power users see every match; the pick sets geo.
 	const { data } = useSWR<LocHit[]>(
-		open && debouncedQ.length >= 2 ? ['/api/locations/search', { q: debouncedQ, ...(geo ? { geo } : {}) }] : null,
+		open && debouncedQ.length >= 2 ? ['/api/locations/search', { q: debouncedQ }] : null,
 		{ dedupingInterval: 30_000, keepPreviousData: true },
 	);
 	const hits = data ?? [];

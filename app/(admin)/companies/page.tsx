@@ -835,16 +835,25 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 		if (!form.website.trim()) { toast.error('Enter a website first.'); return; }
 		setEnriching(true);
 		try {
-			const r = await api<{ found: boolean; data: { name: string | null; description: string | null; website: string | null; city: string | null; country: string | null; logo_url: string | null; founded_year: number | null; linkedin: string | null; twitter: string | null; facebook: string | null; instagram: string | null } | null }>(
+			const r = await api<{ found: boolean; data: {
+				name: string | null; description: string | null; website: string | null; city: string | null; country: string | null; logo_url: string | null; founded_year: number | null;
+				linkedin: string | null; twitter: string | null; facebook: string | null; instagram: string | null;
+				sector_id: string | null; sector_name: string | null; sport_id: string | null; sport_name: string | null; business_model: string | null;
+				poc: { first_name: string | null; last_name: string | null; job_title: string | null; email: string | null; linkedin: string | null } | null;
+			} | null }>(
 				'GET', `/api/admin/integrations/attio/company?domain=${encodeURIComponent(form.website.trim())}`);
 			if (!r.found || !r.data) { toast.error('No Attio match for this domain.'); return; }
 			const d = r.data;
+			const poc = d.poc;
 			setForm((f) => ({
 				...f,
 				name: f.name.trim() || d.name || f.name,
 				description: f.description.trim() || d.description || f.description,
 				custom_logo_url: f.custom_logo_url.trim() || d.logo_url || f.custom_logo_url,
 				founded_year: f.founded_year || (d.founded_year ? String(d.founded_year) : f.founded_year),
+				sector_id: f.sector_id || d.sector_id || f.sector_id,
+				business_model: f.business_model || d.business_model || f.business_model,
+				sport_ids: f.sport_ids.length ? f.sport_ids : (d.sport_id ? [d.sport_id] : f.sport_ids),
 				hq: { ...f.hq, city: f.hq.city.trim() || d.city || f.hq.city, country: f.hq.country.trim() || d.country || f.hq.country },
 				social: {
 					...f.social,
@@ -853,6 +862,11 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 					facebook_url: f.social.facebook_url.trim() || d.facebook || f.social.facebook_url,
 					instagram_url: f.social.instagram_url.trim() || d.instagram || f.social.instagram_url,
 				},
+				poc_first_name: f.poc_first_name.trim() || poc?.first_name || f.poc_first_name,
+				poc_last_name: f.poc_last_name.trim() || poc?.last_name || f.poc_last_name,
+				poc_job_position: f.poc_job_position.trim() || poc?.job_title || f.poc_job_position,
+				poc_email: f.poc_email.trim() || poc?.email || f.poc_email,
+				poc_linkedin: f.poc_linkedin.trim() || poc?.linkedin || f.poc_linkedin,
 			}));
 			toast.success('Filled empty fields from Attio');
 		} catch (e) { toast.error((e as Error).message); } finally { setEnriching(false); }

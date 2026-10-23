@@ -82,8 +82,9 @@ const DETAIL_FIELDS: Array<[string, string]> = [
 	['contact_last_name', 'Contact last name'], ['contact_position', 'Contact role'],
 	['contact_email', 'Contact email'], ['contact_linkedin', 'Contact LinkedIn'],
 ];
-const THESIS_FIELDS: Array<[string, string]> = [
-	['thesis_sectors', 'Thesis sectors'], ['thesis_tech_tags', 'Tech tags'],
+// Plain-string thesis arrays (no id resolution needed). Sectors + tech tags are
+// arrays of UUIDs and are resolved to names separately, in ClaimEditSummary.
+const THESIS_STR_FIELDS: Array<[string, string]> = [
 	['thesis_revenue_stages', 'Revenue stages'], ['thesis_continents', 'Regions'],
 	['thesis_funding_stages', 'Funding stages'],
 ];
@@ -137,10 +138,11 @@ function SummarySection({ title, rows }: { title: string; rows: Array<[string, s
 
 /** Readable render of a `claim_edit` bundle — the admin can see exactly what the
  *  user wants changed without reading raw JSON. */
-function ClaimEditSummary({ r, sectorMap, roundMap, rounds, dealPending, addedDeals, onAddDeal }: {
+function ClaimEditSummary({ r, sectorMap, roundMap, techMap, rounds, dealPending, addedDeals, onAddDeal }: {
 	r: Dcr;
 	sectorMap: Map<string, string>;
 	roundMap: Map<string, string>;
+	techMap: Map<string, string>;
 	rounds: FundingRound[];
 	dealPending: string | null;
 	addedDeals: Set<string>;
@@ -152,9 +154,16 @@ function ClaimEditSummary({ r, sectorMap, roundMap, rounds, dealPending, addedDe
 	const detailRows = DETAIL_FIELDS
 		.map(([k, label]) => [label, fmtDetail(k, details[k], sectorMap, roundMap)] as [string, string | null])
 		.filter((row): row is [string, string] => row[1] != null);
-	const thesisRows = THESIS_FIELDS
-		.map(([k, label]) => [label, fmtDetail(k, changes[k], sectorMap, roundMap)] as [string, string | null])
-		.filter((row): row is [string, string] => row[1] != null);
+	// Thesis sectors + tech tags are UUID arrays → resolve to names; the rest are plain strings.
+	const nameList = (ids: unknown, map: Map<string, string>): string | null =>
+		Array.isArray(ids) && ids.length ? ids.map((id) => map.get(String(id)) ?? String(id)).join(', ') : null;
+	const thesisRows: Array<[string, string]> = [];
+	const ts = nameList(changes.thesis_sectors, sectorMap); if (ts) thesisRows.push(['Thesis sectors', ts]);
+	const tt = nameList(changes.thesis_tech_tags, techMap); if (tt) thesisRows.push(['Tech tags', tt]);
+	for (const [k, label] of THESIS_STR_FIELDS) {
+		const v = changes[k];
+		if (Array.isArray(v) && v.length) thesisRows.push([label, v.map(String).join(', ')]);
+	}
 	const mna = (Array.isArray(changes.mna) ? changes.mna : []) as Array<Record<string, unknown>>;
 	const funds = (Array.isArray(changes.funds) ? changes.funds : []) as Array<Record<string, unknown>>;
 	const portfolio = (Array.isArray(changes.portfolio) ? changes.portfolio : []) as Array<Record<string, unknown>>;
@@ -241,8 +250,10 @@ export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: 
 	// round_type_id) to readable names. Public + cached, shared with the pickers.
 	const sectorsRef = useSWR(['/api/sectors'], { dedupingInterval: 300_000 });
 	const roundsRef = useSWR(['/api/round-types'], { dedupingInterval: 300_000 });
+	const techRef = useSWR(['/api/tech-tags'], { dedupingInterval: 300_000 });
 	const sectorMap = useMemo(() => idNameMap(sectorsRef.data), [sectorsRef.data]);
 	const roundMap = useMemo(() => idNameMap(roundsRef.data), [roundsRef.data]);
+	const techMap = useMemo(() => idNameMap(techRef.data), [techRef.data]);
 
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/admin/data-change-requests');
 
@@ -448,6 +459,7 @@ export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: 
 														r={r}
 														sectorMap={sectorMap}
 														roundMap={roundMap}
+														techMap={techMap}
 														rounds={claimEditRounds(r.context)}
 														dealPending={dealPending}
 														addedDeals={addedDeals}

@@ -370,7 +370,7 @@ function CompanyMaTab({ companyId }: { companyId: string }) {
 					</tbody>
 				</table>
 			</AsyncState>
-			{modal && <AcquisitionModal id={modal.id} onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} />}
+			{modal && <AcquisitionModal id={modal.id} subjectCompanyId={companyId} onClose={() => setModal(null)} onSaved={() => { setModal(null); refresh(); }} />}
 		</div>
 	);
 }

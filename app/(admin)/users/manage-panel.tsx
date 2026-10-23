@@ -36,10 +36,13 @@ export function ManagePanel({ user }: { user: ManageUser }) {
 			<PillTabs tabs={MANAGE_TABS} value={tab} onChange={setTab} />
 
 			{tab === 'Access' && (
-				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)' }}>
-					<TierChangeSection user={user} />
-					<GrantAccessSection profileId={user.id} />
-					<FeatureGrantsSection profileId={user.id} />
+				<div style={{ display: 'grid', gap: 'var(--space-4)' }}>
+					<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-4)' }}>
+						<TierChangeSection user={user} />
+						<GrantAccessSection profileId={user.id} />
+						<FeatureGrantsSection profileId={user.id} />
+					</div>
+					<AccessControlSection profileId={user.id} />
 				</div>
 			)}
 
@@ -308,6 +311,59 @@ function BillingSection({ profileId }: { profileId: string }) {
 				</div>
 			)}
 			{s?.error && <div style={{ fontSize: 11, color: 'var(--accent)', marginTop: 8 }}>Stripe lookup: {s.error}</div>}
+		</div>
+	);
+}
+
+function AccessControlSection({ profileId }: { profileId: string }) {
+	const { mutate } = useSWRConfig();
+	const { data: u, mutate: refetch } = useSWR<{ blocked_at?: string | null; blocked_reason?: string | null }>(
+		[`/api/admin/users/${profileId}`], { dedupingInterval: 15_000 });
+	const [busy, setBusy] = useState<'revoke' | 'block' | 'unblock' | null>(null);
+	const blocked = !!u?.blocked_at;
+	const refreshLists = () => mutate((key) => Array.isArray(key) && key[0] === '/api/admin/users');
+
+	const revoke = async () => {
+		if (!window.confirm('Revoke this user’s access now? Any Stripe subscription is cancelled immediately (no refund — refund separately in Stripe) and the account drops to Explore. Admin-granted access is cleared too.')) return;
+		setBusy('revoke');
+		try { await api('POST', `/api/admin/users/${profileId}/revoke-access`); toast.success('Access revoked'); void refetch(); refreshLists(); }
+		catch (e) { toast.error((e as Error).message); } finally { setBusy(null); }
+	};
+	const block = async () => {
+		const reason = window.prompt('Block (suspend) this account? All access is rejected until unblocked. Optional reason:') ?? undefined;
+		if (reason === undefined) return; // cancelled
+		setBusy('block');
+		try { await api('POST', `/api/admin/users/${profileId}/block`, { reason: reason.trim() || undefined }); toast.success('Account blocked'); void refetch(); refreshLists(); }
+		catch (e) { toast.error((e as Error).message); } finally { setBusy(null); }
+	};
+	const unblock = async () => {
+		setBusy('unblock');
+		try { await api('POST', `/api/admin/users/${profileId}/unblock`); toast.success('Account unblocked'); void refetch(); refreshLists(); }
+		catch (e) { toast.error((e as Error).message); } finally { setBusy(null); }
+	};
+
+	return (
+		<div className="card" style={{ padding: 'var(--space-4)', borderColor: 'color-mix(in oklch, var(--neg), transparent 55%)' }}>
+			<div className="co-stat-label" style={{ marginBottom: 10, color: 'var(--neg)' }}>Access control</div>
+			{blocked && (
+				<div style={{ fontSize: 12, color: 'var(--neg)', marginBottom: 10 }}>
+					⛔ Blocked{u?.blocked_reason ? ` — ${u.blocked_reason}` : ''}. All access is rejected until unblocked.
+				</div>
+			)}
+			<div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+				<button className="btn ghost" disabled={busy !== null} onClick={() => void revoke()}>
+					{busy === 'revoke' ? 'Revoking…' : 'Revoke access (cancel subscription)'}
+				</button>
+				{blocked ? (
+					<button className="btn" disabled={busy !== null} onClick={() => void unblock()}>{busy === 'unblock' ? 'Unblocking…' : 'Unblock account'}</button>
+				) : (
+					<button className="btn ghost" style={{ color: 'var(--neg)' }} disabled={busy !== null} onClick={() => void block()}>{busy === 'block' ? 'Blocking…' : 'Block account'}</button>
+				)}
+			</div>
+			<div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 8 }}>
+				<strong>Revoke</strong> = immediate downgrade to Explore (works for Stripe-paid and admin-granted; no refund — refund in Stripe separately).
+				<strong> Block</strong> = suspend all access regardless of tier (even Explore).
+			</div>
 		</div>
 	);
 }

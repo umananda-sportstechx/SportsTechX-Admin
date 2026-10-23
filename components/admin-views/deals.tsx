@@ -267,7 +267,7 @@ function DealForm({ id, initial, onClose, onSaved, onStage }: { id: string | nul
 			footer={
 				<>
 					<button className="btn ghost" onClick={onClose}>Cancel</button>
-					<button className="btn" disabled={(!stageMode && !form.company_id) || pending} onClick={() => void submit()}>
+					<button className="btn" disabled={pending || (!stageMode && !form.company_id) || (!isEdit && !form.announced_date)} onClick={() => void submit()}>
 						<Save size={12} /> {pending ? 'Saving…' : stageMode ? 'Add round' : 'Save'}
 					</button>
 				</>
@@ -285,22 +285,27 @@ function DealForm({ id, initial, onClose, onSaved, onStage }: { id: string | nul
 				)}
 				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 					<Field label="Round type"><RoundTypeSelect value={form.round_type_id} onChange={(v) => set('round_type_id', v)} /></Field>
-					<Field label="Announced date" hint="sets the FX year used to convert the amount to USD"><input className="search-input" type="date" value={form.announced_date} onChange={(e) => set('announced_date', e.target.value)} /></Field>
+					<Field label="Announced date *" hint="required — sets the year, sort order and the FX rate used to convert the amount to USD"><input className="search-input" type="date" value={form.announced_date} onChange={(e) => set('announced_date', e.target.value)} /></Field>
 				</div>
-				<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 1fr', gap: 12 }}>
+				<div style={{ display: 'grid', gridTemplateColumns: isEdit ? '1fr 120px 1fr' : '1fr 120px', gap: 12 }}>
 					<Field label="Amount" hint="in the currency at right — converted to USD automatically"><input className="search-input" type="number" value={form.amount} onChange={(e) => set('amount', e.target.value)} placeholder="e.g. 5000000" /></Field>
 					<Field label="Currency" hint="of the amount"><CurrencySelect value={form.currency_code} onChange={(v) => set('currency_code', v)} /></Field>
-					<Field label="Size bucket" hint="leave blank — auto-derived from the USD amount">
-						<Select value={form.deal_size_bucket} onChange={(v) => set('deal_size_bucket', v)} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...SIZE_BUCKETS.map((b) => ({ value: b, label: b.replace(/_/g, ' ') }))]} />
-					</Field>
+					{isEdit && (
+						<Field label="Size bucket" hint="leave blank — auto-derived from the USD amount">
+							<Select value={form.deal_size_bucket} onChange={(v) => set('deal_size_bucket', v)} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...SIZE_BUCKETS.map((b) => ({ value: b, label: b.replace(/_/g, ' ') }))]} />
+						</Field>
+					)}
 				</div>
 				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 					<Field label="Source URL"><input className="search-input" value={form.source_url} onChange={(e) => set('source_url', e.target.value)} placeholder="https://" /></Field>
 					<Field label="Transaction URL"><input className="search-input" value={form.transaction_url} onChange={(e) => set('transaction_url', e.target.value)} placeholder="https://" /></Field>
 				</div>
-				<Field label="Status">
-					<Select value={form.status} onChange={(v) => set('status', v)} width="100%" style={{ display: 'block', width: '100%' }} options={STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))} />
-				</Field>
+				{/* Status defaults to "active" for a new round; only exposed on edit. */}
+				{isEdit && (
+					<Field label="Status">
+						<Select value={form.status} onChange={(v) => set('status', v)} width="100%" style={{ display: 'block', width: '100%' }} options={STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))} />
+					</Field>
+				)}
 				<Field label="Investors" hint="star marks the lead"><InvestorPicker value={form.investors} onChange={(v) => set('investors', v)} /></Field>
 			</div>
 		</Modal>

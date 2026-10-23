@@ -620,14 +620,8 @@ function InlineFundingEditor({ onStage, onCancel }: { onStage: (d: StagedDeal) =
 	const [date, setDate] = useState('');
 	const [amount, setAmount] = useState('');
 	const [currency, setCurrency] = useState('');
-	const [bucket, setBucket] = useState('');
-	const [status, setStatus] = useState('active');
-	const [sectorId, setSectorId] = useState('');
-	const [model, setModel] = useState('');
 	const [sourceUrl, setSourceUrl] = useState('');
 	const [txnUrl, setTxnUrl] = useState('');
-	const [hq, setHq] = useState<LocationValue>({ ...EMPTY_LOCATION });
-	const [sportIds, setSportIds] = useState<string[]>([]);
 	const [investors, setInvestors] = useState<DealInvestor[]>([]);
 
 	const add = () => {
@@ -636,18 +630,8 @@ function InlineFundingEditor({ onStage, onCancel }: { onStage: (d: StagedDeal) =
 			announced_date: date || undefined,
 			amount: amount.trim() ? Number(amount) : undefined,
 			currency_code: currency || undefined,
-			deal_size_bucket: bucket || undefined,
-			status,
-			sector_id: sectorId || undefined,
-			business_model: model || undefined,
 			source_url: sourceUrl.trim() || undefined,
 			transaction_url: txnUrl.trim() || undefined,
-			hq_country: hq.country.trim() || undefined,
-			hq_city: hq.city.trim() || undefined,
-			hq_continent: hq.continent.trim() || undefined,
-			hq_region: hq.region.trim() || undefined,
-			hq_state: hq.state.trim() || undefined,
-			sport_ids: sportIds,
 			investors,
 		};
 		onStage({ body, label: { amount: amount.trim() ? fmtStagedAmount(amount) : undefined, year: date ? date.slice(0, 4) : undefined } });
@@ -657,34 +641,23 @@ function InlineFundingEditor({ onStage, onCancel }: { onStage: (d: StagedDeal) =
 		<div style={editorBox}>
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 				<Field label="Round type"><RoundTypeSelect value={roundTypeId} onChange={setRoundTypeId} /></Field>
-				<Field label="Announced date" hint="sets the FX year used to convert the amount to USD"><input className="search-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+				<Field label="Announced date *" hint="required — sets the year, sort order and the FX rate used to convert the amount to USD"><input className="search-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
 			</div>
-			<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 1fr', gap: 12 }}>
+			<div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 12 }}>
 				<Field label="Amount" hint="in the currency at right — converted to USD automatically"><input className="search-input" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 5000000" /></Field>
 				<Field label="Currency" hint="of the amount"><CurrencySelect value={currency} onChange={setCurrency} /></Field>
-				<Field label="Size bucket" hint="leave blank — auto-derived">
-					<Select value={bucket} onChange={setBucket} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...SIZE_BUCKETS.map((b) => ({ value: b, label: b.replace(/_/g, ' ') }))]} />
-				</Field>
 			</div>
 			<Field label="Investors" hint="star marks the lead"><InvestorPicker value={investors} onChange={setInvestors} /></Field>
-			<Field label="Sector"><SectorCascade value={sectorId} onChange={setSectorId} /></Field>
-			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-				<Field name="business_model" label="Business model" hint="who they sell to — B2B, B2C or B2B2C">
-					<Select value={model} onChange={setModel} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...PARTY_MODELS.map((b) => ({ value: b, label: b.toUpperCase() }))]} />
-				</Field>
-				<Field label="Status">
-					<Select value={status} onChange={setStatus} width="100%" style={{ display: 'block', width: '100%' }} options={DEAL_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))} />
-				</Field>
-			</div>
-			<Field label="Location"><LocationFields value={hq} onChange={setHq} /></Field>
-			<Field label="Sports"><SportsPicker value={sportIds} onChange={setSportIds} /></Field>
+			{/* Sector / business model / location / sports / status / size bucket are
+			    NOT asked here: they're company attributes the round inherits (set on
+			    the company itself), and status defaults active / size auto-derives. */}
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 				<Field label="Source URL"><input className="search-input" value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} placeholder="https://" /></Field>
 				<Field label="Transaction URL"><input className="search-input" value={txnUrl} onChange={(e) => setTxnUrl(e.target.value)} placeholder="https://" /></Field>
 			</div>
 			<div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
 				<button className="btn ghost" onClick={onCancel}>Cancel</button>
-				<button className="btn" onClick={add}><Plus size={12} /> Add round</button>
+				<button className="btn" disabled={!date} onClick={add}><Plus size={12} /> Add round</button>
 			</div>
 		</div>
 	);

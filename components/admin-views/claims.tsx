@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { ChevronDown, ChevronRight, ExternalLink, Mail, MailCheck } from 'lucide-react';
@@ -409,10 +409,24 @@ const BUSINESS_MODELS = ['b2b', 'b2c', 'b2b2c'] as const;
 const INVESTOR_CATEGORIES = ['venture_capital', 'private_equity', 'financial_services', 'family_investment_office', 'sovereign_wealth_fund', 'angel', 'other'] as const;
 const ECOSYSTEM_TYPES = ['program', 'event', 'organization', 'initiative'] as const;
 
+interface ClaimDetails {
+	description?: string | null; sector_id?: string | null; business_model?: string | null;
+	founded_year?: number | null; year_launched?: number | null; category?: string | null;
+	entity_type?: string | null; op_type?: string | null;
+	hq_city?: string | null; hq_country?: string | null; location?: string | null; country?: string | null;
+}
+interface ClaimFormResp {
+	company?: { details?: ClaimDetails | null };
+	investor?: { details?: ClaimDetails | null };
+	entity?: { details?: ClaimDetails | null };
+}
+
 /**
- * Edit-then-create panel for a NEW-entity claim. Name/website come prefilled
- * from the claim; the admin fills the rest and clicks Create — the server makes
- * the live record, links it to the claim, and verifies in one call.
+ * Edit-then-create panel for a NEW-entity claim. Everything the founder already
+ * filled in (sector, HQ, founded year, description, …) is prefilled from the
+ * claim's submitted details via `GET /api/claims/:id/form` — the admin reviews
+ * and clicks Create, which makes the live record, links it, and verifies in one
+ * call. (The admin can still edit anything before creating.)
  */
 function CreateEntityPanel({ claim, onDone }: { claim: Claim; onDone: () => void }) {
 	const kind = claim.claim_type; // 'company' | 'investor' | 'ecosystem_entity'
@@ -426,6 +440,36 @@ function CreateEntityPanel({ claim, onDone }: { claim: Claim; onDone: () => void
 	const [year, setYear] = useState('');
 	const [hq, setHq] = useState<LocationValue>({ ...EMPTY_LOCATION });
 	const [pending, setPending] = useState(false);
+
+	// Prefill from what the founder submitted. Owner-or-admin endpoint; cheap and
+	// only fetched once the row is expanded (this panel mounts there).
+	const { data: form } = useSWR<ClaimFormResp>([`/api/claims/${claim.id}/form`], { revalidateOnFocus: false });
+	const seeded = useRef(false);
+	// LocationFields seeds its city search box from value.city on mount only, so a
+	// remount (bumped key) is how the prefilled city shows up after the fetch.
+	const [locKey, setLocKey] = useState(0);
+	useEffect(() => {
+		if (seeded.current || !form) return;
+		const d = form.company?.details ?? form.investor?.details ?? form.entity?.details;
+		if (!d) return;
+		seeded.current = true;
+		if (d.description) setDescription(d.description);
+		const city = d.hq_city ?? d.location ?? '';
+		const country = d.hq_country ?? d.country ?? '';
+		if (city || country) { setHq((h) => ({ ...h, city: city || h.city, country: country || h.country })); setLocKey((k) => k + 1); }
+		if (kind === 'company') {
+			if (d.sector_id) setSectorId(d.sector_id);
+			if (d.business_model) setBusinessModel(d.business_model);
+			if (d.founded_year != null) setYear(String(d.founded_year));
+		} else if (kind === 'investor') {
+			if (d.category) setCategory(d.category);
+			if (d.year_launched != null) setYear(String(d.year_launched));
+		} else {
+			if (d.entity_type) setEntityType(d.entity_type);
+			if (d.op_type) setCategory(d.op_type);
+			if (d.founded_year != null) setYear(String(d.founded_year));
+		}
+	}, [form, kind]);
 
 	const submit = async () => {
 		if (!name.trim()) { toast.error('Name is required.'); return; }
@@ -491,7 +535,7 @@ function CreateEntityPanel({ claim, onDone }: { claim: Claim; onDone: () => void
 				{kind === 'ecosystem_entity' && L('Category', <input className="search-input" value={category} onChange={(e) => setCategory(e.target.value)} />)}
 				{L(kind === 'investor' ? 'Year launched' : 'Founded year', <YearSelect value={year} onChange={setYear} />)}
 			</div>
-			{L('Headquarters', <LocationFields value={hq} onChange={setHq} />)}
+			{L('Headquarters', <LocationFields key={locKey} value={hq} onChange={setHq} />)}
 			<div style={{ display: 'flex', justifyContent: 'flex-end' }}>
 				<button className="btn" disabled={pending || !name.trim()} onClick={() => void submit()}>
 					{pending ? 'Creating…' : `Create & verify ${kind.replace('_', ' ')}`}

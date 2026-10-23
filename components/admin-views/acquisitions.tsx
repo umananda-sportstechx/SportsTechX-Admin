@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Save, Trash2, GitMerge, Banknote, Trophy } from 'lucide-react';
@@ -239,14 +239,17 @@ function toAcqForm(h: AcqEdit): AcqForm {
 // plus a small label snapshot for rendering the row before the company exists.
 export interface StagedAcq { body: Record<string, unknown>; label: { acquirer?: string; counterparty?: string; role?: 'acquiree' | 'acquirer'; amount?: string; year?: string } }
 
-export function AcquisitionModal({ id, onClose, onSaved }: { id: string | null; onClose: () => void; onSaved: () => void }) {
+export function AcquisitionModal({ id, onClose, onSaved, subjectCompanyId }: { id: string | null; onClose: () => void; onSaved: () => void; subjectCompanyId?: string }) {
 	const isEdit = !!id;
 	const { data: hydrated } = useSWR<AcqEdit>(isEdit ? [`/api/admin/acquisitions/${id}/edit`] : null, { revalidateOnFocus: false });
 	if (isEdit && !hydrated) return <Modal title="Edit acquisition" onClose={onClose}><Loading msg="Loading acquisition…" /></Modal>;
-	return <AcquisitionForm id={id} initial={hydrated ? toAcqForm(hydrated) : EMPTY_ACQ} onClose={onClose} onSaved={onSaved} />;
+	// Adding from a company profile: pre-map that company as the subject so the
+	// admin only picks the role + the other party (no re-selecting the same one).
+	const initial = hydrated ? toAcqForm(hydrated) : { ...EMPTY_ACQ, subject_company_id: subjectCompanyId ?? '' };
+	return <AcquisitionForm id={id} initial={initial} lockedSubject={!isEdit && !!subjectCompanyId} onClose={onClose} onSaved={onSaved} />;
 }
 
-function AcquisitionForm({ id, initial, onClose, onSaved }: { id: string | null; initial: AcqForm; onClose: () => void; onSaved: () => void }) {
+function AcquisitionForm({ id, initial, onClose, onSaved, lockedSubject = false }: { id: string | null; initial: AcqForm; onClose: () => void; onSaved: () => void; lockedSubject?: boolean }) {
 	const isEdit = !!id;
 	const [form, setForm] = useState<AcqForm>(initial);
 	const [pending, setPending] = useState(false);
@@ -275,6 +278,13 @@ function AcquisitionForm({ id, initial, onClose, onSaved }: { id: string | null;
 			});
 		} catch { /* leave fields as-is — the admin can still save */ }
 	};
+
+	// Pre-mapped subject (added from a company profile): pull its attributes once so
+	// the stored snapshot matches what picking it manually would produce.
+	useEffect(() => {
+		if (lockedSubject && form.subject_company_id) void fillFromCompany('subject', form.subject_company_id);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
 
 	// Map one side (subject or counterparty) onto the server's acquiree_* / acquirer_*
 	// columns via the chosen role. Computed keys so each company is entered once.
@@ -332,7 +342,7 @@ function AcquisitionForm({ id, initial, onClose, onSaved }: { id: string | null;
 		>
 			<div style={{ display: 'grid', gap: 14 }}>
 				{/* Subject: the catalog company this deal is about — entered once. */}
-				<Field label="Company *" hint="the company in our catalog this deal is about"><CompanySelectOne value={form.subject_company_id} onChange={(v) => { set('subject_company_id', v); void fillFromCompany('subject', v); }} /></Field>
+				<Field label="Company *" hint={lockedSubject ? 'this company profile — only pick the other party below' : 'the company in our catalog this deal is about'}><CompanySelectOne value={form.subject_company_id} onChange={(v) => { set('subject_company_id', v); void fillFromCompany('subject', v); }} locked={lockedSubject} /></Field>
 
 				{/* Role: this company is EITHER the acquirer OR the acquiree. */}
 				<div>

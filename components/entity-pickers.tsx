@@ -524,8 +524,8 @@ export function SocialLinks({ value, onChange }: { value: SocialValue; onChange:
 interface CompanyHit { id: string; name: string; slug: string | null; primary_sector: string | null; hq_country: string | null }
 
 export function CompanySelectOne({
-	value, onChange, placeholder = 'Search companies…',
-}: { value: string; onChange: (id: string) => void; placeholder?: string }) {
+	value, onChange, placeholder = 'Search companies…', locked = false,
+}: { value: string; onChange: (id: string) => void; placeholder?: string; locked?: boolean }) {
 	const [q, setQ] = useState('');
 	const [open, setOpen] = useState(false);
 	const debouncedQ = useDebounced(q, 200);
@@ -543,14 +543,16 @@ export function CompanySelectOne({
 	);
 	const hits = searchResp?.data ?? [];
 
-	if (value && selected && !open) {
+	// `locked`: the company is fixed by context (e.g. adding an M&A deal from a
+	// company's own profile), so show it read-only with no clear button.
+	if (value && selected && (locked || !open)) {
 		return (
 			<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
 				<div className="search-input" style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
 					<span style={{ fontWeight: 500 }}>{selected.name}</span>
 					{selected.primary_sector && <span style={{ color: 'var(--fg-muted)', marginLeft: 6 }}>· {selected.primary_sector}</span>}
 				</div>
-				<button type="button" className="btn ghost" onClick={() => { onChange(''); setOpen(true); }}><X size={12} /></button>
+				{!locked && <button type="button" className="btn ghost" onClick={() => { onChange(''); setOpen(true); }}><X size={12} /></button>}
 			</div>
 		);
 	}

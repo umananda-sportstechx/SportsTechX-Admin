@@ -730,7 +730,7 @@ function InlineMaEditor({ onStage, onCancel }: { onStage: (a: StagedAcq) => void
 		})();
 	};
 
-	const canAdd = !!cpId || !!cpName.trim();
+	const canAdd = (!!cpId || !!cpName.trim()) && !!date;
 	const add = () => {
 		const body: Record<string, unknown> = {
 			_role: role,
@@ -781,20 +781,26 @@ function InlineMaEditor({ onStage, onCancel }: { onStage: (a: StagedAcq) => void
 			{!cpId && (
 				<Field label="…or counterparty name (free text)"><input className="search-input" value={cpName} onChange={(e) => setCpName(e.target.value)} placeholder="Name of the other company" /></Field>
 			)}
-			<Field label="Counterparty sector"><SectorCascade value={party.sector_id} onChange={(v) => setParty((p) => ({ ...p, sector_id: v }))} /></Field>
-			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-				<Field label="Counterparty business model">
-					<Select value={party.business_model} onChange={(v) => setParty((p) => ({ ...p, business_model: v }))} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...PARTY_MODELS.map((b) => ({ value: b, label: b.toUpperCase() }))]} />
-				</Field>
-				<label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13, alignSelf: 'end', paddingBottom: 8 }}>
-					<input type="checkbox" checked={party.is_sportstech} onChange={(e) => setParty((p) => ({ ...p, is_sportstech: e.target.checked }))} /> Counterparty is SportsTech <span style={{ color: 'var(--fg-muted)' }}>— tick if the other party operates in sports-tech</span>
-				</label>
-			</div>
-			<Field label="Counterparty location"><LocationFields value={party.hq} onChange={(v) => setParty((p) => ({ ...p, hq: v }))} /></Field>
-			<Field label="Counterparty sports"><SportsPicker value={party.sport_ids} onChange={(v) => setParty((p) => ({ ...p, sport_ids: v }))} /></Field>
+			{/* Attributes only for an off-catalog (free-text) counterparty; a linked
+			    company supplies its own, as in the standalone M&A form. */}
+			{!cpId ? (
+				<>
+					<Field label="Counterparty sector"><SectorCascade value={party.sector_id} onChange={(v) => setParty((p) => ({ ...p, sector_id: v }))} /></Field>
+					<Field label="Counterparty business model">
+						<Select value={party.business_model} onChange={(v) => setParty((p) => ({ ...p, business_model: v }))} placeholder="—" width="100%" style={{ display: 'block', width: '100%' }} options={[{ value: '', label: '—' }, ...PARTY_MODELS.map((b) => ({ value: b, label: b.toUpperCase() }))]} />
+					</Field>
+					<Field label="Counterparty location"><LocationFields value={party.hq} onChange={(v) => setParty((p) => ({ ...p, hq: v }))} /></Field>
+					<Field label="Counterparty sports"><SportsPicker value={party.sport_ids} onChange={(v) => setParty((p) => ({ ...p, sport_ids: v }))} /></Field>
+				</>
+			) : (
+				<div style={{ fontSize: 12.5, color: 'var(--fg-muted)' }}>Counterparty sector, business model, location and sports are taken from the linked company.</div>
+			)}
+			<label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13 }}>
+				<input type="checkbox" checked={party.is_sportstech} onChange={(e) => setParty((p) => ({ ...p, is_sportstech: e.target.checked }))} /> Counterparty is SportsTech <span style={{ color: 'var(--fg-muted)' }}>— tick if the other party operates in sports-tech</span>
+			</label>
 			<div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, display: 'grid', gap: 12 }}>
 				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-					<Field label="Acquisition date" hint="sets the FX year used to convert the amount to USD"><input className="search-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+					<Field label="Acquisition date *" hint="required — sets the year, sort order and the FX rate used to convert the amount to USD"><input className="search-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
 					<Field label="Type">
 						<Select value={type} onChange={setType} width="100%" style={{ display: 'block', width: '100%' }} options={ACQ_TYPES.map((t) => ({ value: t, label: t.replace(/_/g, ' ') }))} />
 					</Field>

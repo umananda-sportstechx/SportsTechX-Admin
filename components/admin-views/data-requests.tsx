@@ -18,6 +18,7 @@ interface Dcr {
 	id: string;
 	entity_type: string | null;
 	entity_id: string | null;
+	target_company_id: string | null;
 	target_name_snapshot: string | null;
 	field_change: string | null;
 	old_value: string | null;
@@ -31,6 +32,16 @@ interface Dcr {
 }
 const APPLYABLE = new Set(['company', 'investor', 'deal', 'ecosystem']);
 interface DcrResponse { data: Dcr[]; total: number; totalPages: number }
+
+// A verified founder's edit lands here as a `claim_edit` "Profile update" bundle;
+// its funding rounds can't be auto-applied by the scalar apply endpoint, so the
+// admin adds each one as a deal with one click (reuses POST /api/admin/deals).
+interface FundingRound { round_type_id?: string | null; round_label?: string | null; amount_usd?: number | null; round_date?: string | null; investors?: string | null; source_url?: string | null }
+const claimEditRounds = (ctx: Record<string, unknown> | null): FundingRound[] => {
+	const c = ctx as { kind?: string; changes?: { funding_rounds?: unknown } } | null;
+	const rounds = c?.kind === 'claim_edit' ? c.changes?.funding_rounds : null;
+	return Array.isArray(rounds) ? (rounds as FundingRound[]) : [];
+};
 
 const TABS: Array<{ label: string; key: DcrStatus }> = [
 	{ label: 'Open', key: 'open' },
@@ -93,6 +104,28 @@ export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: 
 			void refresh();
 		} catch (e) { toast.error((e as Error).message); }
 		finally { setApplyPending(null); }
+	};
+
+	const [dealPending, setDealPending] = useState<string | null>(null);
+	const [addedDeals, setAddedDeals] = useState<Set<string>>(new Set());
+	const addRoundAsDeal = async (r: Dcr, fr: FundingRound, idx: number) => {
+		if (!r.target_company_id) { toast.error('This request has no linked company.'); return; }
+		const key = `${r.id}:${idx}`;
+		setDealPending(key);
+		try {
+			const investors = (fr.investors ?? '').split(',').map((s) => s.trim()).filter(Boolean).map((investor_name) => ({ investor_name }));
+			await api('POST', '/api/admin/deals', {
+				company_id: r.target_company_id,
+				round_type_id: fr.round_type_id ?? undefined,
+				announced_date: fr.round_date ?? undefined,
+				amount_usd: typeof fr.amount_usd === 'number' ? fr.amount_usd : undefined,
+				source_url: fr.source_url ?? undefined,
+				...(investors.length ? { investors } : {}),
+			});
+			toast.success('Funding round added as a deal');
+			setAddedDeals((s) => new Set(s).add(key));
+		} catch (e) { toast.error((e as Error).message); }
+		finally { setDealPending(null); }
 	};
 
 	const toggleSel = (id: string) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -228,6 +261,28 @@ export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: 
 												<div style={{ fontSize: 12 }}>
 													<div className="co-stat-label">Extra context</div>
 													<pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-2)' }}>{JSON.stringify(r.context, null, 2)}</pre>
+												</div>
+											)}
+											{r.entity_type === 'company' && r.target_company_id && claimEditRounds(r.context).length > 0 && (
+												<div style={{ display: 'grid', gap: 6 }}>
+													<div className="co-stat-label">Proposed funding rounds</div>
+													{claimEditRounds(r.context).map((fr, i) => {
+														const key = `${r.id}:${i}`;
+														const added = addedDeals.has(key);
+														return (
+															<div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, flexWrap: 'wrap' }}>
+																<span style={{ fontWeight: 600 }}>{fr.round_label || 'Round'}</span>
+																<span style={{ color: 'var(--fg-muted)' }}>
+																	{[fr.round_date, typeof fr.amount_usd === 'number' ? `$${fr.amount_usd.toLocaleString()}` : null, fr.investors].filter(Boolean).join(' · ') || '—'}
+																</span>
+																<div style={{ flex: 1 }} />
+																<button className="btn ghost" disabled={added || dealPending === key} onClick={() => void addRoundAsDeal(r, fr, i)}>
+																	{added ? 'Added ✓' : dealPending === key ? 'Adding…' : 'Add as deal'}
+																</button>
+															</div>
+														);
+													})}
+													<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Creates a deal on the company. Set the raising amount/round and toggle “actively raising” from the claim, then resolve this request.</div>
 												</div>
 											)}
 											{APPLYABLE.has(r.entity_type ?? '') ? (

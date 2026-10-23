@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { Plus, Trash2, Save, Search } from 'lucide-react';
@@ -10,7 +10,7 @@ import { useConfirm } from '@/components/confirm';
 import { PageHeader, PillTabs } from '@/components/atoms';
 import { Select } from '@/components/select';
 
-type Kind = 'sectors' | 'sports' | 'tech-tags' | 'round-types' | 'countries';
+type Kind = 'sectors' | 'sports' | 'tech-tags' | 'round-types' | 'countries' | 'cities';
 
 const TABS: { key: Kind; label: string }[] = [
 	{ key: 'sectors', label: 'Sectors' },
@@ -18,6 +18,7 @@ const TABS: { key: Kind; label: string }[] = [
 	{ key: 'tech-tags', label: 'Tech tags' },
 	{ key: 'round-types', label: 'Round types' },
 	{ key: 'countries', label: 'Countries' },
+	{ key: 'cities', label: 'Cities' },
 ];
 
 const CONTINENTS = ['Africa', 'Asia', 'Europe', 'North America', 'Oceania', 'South America'] as const;
@@ -78,7 +79,9 @@ export default function ReferenceAdminPage() {
 	const [creating, setCreating] = useState(false);
 	const [q, setQ] = useState('');
 
-	const { data } = useSWR<RefResponse>([`/api/admin/reference/${kind}`]);
+	// Cities aren't a CRUD reference table (33k+ rows, de-dupe tool instead), so
+	// skip the standard list fetch for that tab.
+	const { data } = useSWR<RefResponse>(kind === 'cities' ? null : [`/api/admin/reference/${kind}`]);
 
 	const refresh = () => mutate((key) => Array.isArray(key) && typeof key[0] === 'string' && (key[0] as string).startsWith(`/api/admin/reference/${kind}`));
 
@@ -106,6 +109,7 @@ export default function ReferenceAdminPage() {
 				<PillTabs tabs={TABS.map((t) => ({ key: t.key, label: t.label }))} value={kind} onChange={(k) => { setKind(k); setEditing(null); setCreating(false); setQ(''); }} />
 			</div>
 
+			{kind === 'cities' ? <CityMergeTool /> : (<>
 			<div className="filter-bar" style={{ marginBottom: 12 }}>
 				<div style={{ position: 'relative' }}>
 					<Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--fg-muted)' }} />
@@ -164,6 +168,7 @@ export default function ReferenceAdminPage() {
 					</tbody>
 				</table>
 			</div>
+		</>)}
 		</div>
 	);
 }
@@ -250,6 +255,106 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 		<div>
 			<div className="co-stat-label" style={{ marginBottom: 6 }}>{label}</div>
 			{children}
+		</div>
+	);
+}
+
+interface CityHit { id: string; name: string; state: string | null; country: string | null; country_id: string; usage: number }
+
+/**
+ * City de-duplication. Search the city catalog, pick the canonical city and the
+ * duplicate, and merge: every record pointing at the duplicate is repointed at
+ * the canonical city and the duplicate row is deleted. There's no "add city"
+ * here — cities are created implicitly when an admin saves an entity with a new
+ * HQ (resolveLocation find-or-creates). This tab only cleans up variants.
+ */
+function CityMergeTool() {
+	const ask = useConfirm();
+	const [q, setQ] = useState('');
+	const [debounced, setDebounced] = useState('');
+	const [keep, setKeep] = useState<CityHit | null>(null);
+	const [dupe, setDupe] = useState<CityHit | null>(null);
+	const [pending, setPending] = useState(false);
+
+	useEffect(() => {
+		const t = setTimeout(() => setDebounced(q.trim()), 300);
+		return () => clearTimeout(t);
+	}, [q]);
+
+	const { data, mutate } = useSWR<{ data: CityHit[] }>(debounced.length >= 2 ? [`/api/admin/cities?q=${encodeURIComponent(debounced)}`] : null);
+	const rows = data?.data ?? [];
+
+	const merge = async () => {
+		if (!keep || !dupe) return;
+		if (!(await ask(`Merge "${dupe.name}" into "${keep.name}"? ${dupe.usage} record${dupe.usage === 1 ? '' : 's'} will move to "${keep.name}" and "${dupe.name}" will be deleted. This cannot be undone.`))) return;
+		setPending(true);
+		try {
+			const res = await api('POST', '/api/admin/cities/merge', { from_id: dupe.id, to_id: keep.id }) as { moved: number };
+			toast.success(`Merged — ${res.moved} record${res.moved === 1 ? '' : 's'} moved.`);
+			setKeep(null); setDupe(null);
+			void mutate();
+		} catch (e) { toast.error((e as Error).message); }
+		finally { setPending(false); }
+	};
+
+	const diffCountry = keep && dupe && keep.country_id !== dupe.country_id;
+
+	return (
+		<div>
+			<p style={{ fontSize: 12, color: 'var(--fg-muted)', margin: '0 0 12px', maxWidth: 680 }}>
+				Find two spellings of the same place (e.g. “Bangalore” / “Bengaluru”) and merge the duplicate into the canonical city. New cities are added automatically when you save an entity with a new HQ — there’s nothing to add here. Case-only variants can’t occur anymore; this is for genuine spelling differences.
+			</p>
+
+			<div className="filter-bar" style={{ marginBottom: 12 }}>
+				<div style={{ position: 'relative' }}>
+					<Search size={12} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', color: 'var(--fg-muted)' }} />
+					<input className="search-input" style={{ height: 30, paddingLeft: 26, width: 280 }} placeholder="Search cities (min 2 chars)…" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+				</div>
+				<div style={{ flex: 1 }} />
+				{rows.length > 0 && <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{rows.length} match{rows.length === 1 ? '' : 'es'}</span>}
+			</div>
+
+			{(keep || dupe) && (
+				<div className="card" style={{ padding: 12, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+					<span style={{ fontSize: 13 }}>
+						<strong>Merge</strong>{' '}
+						<span style={{ color: 'var(--accent)' }}>{dupe ? `${dupe.name} (${dupe.usage})` : '— pick a duplicate —'}</span>
+						{' → '}
+						<span style={{ color: 'var(--fg)' }}>{keep ? `${keep.name} (${keep.usage})` : '— pick the canonical —'}</span>
+					</span>
+					{diffCountry && <span style={{ fontSize: 11, color: 'var(--warning, #c47f00)' }}>⚠ different countries — double-check</span>}
+					<div style={{ flex: 1 }} />
+					<button className="btn ghost" onClick={() => { setKeep(null); setDupe(null); }}>Clear</button>
+					<button className="btn" disabled={!keep || !dupe || pending} onClick={() => void merge()}>{pending ? 'Merging…' : 'Merge'}</button>
+				</div>
+			)}
+
+			<div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+				<table className="data-table" style={{ width: '100%' }}>
+					<thead>
+						<tr><th>City</th><th>State</th><th>Country</th><th style={{ textAlign: 'right' }}>Records</th><th /></tr>
+					</thead>
+					<tbody>
+						{rows.length === 0 ? (
+							<tr><td colSpan={5} style={{ textAlign: 'center', padding: 24, color: 'var(--fg-muted)' }}>{debounced.length >= 2 ? 'No matches.' : 'Type to search.'}</td></tr>
+						) : rows.map((c) => {
+							const isKeep = keep?.id === c.id, isDupe = dupe?.id === c.id;
+							return (
+								<tr key={c.id} style={{ background: isKeep ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : isDupe ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : undefined }}>
+									<td style={{ fontWeight: 600 }}>{c.name}</td>
+									<td style={{ color: 'var(--fg-muted)', fontSize: 12 }}>{c.state ?? '—'}</td>
+									<td style={{ color: 'var(--fg-muted)', fontSize: 12 }}>{c.country ?? '—'}</td>
+									<td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{c.usage}</td>
+									<td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+										<button className="btn ghost" disabled={isDupe} onClick={() => setKeep(isKeep ? null : c)}>{isKeep ? 'Canonical ✓' : 'Keep'}</button>
+										<button className="btn ghost" style={{ color: 'var(--accent)', marginLeft: 6 }} disabled={isKeep} onClick={() => setDupe(isDupe ? null : c)}>{isDupe ? 'Duplicate ✓' : 'Merge away'}</button>
+									</td>
+								</tr>
+							);
+						})}
+					</tbody>
+				</table>
+			</div>
 		</div>
 	);
 }

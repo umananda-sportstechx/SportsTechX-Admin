@@ -1,13 +1,13 @@
 'use client';
 
-import { Fragment, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
-import { ChevronDown, ChevronRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PageHeader, AsyncState, StatCard, StatsPanel, Section, Pager } from '@/components/atoms';
 import { Funnel } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
+import { Modal } from '@/components/modal';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useInitialQuery } from '@/hooks/use-initial-query';
 
@@ -119,6 +119,79 @@ const idNameMap = (resp: unknown): Map<string, string> => {
 	return m;
 };
 
+// The live company's editable fields (`GET /api/admin/companies/:id/edit`) —
+// only the ones that map to a claim_edit detail key, for the current→requested diff.
+interface CompanyEditLite {
+	description?: string | null; sector_id?: string | null; business_model?: string | null;
+	founded_year?: number | null; hq_city?: string | null; hq_country?: string | null;
+	is_actively_raising?: boolean; actively_raising_round?: string | null;
+	actively_raising_valuation?: string | number | null; actively_raising_pitch_deck_url?: string | null;
+	email?: string | null; twitter_url?: string | null; instagram_url?: string | null;
+	facebook_url?: string | null; linkedin_url?: string | null;
+	poc_first_name?: string | null; poc_last_name?: string | null; poc_job_position?: string | null;
+	poc_email?: string | null; poc_linkedin?: string | null;
+}
+// Current value of a detail key on the live company, formatted like the requested
+// value so the two compare as strings. null = no clean mapping (show requested only).
+function companyCurrent(key: string, c: CompanyEditLite | null | undefined, sectorMap: Map<string, string>): string | null {
+	if (!c) return null;
+	const str = (v: unknown): string | null => (v == null || v === '' ? null : String(v));
+	switch (key) {
+		case 'description': return str(c.description);
+		case 'sector_id': return c.sector_id ? sectorMap.get(String(c.sector_id)) ?? null : null;
+		case 'business_model': return str(c.business_model);
+		case 'founded_year': return str(c.founded_year);
+		case 'hq_city': return str(c.hq_city);
+		case 'hq_country': return str(c.hq_country);
+		case 'actively_raising': return c.is_actively_raising ? 'Yes' : 'No';
+		case 'round_type_id': return str(c.actively_raising_round);
+		case 'raising_valuation_note': return str(c.actively_raising_valuation);
+		case 'pitch_deck_url': return c.actively_raising_pitch_deck_url ? 'Attached' : null;
+		case 'public_email': return str(c.email);
+		case 'twitter_url': return str(c.twitter_url);
+		case 'instagram_url': return str(c.instagram_url);
+		case 'facebook_url': return str(c.facebook_url);
+		case 'linkedin_url': return str(c.linkedin_url);
+		case 'contact_first_name': return str(c.poc_first_name);
+		case 'contact_last_name': return str(c.poc_last_name);
+		case 'contact_position': return str(c.poc_job_position);
+		case 'contact_email': return str(c.poc_email);
+		case 'contact_linkedin': return str(c.poc_linkedin);
+		default: return null; // sport, program_participation, round_names, raising min/max — no 1:1 live field
+	}
+}
+
+interface DiffRow { label: string; current: string | null; requested: string }
+function DiffSection({ title, rows }: { title: string; rows: DiffRow[] }) {
+	if (!rows.length) return null;
+	return (
+		<div>
+			<div className="co-stat-label" style={{ marginBottom: 6 }}>{title}</div>
+			<div style={{ display: 'grid', gap: 2 }}>
+				{rows.map(({ label, current, requested }) => {
+					const changed = current !== null && current !== requested;
+					return (
+						<div key={label} style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 12, fontSize: 12.5, alignItems: 'baseline', padding: '3px 0 3px 8px', borderLeft: `2px solid ${changed ? 'var(--pos)' : 'transparent'}` }}>
+							<span style={{ color: 'var(--fg-muted)' }}>{label}</span>
+							<span style={{ wordBreak: 'break-word' }}>
+								{changed ? (
+									<>
+										<span style={{ color: 'var(--fg-muted)', textDecoration: 'line-through' }}>{current || '∅'}</span>
+										<span style={{ color: 'var(--fg-muted)' }}>{' → '}</span>
+										<span style={{ fontWeight: 600, color: 'var(--pos)' }}>{requested}</span>
+									</>
+								) : (
+									<span style={{ color: 'var(--fg-2)' }}>{requested}</span>
+								)}
+							</span>
+						</div>
+					);
+				})}
+			</div>
+		</div>
+	);
+}
+
 function SummarySection({ title, rows }: { title: string; rows: Array<[string, string]> }) {
 	if (!rows.length) return null;
 	return (
@@ -126,7 +199,7 @@ function SummarySection({ title, rows }: { title: string; rows: Array<[string, s
 			<div className="co-stat-label" style={{ marginBottom: 6 }}>{title}</div>
 			<div style={{ display: 'grid', gap: 6 }}>
 				{rows.map(([k, v]) => (
-					<div key={k} style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 12, fontSize: 12.5, alignItems: 'baseline' }}>
+					<div key={k} style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 12, fontSize: 12.5, alignItems: 'baseline' }}>
 						<span style={{ color: 'var(--fg-muted)' }}>{k}</span>
 						<span style={{ wordBreak: 'break-word' }}>{v}</span>
 					</div>
@@ -138,12 +211,13 @@ function SummarySection({ title, rows }: { title: string; rows: Array<[string, s
 
 /** Readable render of a `claim_edit` bundle — the admin can see exactly what the
  *  user wants changed without reading raw JSON. */
-function ClaimEditSummary({ r, sectorMap, roundMap, techMap, rounds, dealPending, addedDeals, onAddDeal }: {
+function ClaimEditSummary({ r, sectorMap, roundMap, techMap, rounds, current, dealPending, addedDeals, onAddDeal }: {
 	r: Dcr;
 	sectorMap: Map<string, string>;
 	roundMap: Map<string, string>;
 	techMap: Map<string, string>;
 	rounds: FundingRound[];
+	current?: CompanyEditLite | null;
 	dealPending: string | null;
 	addedDeals: Set<string>;
 	onAddDeal: (r: Dcr, fr: FundingRound, i: number) => void;
@@ -151,9 +225,10 @@ function ClaimEditSummary({ r, sectorMap, roundMap, techMap, rounds, dealPending
 	const ctx = asClaimEdit(r.context);
 	const changes = (ctx?.changes ?? {}) as Record<string, unknown>;
 	const details = (changes.details ?? {}) as Record<string, unknown>;
-	const detailRows = DETAIL_FIELDS
-		.map(([k, label]) => [label, fmtDetail(k, details[k], sectorMap, roundMap)] as [string, string | null])
-		.filter((row): row is [string, string] => row[1] != null);
+	const detailRows: DiffRow[] = DETAIL_FIELDS
+		.map(([k, label]) => ({ label, current: companyCurrent(k, current, sectorMap), requested: fmtDetail(k, details[k], sectorMap, roundMap) }))
+		.filter((row): row is DiffRow => row.requested != null);
+	const changedCount = detailRows.filter((row) => row.current !== null && row.current !== row.requested).length;
 	// Thesis sectors + tech tags are UUID arrays → resolve to names; the rest are plain strings.
 	const nameList = (ids: unknown, map: Map<string, string>): string | null =>
 		Array.isArray(ids) && ids.length ? ids.map((id) => map.get(String(id)) ?? String(id)).join(', ') : null;
@@ -173,9 +248,10 @@ function ClaimEditSummary({ r, sectorMap, roundMap, techMap, rounds, dealPending
 	return (
 		<div style={{ display: 'grid', gap: 14 }}>
 			<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
-				{ctx?.role ? `${ctx.role[0].toUpperCase()}${ctx.role.slice(1)} is requesting these profile updates:` : 'Requested profile updates:'}
+				{ctx?.role ? `${ctx.role[0].toUpperCase()}${ctx.role.slice(1)} is requesting these profile updates.` : 'Requested profile updates.'}
+				{current ? (changedCount > 0 ? ` ${changedCount} field${changedCount === 1 ? '' : 's'} changed vs the live profile (highlighted).` : ' Nothing differs from the live profile.') : ''}
 			</div>
-			<SummarySection title="Profile & details" rows={detailRows} />
+			<DiffSection title="Profile & details" rows={detailRows} />
 			<SummarySection title="Investment thesis" rows={thesisRows} />
 			{rounds.length > 0 && (
 				<div style={{ display: 'grid', gap: 6 }}>
@@ -276,22 +352,26 @@ export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: 
 		void update(id, next, notes);
 	};
 
-	const [expandedId, setExpandedId] = useState<string | null>(null);
+	// The full request now opens in a modal (bigger view, no long inline scroll).
+	const [modalRow, setModalRow] = useState<Dcr | null>(null);
 	const [editVal, setEditVal] = useState('');
 	const [applyPending, setApplyPending] = useState<string | null>(null);
 	const [showRaw, setShowRaw] = useState(false);
-	const toggleExpand = (r: Dcr) => {
-		setShowRaw(false);
-		if (expandedId === r.id) { setExpandedId(null); return; }
-		setExpandedId(r.id);
-		setEditVal(r.requested_value ?? '');
-	};
+	const openModal = (r: Dcr) => { setShowRaw(false); setEditVal(r.requested_value ?? ''); setModalRow(r); };
+	const closeModal = () => setModalRow(null);
+	// Live company fields, for the current→requested diff on a company claim_edit.
+	const { data: currentCompany } = useSWR<CompanyEditLite>(
+		modalRow?.entity_type === 'company' && modalRow.target_company_id && asClaimEdit(modalRow.context)
+			? [`/api/admin/companies/${modalRow.target_company_id}/edit`]
+			: null,
+		{ revalidateOnFocus: false },
+	);
 	const applyChange = async (r: Dcr) => {
 		setApplyPending(r.id);
 		try {
 			await api('POST', `/api/admin/data-change-requests/${r.id}/apply`, { value: editVal, field: r.field_change ?? undefined });
 			toast.success('Applied to the record');
-			setExpandedId(null);
+			closeModal();
 			void refresh();
 		} catch (e) { toast.error((e as Error).message); }
 		finally { setApplyPending(null); }
@@ -393,14 +473,10 @@ export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: 
 					</thead>
 					<tbody>
 						{items.map((r) => (
-							<Fragment key={r.id}>
-							<tr>
+							<tr key={r.id}>
 								<td><input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSel(r.id)} aria-label="Select row" /></td>
 								<td className="num">{new Date(r.created_at).toLocaleDateString()}</td>
 								<td>
-									<button className="btn ghost" style={{ padding: '2px 4px', marginRight: 4 }} onClick={() => toggleExpand(r)} aria-label="Toggle details">
-										{expandedId === r.id ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-									</button>
 									<span style={{ fontWeight: 600 }}>{r.target_name_snapshot ?? '—'}</span>
 									<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{r.entity_type ?? ''}</div>
 								</td>
@@ -426,6 +502,7 @@ export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: 
 								<td><span className="tag">{r.status}</span></td>
 								<td style={{ textAlign: 'right' }}>
 									<div style={{ display: 'inline-flex', gap: 6 }}>
+										<button className="btn ghost" onClick={() => openModal(r)}>Review</button>
 										{r.status !== 'picked_up' && r.status !== 'resolved' && (
 											<button className="btn ghost" disabled={pendingId === r.id} onClick={() => void update(r.id, 'picked_up')}>Pick up</button>
 										)}
@@ -441,79 +518,103 @@ export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: 
 									</div>
 								</td>
 							</tr>
-							{expandedId === r.id && (
-								<tr>
-									<td colSpan={7} style={{ background: 'var(--bg-2)' }}>
-										<div style={{ display: 'grid', gap: 10, padding: '4px 4px 10px' }}>
-											<div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, fontSize: 12 }}>
-												<div><div className="co-stat-label">Entity</div>{r.entity_type ?? '—'}</div>
-												<div><div className="co-stat-label">Field</div>{r.field_change ?? '—'}</div>
-												<div><div className="co-stat-label">Change type</div>{r.change_type ?? 'edit'}</div>
-												<div><div className="co-stat-label">Current value</div><span style={{ color: 'var(--fg-muted)' }}>{r.old_value || '∅'}</span></div>
-												<div><div className="co-stat-label">Requested by</div>{r.user_email ?? '—'}</div>
-												<div><div className="co-stat-label">Submitted</div>{new Date(r.created_at).toLocaleString()}</div>
-											</div>
-											{asClaimEdit(r.context) ? (
-												<>
-													<ClaimEditSummary
-														r={r}
-														sectorMap={sectorMap}
-														roundMap={roundMap}
-														techMap={techMap}
-														rounds={claimEditRounds(r.context)}
-														dealPending={dealPending}
-														addedDeals={addedDeals}
-														onAddDeal={(row, fr, i) => void addRoundAsDeal(row, fr, i)}
-													/>
-													<div>
-														<button className="btn ghost" style={{ fontSize: 11 }} onClick={() => setShowRaw((v) => !v)}>{showRaw ? 'Hide raw JSON' : 'Show raw JSON'}</button>
-														{showRaw && <pre style={{ margin: '6px 0 0', whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-2)' }}>{JSON.stringify(r.context, null, 2)}</pre>}
-													</div>
-													<div style={{ fontSize: 12, color: 'var(--fg-muted)', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
-														This is a full profile update. Apply the fields above from the {r.entity_type}’s edit form (use “Add as deal” for any funding rounds), then <strong>Resolve</strong>. The requester is notified on pick-up and on resolve.
-													</div>
-												</>
-											) : (
-												<>
-													{r.context && Object.keys(r.context).length > 0 && (
-														<div style={{ fontSize: 12 }}>
-															<div className="co-stat-label">Extra context</div>
-															<pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-2)' }}>{JSON.stringify(r.context, null, 2)}</pre>
-														</div>
-													)}
-													{APPLYABLE.has(r.entity_type ?? '') ? (
-														<div style={{ display: 'grid', gap: 6 }}>
-															<div className="co-stat-label">Value to apply (edit before applying if needed)</div>
-															<div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-																<textarea className="search-input" style={{ flex: 1, minHeight: 38, resize: 'vertical' }} value={editVal} onChange={(e) => setEditVal(e.target.value)} />
-																<button className="btn" disabled={applyPending === r.id || r.status === 'resolved'} onClick={() => void applyChange(r)}>
-																	{applyPending === r.id ? 'Applying…' : 'Apply to record'}
-																</button>
-															</div>
-															<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Writes <code>{r.field_change ?? '—'}</code> on the {r.entity_type} and marks this request resolved.</div>
-														</div>
-													) : (
-														<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
-															{r.entity_type === 'investor_fund'
-																? 'Fund changes carry derived values (USD, year) — edit on the investor’s Funds tab, then resolve this request.'
-																: r.entity_type === 'investor_portfolio'
-																	? 'Portfolio change — review against the investor’s record and resolve manually.'
-																	: 'This request type can’t be auto-applied — review and resolve manually.'}
-														</div>
-													)}
-												</>
-											)}
-										</div>
-									</td>
-								</tr>
-							)}
-							</Fragment>
 						))}
 					</tbody>
 				</table>
 				</AsyncState>
 			</div>
 			<Pager page={page} totalPages={data?.totalPages} onPage={setPage} />
+
+			{modalRow && (() => {
+				const r = modalRow;
+				const ce = asClaimEdit(r.context);
+				return (
+					<Modal
+						title={`${r.target_name_snapshot ?? 'Request'} — ${ce ? 'profile update' : (r.field_change ?? 'change request')}`}
+						width={780}
+						onClose={closeModal}
+						footer={
+							<div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+								{r.status !== 'picked_up' && r.status !== 'resolved' && (
+									<button className="btn ghost" disabled={pendingId === r.id} onClick={() => void update(r.id, 'picked_up')}>Pick up</button>
+								)}
+								{r.status !== 'open' && (
+									<button className="btn ghost" disabled={pendingId === r.id} onClick={() => void update(r.id, 'open')}>Re-open</button>
+								)}
+								{r.status !== 'rejected' && (
+									<button className="btn ghost" disabled={pendingId === r.id} onClick={() => { resolveWithNotes(r.id, 'rejected'); closeModal(); }}>Reject</button>
+								)}
+								{r.status !== 'resolved' && (
+									<button className="btn" disabled={pendingId === r.id} onClick={() => { resolveWithNotes(r.id, 'resolved'); closeModal(); }}>Resolve</button>
+								)}
+							</div>
+						}
+					>
+						<div style={{ display: 'grid', gap: 14 }}>
+							<div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, fontSize: 12 }}>
+								<div><div className="co-stat-label">Entity</div>{r.entity_type ?? '—'}</div>
+								<div><div className="co-stat-label">Status</div>{r.status}</div>
+								<div><div className="co-stat-label">Change type</div>{r.change_type ?? 'edit'}</div>
+								<div><div className="co-stat-label">Requested by</div>{r.user_email ?? '—'}</div>
+								<div><div className="co-stat-label">Submitted</div>{new Date(r.created_at).toLocaleString()}</div>
+								{r.resolution_notes && <div><div className="co-stat-label">Note</div>{r.resolution_notes}</div>}
+							</div>
+							{ce ? (
+								<>
+									<ClaimEditSummary
+										r={r}
+										sectorMap={sectorMap}
+										roundMap={roundMap}
+										techMap={techMap}
+										rounds={claimEditRounds(r.context)}
+										current={currentCompany}
+										dealPending={dealPending}
+										addedDeals={addedDeals}
+										onAddDeal={(row, fr, i) => void addRoundAsDeal(row, fr, i)}
+									/>
+									<div>
+										<button className="btn ghost" style={{ fontSize: 11 }} onClick={() => setShowRaw((v) => !v)}>{showRaw ? 'Hide raw JSON' : 'Show raw JSON'}</button>
+										{showRaw && <pre style={{ margin: '6px 0 0', whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-2)' }}>{JSON.stringify(r.context, null, 2)}</pre>}
+									</div>
+									<div style={{ fontSize: 12, color: 'var(--fg-muted)', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+										Apply the changed fields from the {r.entity_type}’s edit form (use “Add as deal” for any funding rounds), then <strong>Resolve</strong>. The requester is notified on pick-up and on resolve.
+									</div>
+								</>
+							) : (
+								<>
+									{r.context && Object.keys(r.context).length > 0 && (
+										<div style={{ fontSize: 12 }}>
+											<div className="co-stat-label">Extra context</div>
+											<pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-2)' }}>{JSON.stringify(r.context, null, 2)}</pre>
+										</div>
+									)}
+									{APPLYABLE.has(r.entity_type ?? '') ? (
+										<div style={{ display: 'grid', gap: 6 }}>
+											<div className="co-stat-label">Value to apply (edit before applying if needed)</div>
+											<div style={{ fontSize: 12 }}><span style={{ color: 'var(--fg-muted)' }}>Current: </span><span style={{ textDecoration: 'line-through', color: 'var(--fg-muted)' }}>{r.old_value || '∅'}</span></div>
+											<div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+												<textarea className="search-input" style={{ flex: 1, minHeight: 38, resize: 'vertical' }} value={editVal} onChange={(e) => setEditVal(e.target.value)} />
+												<button className="btn" disabled={applyPending === r.id || r.status === 'resolved'} onClick={() => void applyChange(r)}>
+													{applyPending === r.id ? 'Applying…' : 'Apply to record'}
+												</button>
+											</div>
+											<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Writes <code>{r.field_change ?? '—'}</code> on the {r.entity_type} and marks this request resolved.</div>
+										</div>
+									) : (
+										<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
+											{r.entity_type === 'investor_fund'
+												? 'Fund changes carry derived values (USD, year) — edit on the investor’s Funds tab, then resolve this request.'
+												: r.entity_type === 'investor_portfolio'
+													? 'Portfolio change — review against the investor’s record and resolve manually.'
+													: 'This request type can’t be auto-applied — review and resolve manually.'}
+										</div>
+									)}
+								</>
+							)}
+						</div>
+					</Modal>
+				);
+			})()}
 		</div>
 	);
 }

@@ -835,7 +835,7 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 		if (!form.website.trim()) { toast.error('Enter a website first.'); return; }
 		setEnriching(true);
 		try {
-			const r = await api<{ found: boolean; data: { name: string | null; description: string | null; website: string | null; city: string | null; country: string | null; logo_url: string | null; founded_year: number | null } | null }>(
+			const r = await api<{ found: boolean; data: { name: string | null; description: string | null; website: string | null; city: string | null; country: string | null; logo_url: string | null; founded_year: number | null; linkedin: string | null; twitter: string | null; facebook: string | null; instagram: string | null } | null }>(
 				'GET', `/api/admin/integrations/attio/company?domain=${encodeURIComponent(form.website.trim())}`);
 			if (!r.found || !r.data) { toast.error('No Attio match for this domain.'); return; }
 			const d = r.data;
@@ -846,6 +846,13 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 				custom_logo_url: f.custom_logo_url.trim() || d.logo_url || f.custom_logo_url,
 				founded_year: f.founded_year || (d.founded_year ? String(d.founded_year) : f.founded_year),
 				hq: { ...f.hq, city: f.hq.city.trim() || d.city || f.hq.city, country: f.hq.country.trim() || d.country || f.hq.country },
+				social: {
+					...f.social,
+					linkedin_url: f.social.linkedin_url.trim() || d.linkedin || f.social.linkedin_url,
+					twitter_url: f.social.twitter_url.trim() || d.twitter || f.social.twitter_url,
+					facebook_url: f.social.facebook_url.trim() || d.facebook || f.social.facebook_url,
+					instagram_url: f.social.instagram_url.trim() || d.instagram || f.social.instagram_url,
+				},
 			}));
 			toast.success('Filled empty fields from Attio');
 		} catch (e) { toast.error((e as Error).message); } finally { setEnriching(false); }
@@ -945,7 +952,7 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 									<Field label="Website *" hint="required & unique — used to dedupe and to enrich from Attio">
 										<div style={{ display: 'flex', gap: 6 }}>
 											<input className="search-input" type="url" value={form.website} onChange={(e) => set('website', e.target.value)} placeholder="https://acmesports.com" style={{ flex: 1 }} />
-											<button type="button" className="btn ghost" disabled={enriching || !form.website.trim()} onClick={() => void enrich()} title="Fill empty fields (name, description, logo, founded, HQ) from Attio using this domain">{enriching ? 'Enriching…' : 'Enrich'}</button>
+											<button type="button" className="btn ghost" disabled={enriching || !form.website.trim()} onClick={() => void enrich()} title="Fill empty fields (name, description, logo, founded year, HQ, social links) from Attio using this domain">{enriching ? 'Enriching…' : 'Enrich'}</button>
 										</div>
 									</Field>
 									<Field label="Slug" hint={isEdit ? 'the public URL is fixed once created' : 'optional — auto-generated from the name if left blank'}><input className="search-input" style={{ fontFamily: 'var(--font-mono)' }} value={form.slug} onChange={(e) => set('slug', e.target.value)} disabled={isEdit} placeholder={isEdit ? undefined : 'acme-sports'} /></Field>

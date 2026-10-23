@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import { toast } from 'sonner';
 import { ChevronDown, ChevronRight } from 'lucide-react';
@@ -33,15 +33,186 @@ interface Dcr {
 const APPLYABLE = new Set(['company', 'investor', 'deal', 'ecosystem']);
 interface DcrResponse { data: Dcr[]; total: number; totalPages: number }
 
-// A verified founder's edit lands here as a `claim_edit` "Profile update" bundle;
-// its funding rounds can't be auto-applied by the scalar apply endpoint, so the
-// admin adds each one as a deal with one click (reuses POST /api/admin/deals).
+// A verified user's edit lands here as a `claim_edit` "Profile update" bundle
+// (`context.changes` = { details, funding_rounds, mna, funds, portfolio, thesis_* }).
+// Raw JSON of that is unreadable for an admin, so it's rendered as a labelled
+// summary below; funding rounds also get a one-click "Add as deal".
 interface FundingRound { round_type_id?: string | null; round_label?: string | null; amount_usd?: number | null; round_date?: string | null; investors?: string | null; source_url?: string | null }
+interface ClaimEditCtx { kind?: string; role?: string; changes?: Record<string, unknown> }
+const asClaimEdit = (ctx: Record<string, unknown> | null): ClaimEditCtx | null => {
+	const c = ctx as ClaimEditCtx | null;
+	return c?.kind === 'claim_edit' ? c : null;
+};
 const claimEditRounds = (ctx: Record<string, unknown> | null): FundingRound[] => {
-	const c = ctx as { kind?: string; changes?: { funding_rounds?: unknown } } | null;
-	const rounds = c?.kind === 'claim_edit' ? c.changes?.funding_rounds : null;
+	const rounds = asClaimEdit(ctx)?.changes?.funding_rounds;
 	return Array.isArray(rounds) ? (rounds as FundingRound[]) : [];
 };
+// A one-line tally for the list cell: "12 fields · 1 round · 1 M&A".
+const claimEditTally = (ctx: Record<string, unknown> | null): string | null => {
+	const ce = asClaimEdit(ctx);
+	if (!ce) return null;
+	const ch = (ce.changes ?? {}) as Record<string, unknown>;
+	const details = (ch.details ?? {}) as Record<string, unknown>;
+	const nFields = Object.values(details).filter((v) => v != null && v !== '' && !(Array.isArray(v) && v.length === 0)).length;
+	const nRounds = Array.isArray(ch.funding_rounds) ? ch.funding_rounds.length : 0;
+	const nMna = Array.isArray(ch.mna) ? ch.mna.length : 0;
+	const parts = [`${nFields} field${nFields === 1 ? '' : 's'}`];
+	if (nRounds) parts.push(`${nRounds} round${nRounds === 1 ? '' : 's'}`);
+	if (nMna) parts.push(`${nMna} M&A`);
+	return parts.join(' · ');
+};
+
+// Internal detail keys → human labels, in the order they should read.
+const DETAIL_FIELDS: Array<[string, string]> = [
+	['description', 'Description'], ['website', 'Website'], ['sector_id', 'Sector'],
+	['business_model', 'Business model'], ['founded_year', 'Founded'], ['sport', 'Sport'],
+	['hq_city', 'HQ city'], ['hq_country', 'HQ country'], ['location', 'Location'],
+	['country', 'Country'], ['program_participation', 'Programs'],
+	['actively_raising', 'Actively raising'], ['round_type_id', 'Current round'],
+	['round_names', 'Round names'], ['raising_amount_min_usd', 'Raising (min)'],
+	['raising_amount_max_usd', 'Raising (max)'], ['raising_valuation_note', 'Valuation'],
+	['pitch_deck_url', 'Pitch deck'], ['actively_investing', 'Actively investing'],
+	['category', 'Investor type'], ['year_launched', 'Year launched'],
+	['thesis_amount_min_usd', 'Cheque (min)'], ['thesis_amount_max_usd', 'Cheque (max)'],
+	['fund_data', 'Fund data'], ['entity_type', 'Entity type'], ['op_type', 'Type'],
+	['applications_open', 'Applications open'], ['next_intake', 'Next intake'],
+	['key_date', 'Key date'], ['offer', 'Offer'], ['public_email', 'Public email'],
+	['twitter_url', 'Twitter'], ['instagram_url', 'Instagram'], ['facebook_url', 'Facebook'],
+	['linkedin_url', 'LinkedIn'], ['contact_name', 'Contact'], ['contact_first_name', 'Contact first name'],
+	['contact_last_name', 'Contact last name'], ['contact_position', 'Contact role'],
+	['contact_email', 'Contact email'], ['contact_linkedin', 'Contact LinkedIn'],
+];
+const THESIS_FIELDS: Array<[string, string]> = [
+	['thesis_sectors', 'Thesis sectors'], ['thesis_tech_tags', 'Tech tags'],
+	['thesis_revenue_stages', 'Revenue stages'], ['thesis_continents', 'Regions'],
+	['thesis_funding_stages', 'Funding stages'],
+];
+const MONEY_KEYS = new Set(['raising_amount_min_usd', 'raising_amount_max_usd', 'thesis_amount_min_usd', 'thesis_amount_max_usd']);
+
+const fmtMoney = (n: number): string => {
+	const [div, suffix] = n >= 1e9 ? [1e9, 'B'] as const : n >= 1e6 ? [1e6, 'M'] as const : n >= 1e3 ? [1e3, 'K'] as const : [1, ''] as const;
+	return `$${(n / div).toFixed(1).replace(/\.0$/, '')}${suffix}`;
+};
+
+// One detail value → a readable string, or null to skip the row entirely.
+function fmtDetail(key: string, val: unknown, sectorMap: Map<string, string>, roundMap: Map<string, string>): string | null {
+	if (val == null || val === '' || (Array.isArray(val) && val.length === 0)) return null;
+	if (key === 'sector_id') return sectorMap.get(String(val)) ?? null;
+	if (key === 'round_type_id') return roundMap.get(String(val)) ?? null;
+	if (key === 'pitch_deck_url') return 'Attached';
+	if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+	if (MONEY_KEYS.has(key) && typeof val === 'number') return fmtMoney(val);
+	if (Array.isArray(val)) return val.map(String).join(', ');
+	if (typeof val === 'object') {
+		const parts = Object.entries(val as Record<string, unknown>).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}: ${v}`);
+		return parts.length ? parts.join(', ') : null;
+	}
+	return String(val);
+}
+
+type RefRow = { id?: string; name?: string };
+const idNameMap = (resp: unknown): Map<string, string> => {
+	const list = Array.isArray(resp) ? resp : ((resp as { data?: RefRow[] })?.data ?? []);
+	const m = new Map<string, string>();
+	for (const o of list as RefRow[]) if (o?.id && o?.name) m.set(String(o.id), String(o.name));
+	return m;
+};
+
+function SummarySection({ title, rows }: { title: string; rows: Array<[string, string]> }) {
+	if (!rows.length) return null;
+	return (
+		<div>
+			<div className="co-stat-label" style={{ marginBottom: 6 }}>{title}</div>
+			<div style={{ display: 'grid', gap: 6 }}>
+				{rows.map(([k, v]) => (
+					<div key={k} style={{ display: 'grid', gridTemplateColumns: '160px 1fr', gap: 12, fontSize: 12.5, alignItems: 'baseline' }}>
+						<span style={{ color: 'var(--fg-muted)' }}>{k}</span>
+						<span style={{ wordBreak: 'break-word' }}>{v}</span>
+					</div>
+				))}
+			</div>
+		</div>
+	);
+}
+
+/** Readable render of a `claim_edit` bundle — the admin can see exactly what the
+ *  user wants changed without reading raw JSON. */
+function ClaimEditSummary({ r, sectorMap, roundMap, rounds, dealPending, addedDeals, onAddDeal }: {
+	r: Dcr;
+	sectorMap: Map<string, string>;
+	roundMap: Map<string, string>;
+	rounds: FundingRound[];
+	dealPending: string | null;
+	addedDeals: Set<string>;
+	onAddDeal: (r: Dcr, fr: FundingRound, i: number) => void;
+}) {
+	const ctx = asClaimEdit(r.context);
+	const changes = (ctx?.changes ?? {}) as Record<string, unknown>;
+	const details = (changes.details ?? {}) as Record<string, unknown>;
+	const detailRows = DETAIL_FIELDS
+		.map(([k, label]) => [label, fmtDetail(k, details[k], sectorMap, roundMap)] as [string, string | null])
+		.filter((row): row is [string, string] => row[1] != null);
+	const thesisRows = THESIS_FIELDS
+		.map(([k, label]) => [label, fmtDetail(k, changes[k], sectorMap, roundMap)] as [string, string | null])
+		.filter((row): row is [string, string] => row[1] != null);
+	const mna = (Array.isArray(changes.mna) ? changes.mna : []) as Array<Record<string, unknown>>;
+	const funds = (Array.isArray(changes.funds) ? changes.funds : []) as Array<Record<string, unknown>>;
+	const portfolio = (Array.isArray(changes.portfolio) ? changes.portfolio : []) as Array<Record<string, unknown>>;
+	const line = (parts: Array<unknown>) => parts.filter((p) => p != null && p !== '').join(' · ') || '—';
+	const empty = !detailRows.length && !thesisRows.length && !rounds.length && !mna.length && !funds.length && !portfolio.length;
+
+	return (
+		<div style={{ display: 'grid', gap: 14 }}>
+			<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
+				{ctx?.role ? `${ctx.role[0].toUpperCase()}${ctx.role.slice(1)} is requesting these profile updates:` : 'Requested profile updates:'}
+			</div>
+			<SummarySection title="Profile & details" rows={detailRows} />
+			<SummarySection title="Investment thesis" rows={thesisRows} />
+			{rounds.length > 0 && (
+				<div style={{ display: 'grid', gap: 6 }}>
+					<div className="co-stat-label">Funding rounds</div>
+					{rounds.map((fr, i) => {
+						const key = `${r.id}:${i}`;
+						const added = addedDeals.has(key);
+						const label = fr.round_label || (fr.round_type_id ? roundMap.get(String(fr.round_type_id)) : null) || 'Round';
+						return (
+							<div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5, flexWrap: 'wrap' }}>
+								<span style={{ fontWeight: 600 }}>{label}</span>
+								<span style={{ color: 'var(--fg-muted)' }}>{line([fr.round_date, typeof fr.amount_usd === 'number' ? fmtMoney(fr.amount_usd) : null, fr.investors])}</span>
+								<div style={{ flex: 1 }} />
+								{r.target_company_id && (
+									<button className="btn ghost" disabled={added || dealPending === key} onClick={() => onAddDeal(r, fr, i)}>
+										{added ? 'Added ✓' : dealPending === key ? 'Adding…' : 'Add as deal'}
+									</button>
+								)}
+							</div>
+						);
+					})}
+					{r.target_company_id && <div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Creates a deal on the company. Set the raising amount/round + toggle “actively raising” from the claim, then resolve.</div>}
+				</div>
+			)}
+			{mna.length > 0 && (
+				<div style={{ display: 'grid', gap: 6 }}>
+					<div className="co-stat-label">M&amp;A</div>
+					{mna.map((m, i) => <div key={i} style={{ fontSize: 12.5 }}>{line([m.deal_type, m.counterparty, typeof m.amount_usd === 'number' ? fmtMoney(m.amount_usd) : null, m.deal_date])}</div>)}
+				</div>
+			)}
+			{funds.length > 0 && (
+				<div style={{ display: 'grid', gap: 6 }}>
+					<div className="co-stat-label">Funds</div>
+					{funds.map((f, i) => <div key={i} style={{ fontSize: 12.5 }}>{line([f.name, typeof f.size_usd === 'number' ? fmtMoney(f.size_usd) : null, f.fund_year])}</div>)}
+				</div>
+			)}
+			{portfolio.length > 0 && (
+				<div style={{ display: 'grid', gap: 6 }}>
+					<div className="co-stat-label">Portfolio</div>
+					{portfolio.map((p, i) => <div key={i} style={{ fontSize: 12.5 }}>{line([p.company_name, p.stage, p.invest_year])}</div>)}
+				</div>
+			)}
+			{empty && <div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>No field values in this request.</div>}
+		</div>
+	);
+}
 
 const TABS: Array<{ label: string; key: DcrStatus }> = [
 	{ label: 'Open', key: 'open' },
@@ -65,6 +236,13 @@ export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: 
 	);
 	const stats = useSWR<QueueStats>(['/api/admin/stats/queues'], { dedupingInterval: 60_000 });
 	const dq: Record<string, number> = Object.fromEntries((stats.data?.data_requests ?? []).map((b) => [b.label, b.value]));
+
+	// Reference lists resolve the UUIDs a claim_edit bundle stores (sector_id,
+	// round_type_id) to readable names. Public + cached, shared with the pickers.
+	const sectorsRef = useSWR(['/api/sectors'], { dedupingInterval: 300_000 });
+	const roundsRef = useSWR(['/api/round-types'], { dedupingInterval: 300_000 });
+	const sectorMap = useMemo(() => idNameMap(sectorsRef.data), [sectorsRef.data]);
+	const roundMap = useMemo(() => idNameMap(roundsRef.data), [roundsRef.data]);
 
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/admin/data-change-requests');
 
@@ -90,7 +268,9 @@ export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: 
 	const [expandedId, setExpandedId] = useState<string | null>(null);
 	const [editVal, setEditVal] = useState('');
 	const [applyPending, setApplyPending] = useState<string | null>(null);
+	const [showRaw, setShowRaw] = useState(false);
 	const toggleExpand = (r: Dcr) => {
+		setShowRaw(false);
 		if (expandedId === r.id) { setExpandedId(null); return; }
 		setExpandedId(r.id);
 		setEditVal(r.requested_value ?? '');
@@ -214,7 +394,12 @@ export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: 
 									<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>{r.entity_type ?? ''}</div>
 								</td>
 								<td style={{ maxWidth: 320 }}>
-									{r.field_change ? (
+									{asClaimEdit(r.context) ? (
+										<div style={{ fontSize: 13 }}>
+											<span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)' }}>profile update</span>
+											<div style={{ color: 'var(--fg-2)' }}>{claimEditTally(r.context)}</div>
+										</div>
+									) : r.field_change ? (
 										<div style={{ fontSize: 13 }}>
 											<span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-muted)' }}>{r.change_type ?? 'edit'} · {r.field_change}</span>
 											<div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -257,53 +442,54 @@ export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: 
 												<div><div className="co-stat-label">Requested by</div>{r.user_email ?? '—'}</div>
 												<div><div className="co-stat-label">Submitted</div>{new Date(r.created_at).toLocaleString()}</div>
 											</div>
-											{r.context && Object.keys(r.context).length > 0 && (
-												<div style={{ fontSize: 12 }}>
-													<div className="co-stat-label">Extra context</div>
-													<pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-2)' }}>{JSON.stringify(r.context, null, 2)}</pre>
-												</div>
-											)}
-											{r.entity_type === 'company' && r.target_company_id && claimEditRounds(r.context).length > 0 && (
-												<div style={{ display: 'grid', gap: 6 }}>
-													<div className="co-stat-label">Proposed funding rounds</div>
-													{claimEditRounds(r.context).map((fr, i) => {
-														const key = `${r.id}:${i}`;
-														const added = addedDeals.has(key);
-														return (
-															<div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12, flexWrap: 'wrap' }}>
-																<span style={{ fontWeight: 600 }}>{fr.round_label || 'Round'}</span>
-																<span style={{ color: 'var(--fg-muted)' }}>
-																	{[fr.round_date, typeof fr.amount_usd === 'number' ? `$${fr.amount_usd.toLocaleString()}` : null, fr.investors].filter(Boolean).join(' · ') || '—'}
-																</span>
-																<div style={{ flex: 1 }} />
-																<button className="btn ghost" disabled={added || dealPending === key} onClick={() => void addRoundAsDeal(r, fr, i)}>
-																	{added ? 'Added ✓' : dealPending === key ? 'Adding…' : 'Add as deal'}
+											{asClaimEdit(r.context) ? (
+												<>
+													<ClaimEditSummary
+														r={r}
+														sectorMap={sectorMap}
+														roundMap={roundMap}
+														rounds={claimEditRounds(r.context)}
+														dealPending={dealPending}
+														addedDeals={addedDeals}
+														onAddDeal={(row, fr, i) => void addRoundAsDeal(row, fr, i)}
+													/>
+													<div>
+														<button className="btn ghost" style={{ fontSize: 11 }} onClick={() => setShowRaw((v) => !v)}>{showRaw ? 'Hide raw JSON' : 'Show raw JSON'}</button>
+														{showRaw && <pre style={{ margin: '6px 0 0', whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-2)' }}>{JSON.stringify(r.context, null, 2)}</pre>}
+													</div>
+													<div style={{ fontSize: 12, color: 'var(--fg-muted)', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+														This is a full profile update. Apply the fields above from the {r.entity_type}’s edit form (use “Add as deal” for any funding rounds), then <strong>Resolve</strong>. The requester is notified on pick-up and on resolve.
+													</div>
+												</>
+											) : (
+												<>
+													{r.context && Object.keys(r.context).length > 0 && (
+														<div style={{ fontSize: 12 }}>
+															<div className="co-stat-label">Extra context</div>
+															<pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--fg-2)' }}>{JSON.stringify(r.context, null, 2)}</pre>
+														</div>
+													)}
+													{APPLYABLE.has(r.entity_type ?? '') ? (
+														<div style={{ display: 'grid', gap: 6 }}>
+															<div className="co-stat-label">Value to apply (edit before applying if needed)</div>
+															<div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+																<textarea className="search-input" style={{ flex: 1, minHeight: 38, resize: 'vertical' }} value={editVal} onChange={(e) => setEditVal(e.target.value)} />
+																<button className="btn" disabled={applyPending === r.id || r.status === 'resolved'} onClick={() => void applyChange(r)}>
+																	{applyPending === r.id ? 'Applying…' : 'Apply to record'}
 																</button>
 															</div>
-														);
-													})}
-													<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Creates a deal on the company. Set the raising amount/round and toggle “actively raising” from the claim, then resolve this request.</div>
-												</div>
-											)}
-											{APPLYABLE.has(r.entity_type ?? '') ? (
-												<div style={{ display: 'grid', gap: 6 }}>
-													<div className="co-stat-label">Value to apply (edit before applying if needed)</div>
-													<div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-														<textarea className="search-input" style={{ flex: 1, minHeight: 38, resize: 'vertical' }} value={editVal} onChange={(e) => setEditVal(e.target.value)} />
-														<button className="btn" disabled={applyPending === r.id || r.status === 'resolved'} onClick={() => void applyChange(r)}>
-															{applyPending === r.id ? 'Applying…' : 'Apply to record'}
-														</button>
-													</div>
-													<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Writes <code>{r.field_change ?? '—'}</code> on the {r.entity_type} and marks this request resolved.</div>
-												</div>
-											) : (
-												<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
-													{r.entity_type === 'investor_fund'
-														? 'Fund changes carry derived values (USD, year) — edit on the investor’s Funds tab, then resolve this request.'
-														: r.entity_type === 'investor_portfolio'
-															? 'Portfolio change — review against the investor’s record and resolve manually.'
-															: 'This request type can’t be auto-applied — review and resolve manually.'}
-												</div>
+															<div style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Writes <code>{r.field_change ?? '—'}</code> on the {r.entity_type} and marks this request resolved.</div>
+														</div>
+													) : (
+														<div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>
+															{r.entity_type === 'investor_fund'
+																? 'Fund changes carry derived values (USD, year) — edit on the investor’s Funds tab, then resolve this request.'
+																: r.entity_type === 'investor_portfolio'
+																	? 'Portfolio change — review against the investor’s record and resolve manually.'
+																	: 'This request type can’t be auto-applied — review and resolve manually.'}
+														</div>
+													)}
+												</>
 											)}
 										</div>
 									</td>

@@ -829,6 +829,9 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 
 	const set = <K extends keyof CompanyForm>(k: K, v: CompanyForm[K]) => setForm((f) => ({ ...f, [k]: v }));
 	const [enriching, setEnriching] = useState(false);
+	// Fields the Attio "Enrich" button just filled — merged with `enrichedFields`
+	// (the pipeline-promote ones) so both get the "verify before saving" highlight.
+	const [attioEnriched, setAttioEnriched] = useState<Set<string>>(new Set());
 	// Pull name/description/location from Attio by the entered website domain;
 	// fills only empty fields so it never clobbers admin edits.
 	const enrich = async () => {
@@ -845,6 +848,25 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 			if (!r.found || !r.data) { toast.error('No Attio match for this domain.'); return; }
 			const d = r.data;
 			const poc = d.poc;
+			// Track which fields this actually fills (empty-before + Attio-has-value),
+			// so only those get highlighted. Names match the <Field>/<EnrichedGroup name>.
+			const filled = new Set<string>();
+			const mark = (cond: boolean, name: string) => { if (cond) filled.add(name); };
+			mark(!form.name.trim() && !!d.name, 'name');
+			mark(!form.description.trim() && !!d.description, 'description');
+			mark(!form.custom_logo_url.trim() && !!d.logo_url, 'custom_logo_url');
+			mark(!form.founded_year && !!d.founded_year, 'founded_year');
+			mark(!form.sector_id && !!d.sector_id, 'sector_id');
+			mark(!form.business_model && !!d.business_model, 'business_model');
+			mark(!form.sport_ids.length && !!d.sport_id, 'sport_ids');
+			mark((!form.hq.city.trim() && !!d.city) || (!form.hq.country.trim() && !!d.country), 'hq');
+			mark((!form.social.linkedin_url.trim() && !!d.linkedin) || (!form.social.twitter_url.trim() && !!d.twitter) || (!form.social.facebook_url.trim() && !!d.facebook) || (!form.social.instagram_url.trim() && !!d.instagram), 'social');
+			mark(!form.poc_first_name.trim() && !!poc?.first_name, 'poc_first_name');
+			mark(!form.poc_last_name.trim() && !!poc?.last_name, 'poc_last_name');
+			mark(!form.poc_job_position.trim() && !!poc?.job_title, 'poc_job_position');
+			// poc_email is saved (below) but has no visible input, so it's not highlighted.
+			mark(!form.poc_linkedin.trim() && !!poc?.linkedin, 'poc_linkedin');
+			setAttioEnriched((prev) => new Set([...prev, ...filled]));
 			setForm((f) => ({
 				...f,
 				name: f.name.trim() || d.name || f.name,
@@ -868,7 +890,7 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 				poc_email: f.poc_email.trim() || poc?.email || f.poc_email,
 				poc_linkedin: f.poc_linkedin.trim() || poc?.linkedin || f.poc_linkedin,
 			}));
-			toast.success('Filled empty fields from Attio');
+			toast.success(filled.size ? `Filled ${filled.size} field${filled.size === 1 ? '' : 's'} from Attio — highlighted for review` : 'Attio matched, but all fields were already filled');
 		} catch (e) { toast.error((e as Error).message); } finally { setEnriching(false); }
 	};
 
@@ -951,8 +973,8 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 			}
 		>
 			{(
-				<EnrichedFieldsProvider value={new Set(enrichedFields ?? [])}>
-					{!!enrichedFields?.length && (
+				<EnrichedFieldsProvider value={new Set([...(enrichedFields ?? []), ...attioEnriched])}>
+					{(!!enrichedFields?.length || attioEnriched.size > 0) && (
 						<div style={{ fontSize: 12, color: 'var(--info)', padding: '8px 10px', border: '1px solid color-mix(in oklab, var(--info) 30%, transparent)', background: 'color-mix(in oklab, var(--info) 6%, transparent)', borderRadius: 'var(--radius-sm)', marginBottom: 4 }}>Highlighted fields were auto-filled by enrichment — verify before saving.</div>
 					)}
 					<TabbedForm
@@ -962,7 +984,7 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 						{
 							key: 'profile', label: 'Profile', node: (
 								<>
-									<Field label="Name *" hint="required — the display name used everywhere"><input className="search-input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Acme Sports" /></Field>
+									<Field name="name" label="Name *" hint="required — the display name used everywhere"><input className="search-input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Acme Sports" /></Field>
 									<Field label="Website *" hint="required & unique — used to dedupe and to enrich from Attio">
 										<div style={{ display: 'flex', gap: 6 }}>
 											<input className="search-input" type="url" value={form.website} onChange={(e) => set('website', e.target.value)} placeholder="https://acmesports.com" style={{ flex: 1 }} />

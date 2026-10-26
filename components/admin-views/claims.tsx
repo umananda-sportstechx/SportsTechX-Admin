@@ -453,6 +453,8 @@ function CreateEntityPanel({ claim, onDone }: { claim: Claim; onDone: () => void
 	const [year, setYear] = useState('');
 	const [hq, setHq] = useState<LocationValue>({ ...EMPTY_LOCATION });
 	const [pending, setPending] = useState(false);
+	// Set when Create is refused because the record already exists (same website).
+	const [dupOf, setDupOf] = useState<string | null>(null);
 
 	// Prefill from what the founder submitted. Owner-or-admin endpoint; cheap and
 	// only fetched once the row is expanded (this panel mounts there).
@@ -514,10 +516,24 @@ function CreateEntityPanel({ claim, onDone }: { claim: Claim; onDone: () => void
 			toast.success('Record created, linked & verified');
 			onDone();
 		} catch (e) {
-			toast.error((e as Error).message);
+			const msg = (e as Error).message;
+			// The record already exists (same website) — offer to link instead of create.
+			if (/already exists/i.test(msg)) setDupOf(msg);
+			toast.error(msg);
 		} finally {
 			setPending(false);
 		}
+	};
+	// Attach this "add new" claim to the existing record (several people may be
+	// verified for one entity). Verifying stays a separate step on the claim row.
+	const linkExisting = async () => {
+		setPending(true);
+		try {
+			await api('POST', `/api/admin/claims/${claim.id}/link`, { website: website.trim() });
+			toast.success('Linked to the existing record — verify the claim when ready');
+			onDone();
+		} catch (e) { toast.error((e as Error).message); }
+		finally { setPending(false); }
 	};
 
 	const L = (label: string, node: React.ReactNode) => (
@@ -549,6 +565,12 @@ function CreateEntityPanel({ claim, onDone }: { claim: Claim; onDone: () => void
 				{L(kind === 'investor' ? 'Year launched' : 'Founded year', <YearSelect value={year} onChange={setYear} />)}
 			</div>
 			{L('Headquarters', <LocationFields key={locKey} value={hq} onChange={setHq} />)}
+			{dupOf && (
+				<div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', fontSize: 12 }}>
+					<span style={{ flex: 1 }}>{dupOf}</span>
+					<button className="btn" disabled={pending || !website.trim()} onClick={() => void linkExisting()}>Link to existing</button>
+				</div>
+			)}
 			<div style={{ display: 'flex', justifyContent: 'flex-end' }}>
 				<button className="btn" disabled={pending || !name.trim()} onClick={() => void submit()}>
 					{pending ? 'Creating…' : `Create & verify ${kind.replace('_', ' ')}`}

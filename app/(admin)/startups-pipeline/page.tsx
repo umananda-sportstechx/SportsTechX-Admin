@@ -49,7 +49,9 @@ interface EnrichedDetail {
 }
 interface Response { data: Entry[]; total: number; totalPages?: number }
 interface DedupeMatch { id: string; name: string; website: string | null; slug: string | null; status: string | null }
-interface Preview { matches: DedupeMatch[]; suggestions: Suggestions | null; prefill: { name: string; website: string; description: string; hq_country: string; hq_city: string; hq_state: string; continent: string; region: string; report_region: string; logo_url: string; founded_year: number | null; linkedin_url: string; twitter_url: string; facebook_url: string; poc_name: string; poc_position: string; poc_linkedin: string } }
+interface Preview { matches: DedupeMatch[]; suggestions: Suggestions | null; prefill: { name: string; website: string; description: string; hq_country: string; hq_city: string; hq_state: string; continent: string; region: string; report_region: string; logo_url: string; founded_year: number | null; linkedin_url: string; twitter_url: string; facebook_url: string; instagram_url?: string; poc_name: string; poc_position: string; poc_linkedin: string; poc_email?: string;
+	// Server-resolved taxonomy from the merged enrichment; null on rows enriched before it existed.
+	sector_id?: string | null; sport_ids?: string[] | null; tech_tag_ids?: string[] | null; business_model?: string | null } }
 
 const TABS: Array<{ label: string; key: Status | '' }> = [
 	{ label: 'All', key: '' }, { label: 'New', key: 'new' }, { label: 'Reviewing', key: 'reviewing' },
@@ -270,19 +272,21 @@ function PromoteModal({ row, onClose, onDone }: { row: Entry; onClose: () => voi
 		// Prefer the most-specific (leaf) sector so the sub-sector cascade fills;
 		// fall back to the first broad suggestion.
 		const primaryId = s?.primary_sector ? secMap.get(s.primary_sector.toLowerCase()) : undefined;
-		const sectorId = primaryId ?? resolve(s?.sectors, secMap)[0] ?? '';
+		// Prefer the server-resolved ids from the merged enrichment; older rows fall
+		// back to resolving Claude's suggestion names here.
+		const sectorId = p?.sector_id ?? primaryId ?? resolve(s?.sectors, secMap)[0] ?? '';
 		const pocParts = (p?.poc_name ?? '').trim().split(/\s+/).filter(Boolean);
 		const seed = p ? {
 					name: p.name, website: p.website, description: p.description,
 					custom_logo_url: p.logo_url,
 					founded_year: p.founded_year != null ? String(p.founded_year) : '',
-					business_model: s?.business_model ?? '',
+					business_model: p.business_model ?? s?.business_model ?? '',
 					sector_id: sectorId,
-					sport_ids: sportIds, tech_tag_ids: techIds,
+					sport_ids: p.sport_ids ?? sportIds, tech_tag_ids: p.tech_tag_ids ?? techIds,
 					hq: { ...EMPTY_LOCATION, country: p.hq_country, city: p.hq_city, state: p.hq_state, continent: p.continent, region: p.region, report_region: p.report_region },
-					social: { twitter_url: p.twitter_url, instagram_url: '', facebook_url: p.facebook_url, linkedin_url: p.linkedin_url, youtube_url: '', email: '' },
+					social: { twitter_url: p.twitter_url, instagram_url: p.instagram_url ?? '', facebook_url: p.facebook_url, linkedin_url: p.linkedin_url, youtube_url: '', email: '' },
 					poc_first_name: pocParts[0] ?? '', poc_last_name: pocParts.slice(1).join(' '),
-					poc_job_position: p.poc_position, poc_linkedin: p.poc_linkedin,
+					poc_job_position: p.poc_position, poc_linkedin: p.poc_linkedin, poc_email: p.poc_email ?? '',
 				} : undefined;
 		return (
 			<CompanyModal

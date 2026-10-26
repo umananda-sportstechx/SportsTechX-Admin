@@ -309,6 +309,8 @@ const TABS: Array<{ label: string; key: DcrStatus }> = [
 export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: boolean; lockEntity?: string }) {
 	const { mutate } = useSWRConfig();
 	const [status, setStatus] = useState('');
+	// Only offered when the view isn't locked to a section (the all-queues page).
+	const [entity, setEntity] = useState('');
 	const [search, setSearch] = useState(useInitialQuery());
 	const debouncedSearch = useDebouncedValue(search);
 	const [page, setPage] = useState(1);
@@ -316,7 +318,7 @@ export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: 
 	const [selected, setSelected] = useState<Set<string>>(new Set());
 
 	const { data, error, isLoading } = useSWR<DcrResponse>(
-		['/api/admin/data-change-requests', { status: status || undefined, q: debouncedSearch || undefined, entity_type: lockEntity || undefined, page, limit: 30 }],
+		['/api/admin/data-change-requests', { status: status || undefined, q: debouncedSearch || undefined, entity_type: lockEntity || entity || undefined, page, limit: 30 }],
 		{ dedupingInterval: 15_000 },
 	);
 	const stats = useSWR<QueueStats>(['/api/admin/stats/queues'], { dedupingInterval: 60_000 });
@@ -445,6 +447,13 @@ export function DataRequestsView({ embedded = false, lockEntity }: { embedded?: 
 			<FilterBar>
 				<input className="search-input" style={{ flex: '0 0 260px', height: 32 }} placeholder="Search target / requester / field…" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
 				<FilterSelect ariaLabel="Status" value={status} onChange={(v) => { setStatus(v); setPage(1); }} options={TABS.map((t) => ({ value: t.key, label: t.label }))} allLabel="All statuses" />
+				{!lockEntity && (
+					<FilterSelect ariaLabel="Entity" value={entity} onChange={(v) => { setEntity(v); setPage(1); setSelected(new Set()); }} allLabel="All entities" options={[
+						{ value: 'company,deal', label: 'Companies & deals' },
+						{ value: 'investor,investor_fund,investor_portfolio', label: 'Investors' },
+						{ value: 'ecosystem', label: 'Ecosystem' },
+					]} />
+				)}
 			</FilterBar>
 
 			{selected.size > 0 && (

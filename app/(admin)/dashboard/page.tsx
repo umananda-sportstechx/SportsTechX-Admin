@@ -115,15 +115,15 @@ export default function AdminDashboard() {
 
 	const queues = [
 		{ label: 'Pending claims',     value: claimsTotal,               href: '/claims',            loading: claims.isLoading,   urgent: claimsTotal > 0 },
-		{ label: 'Open data requests', value: dcrTotal,                  href: '/data-requests',     loading: dcr.isLoading,      urgent: dcrTotal > 0 },
+		{ label: 'Open data requests', value: dcrTotal,                  href: '/claims?tab=changes', loading: dcr.isLoading,      urgent: dcrTotal > 0 },
 		{ label: 'Pipeline (new)',     value: pipeline.data?.total ?? 0, href: '/startups-pipeline', loading: pipeline.isLoading, urgent: (pipeline.data?.total ?? 0) > 0 },
 	];
 
 	const warehouse = [
 		{ label: 'Companies', value: d?.total_companies,          href: '/companies',    tone: 'blue' },
-		{ label: 'Deals',     value: d?.total_deals,              href: '/deals',        tone: 'green' },
-		{ label: 'Investors', value: d?.total_investors,          href: '/investors',    tone: 'purple' },
-		{ label: 'M&A',       value: d?.total_acquisitions,       href: '/acquisitions', tone: 'amber' },
+		{ label: 'Deals',     value: d?.total_deals,              href: '/companies?tab=deals',        tone: 'green' },
+		{ label: 'Investors', value: d?.total_investors,          href: '/ecosystem?tab=investors',    tone: 'purple' },
+		{ label: 'M&A',       value: d?.total_acquisitions,       href: '/companies?tab=acquisitions', tone: 'amber' },
 		{ label: 'Ecosystem', value: d?.total_ecosystem_entities, href: '/ecosystem',    tone: 'teal' },
 		{ label: 'Users',     value: users.data?.total,           href: '/users',        tone: 'indigo' },
 	] as const;
@@ -169,7 +169,7 @@ export default function AdminDashboard() {
 				/>
 				<MoneyStat
 					label="Largest M&A" loading={ma.isLoading} value={fmtMoney(ma.data?.largest_value ?? 0)}
-					sub={ma.data?.largest_target} subHref={ma.data?.largest_target ? `/acquisitions?q=${encodeURIComponent(ma.data.largest_target)}` : undefined}
+					sub={ma.data?.largest_target} subHref={ma.data?.largest_target ? `/companies?tab=acquisitions&q=${encodeURIComponent(ma.data.largest_target)}` : undefined}
 					tone="oklch(57% 0.13 65)"
 				/>
 			</div>
@@ -235,7 +235,7 @@ export default function AdminDashboard() {
 							<thead><tr><th>Acquirer</th><th style={{ textAlign: 'right' }}>Value</th><th style={{ textAlign: 'right' }}>Deals</th></tr></thead>
 							<tbody>
 								{(topAcq.data ?? []).map((a, i) => (
-									<tr key={`${a.acquirer_name}-${i}`} {...rowLink(`/acquisitions?q=${encodeURIComponent(a.acquirer_name)}`)}>
+									<tr key={`${a.acquirer_name}-${i}`} {...rowLink(`/companies?tab=acquisitions&q=${encodeURIComponent(a.acquirer_name)}`)}>
 										<td style={{ fontWeight: 600 }}>{a.acquirer_name}{a.acquirer_country ? <span style={{ color: 'var(--fg-muted)', fontWeight: 400 }}> · {a.acquirer_country}</span> : null}</td>
 										<td className="num" style={{ textAlign: 'right' }}>{fmtMoney(a.total_value)}</td>
 										<td className="num" style={{ textAlign: 'right', color: 'var(--fg-muted)' }}>{a.deal_count}</td>
@@ -277,7 +277,7 @@ export default function AdminDashboard() {
 								{(dcr.data?.data ?? []).map((r) => {
 									const name = r.target_name_snapshot ?? '';
 									return (
-										<tr key={r.id} {...rowLink(name ? `/data-requests?q=${encodeURIComponent(name)}` : '/data-requests')}>
+										<tr key={r.id} {...rowLink(name ? `/claims?tab=changes&q=${encodeURIComponent(name)}` : '/claims?tab=changes')}>
 											<td className="num">{new Date(r.created_at).toLocaleDateString()}</td>
 											<td>{name || r.entity_type}</td>
 											<td style={{ maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.field_change ?? '—'}</td>

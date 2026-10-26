@@ -829,11 +829,12 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 
 	const set = <K extends keyof CompanyForm>(k: K, v: CompanyForm[K]) => setForm((f) => ({ ...f, [k]: v }));
 	const [enriching, setEnriching] = useState(false);
-	// Fields the Attio "Enrich" button just filled — merged with `enrichedFields`
+	// Fields the "Enrich" button just filled — merged with `enrichedFields`
 	// (the pipeline-promote ones) so both get the "verify before saving" highlight.
 	const [attioEnriched, setAttioEnriched] = useState<Set<string>>(new Set());
-	// Pull name/description/location from Attio by the entered website domain;
-	// fills only empty fields so it never clobbers admin edits.
+	// Pull everything we can find for the website's domain — Attio + Apollo, with
+	// taxonomy mapped to our reference data server-side. Fills only empty fields
+	// so it never clobbers admin edits.
 	const enrich = async () => {
 		if (!form.website.trim()) { toast.error('Enter a website first.'); return; }
 		setEnriching(true);
@@ -841,14 +842,15 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 			const r = await api<{ found: boolean; data: {
 				name: string | null; description: string | null; website: string | null; city: string | null; country: string | null; logo_url: string | null; founded_year: number | null;
 				linkedin: string | null; twitter: string | null; facebook: string | null; instagram: string | null;
-				sector_id: string | null; sector_name: string | null; sport_id: string | null; sport_name: string | null; business_model: string | null;
+				sector_id: string | null; sector_name: string | null; sport_ids: string[]; tech_tag_ids: string[]; business_model: string | null;
 				poc: { first_name: string | null; last_name: string | null; job_title: string | null; email: string | null; linkedin: string | null } | null;
+				sources: Record<string, 'attio' | 'apollo' | 'ai'>;
 			} | null }>(
-				'GET', `/api/admin/integrations/attio/company?domain=${encodeURIComponent(form.website.trim())}`);
-			if (!r.found || !r.data) { toast.error('No Attio match for this domain.'); return; }
+				'GET', `/api/admin/integrations/company-enrich?domain=${encodeURIComponent(form.website.trim())}${form.name.trim() ? `&name=${encodeURIComponent(form.name.trim())}` : ''}`);
+			if (!r.found || !r.data) { toast.error('Neither Attio nor Apollo knows this domain.'); return; }
 			const d = r.data;
 			const poc = d.poc;
-			// Track which fields this actually fills (empty-before + Attio-has-value),
+			// Track which fields this actually fills (empty-before + source-has-value),
 			// so only those get highlighted. Names match the <Field>/<EnrichedGroup name>.
 			const filled = new Set<string>();
 			const mark = (cond: boolean, name: string) => { if (cond) filled.add(name); };
@@ -858,7 +860,8 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 			mark(!form.founded_year && !!d.founded_year, 'founded_year');
 			mark(!form.sector_id && !!d.sector_id, 'sector_id');
 			mark(!form.business_model && !!d.business_model, 'business_model');
-			mark(!form.sport_ids.length && !!d.sport_id, 'sport_ids');
+			mark(!form.sport_ids.length && d.sport_ids.length > 0, 'sport_ids');
+			mark(!form.tech_tag_ids.length && d.tech_tag_ids.length > 0, 'tech_tag_ids');
 			mark((!form.hq.city.trim() && !!d.city) || (!form.hq.country.trim() && !!d.country), 'hq');
 			mark((!form.social.linkedin_url.trim() && !!d.linkedin) || (!form.social.twitter_url.trim() && !!d.twitter) || (!form.social.facebook_url.trim() && !!d.facebook) || (!form.social.instagram_url.trim() && !!d.instagram), 'social');
 			mark(!form.poc_first_name.trim() && !!poc?.first_name, 'poc_first_name');
@@ -875,7 +878,8 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 				founded_year: f.founded_year || (d.founded_year ? String(d.founded_year) : f.founded_year),
 				sector_id: f.sector_id || d.sector_id || f.sector_id,
 				business_model: f.business_model || d.business_model || f.business_model,
-				sport_ids: f.sport_ids.length ? f.sport_ids : (d.sport_id ? [d.sport_id] : f.sport_ids),
+				sport_ids: f.sport_ids.length ? f.sport_ids : d.sport_ids,
+				tech_tag_ids: f.tech_tag_ids.length ? f.tech_tag_ids : d.tech_tag_ids,
 				hq: { ...f.hq, city: f.hq.city.trim() || d.city || f.hq.city, country: f.hq.country.trim() || d.country || f.hq.country },
 				social: {
 					...f.social,
@@ -890,7 +894,9 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 				poc_email: f.poc_email.trim() || poc?.email || f.poc_email,
 				poc_linkedin: f.poc_linkedin.trim() || poc?.linkedin || f.poc_linkedin,
 			}));
-			toast.success(filled.size ? `Filled ${filled.size} field${filled.size === 1 ? '' : 's'} from Attio — highlighted for review` : 'Attio matched, but all fields were already filled');
+			const LABEL = { attio: 'Attio', apollo: 'Apollo', ai: 'AI mapping' } as const;
+			const used = [...new Set(Object.values(d.sources ?? {}))].map((k) => LABEL[k]).join(' + ');
+			toast.success(filled.size ? `Filled ${filled.size} field${filled.size === 1 ? '' : 's'} from ${used} — highlighted for review` : `Matched (${used}), but every field was already filled`);
 		} catch (e) { toast.error((e as Error).message); } finally { setEnriching(false); }
 	};
 
@@ -985,10 +991,10 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 							key: 'profile', label: 'Profile', node: (
 								<>
 									<Field name="name" label="Name *" hint="required — the display name used everywhere"><input className="search-input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Acme Sports" /></Field>
-									<Field label="Website *" hint="required & unique — used to dedupe and to enrich from Attio">
+									<Field label="Website *" hint="required & unique — used to dedupe and to enrich from Attio + Apollo">
 										<div style={{ display: 'flex', gap: 6 }}>
 											<input className="search-input" type="url" value={form.website} onChange={(e) => set('website', e.target.value)} placeholder="https://acmesports.com" style={{ flex: 1 }} />
-											<button type="button" className="btn ghost" disabled={enriching || !form.website.trim()} onClick={() => void enrich()} title="Fill empty fields (name, description, logo, founded year, HQ, social links) from Attio using this domain">{enriching ? 'Enriching…' : 'Enrich'}</button>
+											<button type="button" className="btn ghost" disabled={enriching || !form.website.trim()} onClick={() => void enrich()} title="Fill empty fields (description, logo, founded year, HQ, socials, sector, sports, tech tags, business model, contact) from Attio + Apollo using this domain">{enriching ? 'Enriching…' : 'Enrich'}</button>
 										</div>
 									</Field>
 									<Field label="Slug" hint={isEdit ? 'the public URL is fixed once created' : 'optional — auto-generated from the name if left blank'}><input className="search-input" style={{ fontFamily: 'var(--font-mono)' }} value={form.slug} onChange={(e) => set('slug', e.target.value)} disabled={isEdit} placeholder={isEdit ? undefined : 'acme-sports'} /></Field>

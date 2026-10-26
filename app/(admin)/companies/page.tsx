@@ -894,8 +894,16 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 				poc_email: f.poc_email.trim() || poc?.email || f.poc_email,
 				poc_linkedin: f.poc_linkedin.trim() || poc?.linkedin || f.poc_linkedin,
 			}));
+			// Name only the providers behind fields this click actually filled (form
+			// field → the enrichment keys that feed it), not every provider that answered.
 			const LABEL = { attio: 'Attio', apollo: 'Apollo', ai: 'AI mapping' } as const;
-			const used = [...new Set(Object.values(d.sources ?? {}))].map((k) => LABEL[k]).join(' + ');
+			const FEEDS: Record<string, string[]> = {
+				custom_logo_url: ['logo_url'], hq: ['city', 'country'], social: ['linkedin', 'twitter', 'facebook', 'instagram'],
+				poc_first_name: ['poc'], poc_last_name: ['poc'], poc_job_position: ['poc'], poc_linkedin: ['poc'],
+			};
+			const src = d.sources ?? {};
+			const usedKeys = filled.size ? [...filled].flatMap((f) => FEEDS[f] ?? [f]) : Object.keys(src);
+			const used = [...new Set(usedKeys.map((k) => src[k]).filter((v): v is 'attio' | 'apollo' | 'ai' => !!v))].map((k) => LABEL[k]).join(' + ') || 'Attio/Apollo';
 			toast.success(filled.size ? `Filled ${filled.size} field${filled.size === 1 ? '' : 's'} from ${used} — highlighted for review` : `Matched (${used}), but every field was already filled`);
 		} catch (e) { toast.error((e as Error).message); } finally { setEnriching(false); }
 	};

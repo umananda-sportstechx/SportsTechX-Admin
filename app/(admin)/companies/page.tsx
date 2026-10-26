@@ -401,12 +401,13 @@ interface CompanyClaimRow {
  *  never clobbers a change made on this tab. */
 function CompanyClaimTab({ companyId, onFlags }: { companyId: string; onFlags?: (f: { is_verified?: boolean; is_actively_raising?: boolean }) => void }) {
 	const { mutate } = useSWRConfig();
-	const { data, isLoading, error } = useSWR<{ claim: CompanyClaimRow | null }>(
+	const { data, isLoading, error } = useSWR<{ claims: CompanyClaimRow[] }>(
 		[`/api/admin/companies/${companyId}/claim`], { dedupingInterval: 10_000 },
 	);
 	const refresh = () => mutate((k) => Array.isArray(k) && k[0] === `/api/admin/companies/${companyId}/claim`);
-	const claim = data?.claim ?? null;
+	const claims = data?.claims ?? [];
 	const [busy, setBusy] = useState(false);
+	const [adding, setAdding] = useState(false);
 
 	const act = async (fn: () => Promise<unknown>, ok: string, after?: () => void) => {
 		setBusy(true);
@@ -414,11 +415,16 @@ function CompanyClaimTab({ companyId, onFlags }: { companyId: string; onFlags?: 
 		catch (e) { toast.error((e as Error).message); }
 		finally { setBusy(false); }
 	};
+	// Several people may be verified for one company. The public badge stays on
+	// while anyone is (the server re-derives it on un-verify), so mirror that here.
 	const setVerified = (cid: string, on: boolean) => act(
 		() => api('POST', `/api/admin/claims/${cid}/${on ? 'verify' : 'unverify'}`, on ? { send_email: false } : undefined),
-		on ? 'Claim verified' : 'Verification removed', () => onFlags?.({ is_verified: on }));
-	const setRaising = (cid: string, on: boolean) => act(
-		() => api('POST', `/api/admin/claims/${cid}/toggle-active`, { active: on }),
+		on ? 'Claim verified' : 'Verification removed',
+		() => onFlags?.({ is_verified: on || claims.some((c) => c.id !== cid && c.is_verified) }));
+	// Actively raising is a COMPANY flag (same for every claimant); the endpoint just
+	// needs any claim on the company to find it.
+	const setRaising = (on: boolean) => claims[0] && act(
+		() => api('POST', `/api/admin/claims/${claims[0].id}/toggle-active`, { active: on }),
 		on ? 'Marked actively raising' : 'Marked not raising', () => onFlags?.({ is_actively_raising: on }));
 	const sendEmail = (cid: string) => act(() => api('POST', `/api/admin/claims/${cid}/send-email`), 'Verified-claim email sent to claimant');
 	const copyLink = (token: string) => { void navigator.clipboard.writeText(`${window.location.origin}/verified/${token}`); toast.success('Shareable link copied'); };
@@ -426,59 +432,68 @@ function CompanyClaimTab({ companyId, onFlags }: { companyId: string; onFlags?: 
 
 	if (isLoading) return <Loading />;
 	if (error) return <ErrorState error={error} onRetry={() => void refresh()} />;
+	if (claims.length === 0) return <CreateClaimOnBehalf companyId={companyId} onDone={refresh} onFlags={onFlags} />;
 
-	if (claim) {
-		return (
-			<div style={{ display: 'grid', gap: 14 }}>
-				<div style={{ fontWeight: 700, fontSize: 14 }}>Existing claim</div>
-				{!claim.profile_id && (
-					<div style={{ fontSize: 12, color: 'var(--fg-2)', background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px' }}>
-						<span className="tag warn">Pending signup</span> This user hasn’t signed up yet. When they create an account with <strong>{claim.claimant_email}</strong>, this claim links to it automatically.
-					</div>
-				)}
-				<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
-					<div><div className="co-stat-label">Claimed by</div>{claim.claimant_name ?? '—'}</div>
-					<div><div className="co-stat-label">Email</div>{claim.claimant_email ?? '—'}</div>
-					<div><div className="co-stat-label">Position</div>{claim.position_at_company || '—'}</div>
-					<div><div className="co-stat-label">Location</div>{[claim.claimant_city, claim.claimant_country].filter(Boolean).join(', ') || '—'}</div>
-					{claim.claimant_linkedin && (
-						<div><div className="co-stat-label">LinkedIn</div><a href={claim.claimant_linkedin.startsWith('http') ? claim.claimant_linkedin : `https://${claim.claimant_linkedin}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>View profile</a></div>
-					)}
-					<div><div className="co-stat-label">Submitted</div>{new Date(claim.created_at).toLocaleDateString()}</div>
+	const co = claims[0]; // entity-level raise detail is identical on every row
+	const verifiedCount = claims.filter((c) => c.is_verified).length;
+
+	return (
+		<div style={{ display: 'grid', gap: 14 }}>
+			<div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+				<div style={{ fontWeight: 700, fontSize: 14 }}>People claiming this company</div>
+				<span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>{claims.length} · {verifiedCount} verified — several people from the same company can be verified</span>
+			</div>
+
+			<div style={{ display: 'grid', gap: 10, padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)' }}>
+				<div className="co-stat-label">Company-level</div>
+				<div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+					<button className={`tg ${co.is_actively_raising ? 'on' : ''}`} disabled={busy} onClick={() => void setRaising(!co.is_actively_raising)} aria-label="Toggle actively raising"><span className="tg-knob" /></button>
+					<span><strong>Actively raising</strong> <span style={{ color: 'var(--fg-muted)' }}>— currently fundraising (applies to the company, not one person)</span></span>
 				</div>
-				<div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, display: 'grid', gap: 12 }}>
-					<div className="co-stat-label">Verification status</div>
-					<div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
-						<button className={`tg ${claim.is_verified ? 'on' : ''}`} disabled={busy} onClick={() => void setVerified(claim.id, !claim.is_verified)} aria-label="Toggle verified"><span className="tg-knob" /></button>
-						<span><strong>Verified</strong> <span style={{ color: 'var(--fg-muted)' }}>— company ownership confirmed (sets the public badge)</span></span>
-					</div>
-					<div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
-						<button className={`tg ${claim.is_actively_raising ? 'on' : ''}`} disabled={busy} onClick={() => void setRaising(claim.id, !claim.is_actively_raising)} aria-label="Toggle actively raising"><span className="tg-knob" /></button>
-						<span><strong>Actively raising</strong> <span style={{ color: 'var(--fg-muted)' }}>— currently fundraising</span></span>
-					</div>
-					{claim.is_actively_raising && (
-						<div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, padding: 12, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg-2)', fontSize: 13 }}>
-							<div><div className="co-stat-label">Amount</div>{money(claim.actively_raising_amount)}</div>
-							<div><div className="co-stat-label">Round</div>{claim.actively_raising_round || '—'}</div>
-							<div><div className="co-stat-label">Valuation</div>{money(claim.actively_raising_valuation)}</div>
-							<div style={{ gridColumn: '1 / -1', fontSize: 11, color: 'var(--fg-muted)' }}>Edit these on the Status tab.</div>
-						</div>
-					)}
-				</div>
-				{claim.is_verified && (
-					<div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-						<button className="btn ghost" disabled={busy} onClick={() => void sendEmail(claim.id)} title="Email the claimant that their claim is verified">Send email to claimant</button>
-						{claim.shareable_token && <button className="btn ghost" onClick={() => copyLink(claim.shareable_token!)}>Copy verified link</button>}
+				{co.is_actively_raising && (
+					<div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, fontSize: 13 }}>
+						<div><div className="co-stat-label">Amount</div>{money(co.actively_raising_amount)}</div>
+						<div><div className="co-stat-label">Round</div>{co.actively_raising_round || '—'}</div>
+						<div><div className="co-stat-label">Valuation</div>{money(co.actively_raising_valuation)}</div>
+						<div style={{ gridColumn: '1 / -1', fontSize: 11, color: 'var(--fg-muted)' }}>Edit these on the Status tab.</div>
 					</div>
 				)}
 			</div>
-		);
-	}
 
-	return <CreateClaimOnBehalf companyId={companyId} onDone={refresh} onFlags={onFlags} />;
+			{claims.map((claim) => (
+				<div key={claim.id} className="card" style={{ padding: 14, display: 'grid', gap: 12 }}>
+					{!claim.profile_id && (
+						<div style={{ fontSize: 12, color: 'var(--fg-2)', background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px' }}>
+							<span className="tag warn">Pending signup</span> This user hasn’t signed up yet. When they create an account with <strong>{claim.claimant_email}</strong>, this claim links to it automatically.
+						</div>
+					)}
+					<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
+						<div><div className="co-stat-label">Claimed by</div>{claim.claimant_name ?? '—'}</div>
+						<div><div className="co-stat-label">Email</div>{claim.claimant_email ?? '—'}</div>
+						<div><div className="co-stat-label">Position</div>{claim.position_at_company || '—'}</div>
+						<div><div className="co-stat-label">Location</div>{[claim.claimant_city, claim.claimant_country].filter(Boolean).join(', ') || '—'}</div>
+						{claim.claimant_linkedin && (
+							<div><div className="co-stat-label">LinkedIn</div><a href={claim.claimant_linkedin.startsWith('http') ? claim.claimant_linkedin : `https://${claim.claimant_linkedin}`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>View profile</a></div>
+						)}
+						<div><div className="co-stat-label">Submitted</div>{new Date(claim.created_at).toLocaleDateString()}</div>
+					</div>
+					<div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, flexWrap: 'wrap' }}>
+						<button className={`tg ${claim.is_verified ? 'on' : ''}`} disabled={busy} onClick={() => void setVerified(claim.id, !claim.is_verified)} aria-label="Toggle verified"><span className="tg-knob" /></button>
+						<span style={{ flex: 1 }}><strong>Verified</strong> <span style={{ color: 'var(--fg-muted)' }}>— this person is verified for the company (the public badge stays on while anyone is)</span></span>
+						{claim.is_verified && <button className="btn ghost" disabled={busy} onClick={() => void sendEmail(claim.id)} title="Email the claimant that their claim is verified">Send email</button>}
+						{claim.is_verified && claim.shareable_token && <button className="btn ghost" onClick={() => copyLink(claim.shareable_token!)}>Copy verified link</button>}
+					</div>
+				</div>
+			))}
+
+			{adding
+				? <CreateClaimOnBehalf companyId={companyId} hasClaims onDone={() => { setAdding(false); refresh(); }} onFlags={onFlags} />
+				: <div><button className="btn ghost" onClick={() => setAdding(true)}>+ Create a claim on behalf of another person</button></div>}
+		</div>
+	);
 }
 
-function CreateClaimOnBehalf({ companyId, onDone, onFlags }: { companyId: string; onDone: () => void; onFlags?: (f: { is_verified?: boolean; is_actively_raising?: boolean }) => void }) {
+function CreateClaimOnBehalf({ companyId, onDone, onFlags, hasClaims = false }: { companyId: string; onDone: () => void; onFlags?: (f: { is_verified?: boolean; is_actively_raising?: boolean }) => void; hasClaims?: boolean }) {
 	const [f, setF] = useState({ user_email: '', company_email: '', first_name: '', last_name: '', position: '', linkedin: '', city: '', country: '' });
 	const [verified, setVerified] = useState(false);
 	const [raising, setRaising] = useState(false);
@@ -518,7 +533,9 @@ function CreateClaimOnBehalf({ companyId, onDone, onFlags }: { companyId: string
 	return (
 		<div style={{ display: 'grid', gap: 12 }}>
 			<div style={{ fontSize: 13, color: 'var(--fg-2)' }}>
-				No claim exists for this company. Create one on behalf of a user to enable the verified badge and let them submit edit requests.
+				{hasClaims
+					? 'Add another person from this company. Once verified, they can submit edit requests too — several people per company can be verified.'
+					: 'No claim exists for this company. Create one on behalf of a user to enable the verified badge and let them submit edit requests.'}
 			</div>
 			<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 				<Field label="User email *" hint="the person's login email — links the claim to their account"><input className="search-input" value={f.user_email} onChange={(e) => set('user_email', e.target.value)} placeholder="user@company.com" /></Field>
@@ -539,7 +556,7 @@ function CreateClaimOnBehalf({ companyId, onDone, onFlags }: { companyId: string
 			<div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, display: 'grid', gap: 10 }}>
 				<div className="co-stat-label">Verification options</div>
 				<label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-					<input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} /> Verify immediately <span style={{ color: 'var(--fg-muted)' }}>— sets the public verified badge</span>
+					<input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} /> Verify immediately <span style={{ color: 'var(--fg-muted)' }}>— verifies this person (turns the public badge on if it isn't already)</span>
 				</label>
 				<label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
 					<input type="checkbox" checked={raising} onChange={(e) => setRaising(e.target.checked)} /> Mark actively raising

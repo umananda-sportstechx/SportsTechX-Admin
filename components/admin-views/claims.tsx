@@ -38,6 +38,9 @@ interface Claim {
 	shareable_token?: string | null;
 	picked_up_by_email?: string | null;
 	is_actively_raising?: boolean | null;
+	/** Other people's claims on the same entity — several may be verified (admin's call). */
+	entity_verified_count?: number;
+	entity_pending_count?: number;
 	report_id?: string | null;
 	report_status?: string | null;
 	created_at: string;
@@ -155,6 +158,16 @@ export function ClaimsView({ embedded = false, lockType }: { embedded?: boolean;
 					<div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
 						<span className="tag">{typeLabel(cl)}</span>
 						{cl.new_entry_request && <span className="tag warn">New Entry</span>}
+						{(cl.entity_verified_count ?? 0) > 0 && (
+							<span className="tag" title={`${cl.entity_verified_count} other ${cl.entity_verified_count === 1 ? 'person is' : 'people are'} already verified for this entity — verifying this one adds another.`}>
+								+{cl.entity_verified_count} verified
+							</span>
+						)}
+						{(cl.entity_pending_count ?? 0) > 0 && (
+							<span className="tag" style={{ opacity: 0.8 }} title={`${cl.entity_pending_count} other pending ${cl.entity_pending_count === 1 ? 'claim' : 'claims'} for this entity`}>
+								+{cl.entity_pending_count} pending
+							</span>
+						)}
 					</div>
 				</td>
 				<td style={{ textAlign: 'center' }}>

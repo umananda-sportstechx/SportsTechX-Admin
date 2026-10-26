@@ -8,7 +8,7 @@ import {
 	Activity, ShoppingCart, LogOut, CreditCard, ToggleLeft,
 	Banknote, Sparkles, Tag, BookOpen, Menu, BarChart3, Gauge,
 	Receipt, Package, Handshake, Download, Coins, ChevronDown, Sun, Moon, Newspaper, Undo2,
-	Images, Rocket, CalendarClock, SlidersHorizontal,
+	Images, Rocket, CalendarClock, SlidersHorizontal, ShieldCheck,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthSession } from '@/hooks/use-auth-session';
@@ -45,6 +45,7 @@ interface NavGroup { label: string; items: NavItem[] }
 // pages, and the new-build features slot into the closest group.
 const DATA_NAV: NavItem[] = [
 	{ label: 'Dashboard', href: '/dashboard', Icon: LayoutDashboard },
+	{ label: 'Claims & data changes', href: '/claims', Icon: ShieldCheck },
 	{ label: 'Companies & Deals', href: '/companies', Icon: Briefcase },
 	{ label: 'Ecosystem', href: '/ecosystem', Icon: Layers },
 	{ label: 'Startups to add', href: '/startups-pipeline', Icon: FilePlus },

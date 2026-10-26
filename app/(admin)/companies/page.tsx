@@ -862,7 +862,12 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 			mark(!form.business_model && !!d.business_model, 'business_model');
 			mark(!form.sport_ids.length && d.sport_ids.length > 0, 'sport_ids');
 			mark(!form.tech_tag_ids.length && d.tech_tag_ids.length > 0, 'tech_tag_ids');
-			mark((!form.hq.city.trim() && !!d.city) || (!form.hq.country.trim() && !!d.country), 'hq');
+			// A city is only meaningful with its own country: when editing a company that
+			// already has a (different) country, don't drop the source's city next to it —
+			// saving would mint a bogus "Paris, Germany" city row.
+			const formCountry = form.hq.country.trim().toLowerCase();
+			const cityFits = !formCountry || !d.country || formCountry === d.country.toLowerCase();
+			mark((!form.hq.city.trim() && !!d.city && cityFits) || (!form.hq.country.trim() && !!d.country), 'hq');
 			mark((!form.social.linkedin_url.trim() && !!d.linkedin) || (!form.social.twitter_url.trim() && !!d.twitter) || (!form.social.facebook_url.trim() && !!d.facebook) || (!form.social.instagram_url.trim() && !!d.instagram), 'social');
 			mark(!form.poc_first_name.trim() && !!poc?.first_name, 'poc_first_name');
 			mark(!form.poc_last_name.trim() && !!poc?.last_name, 'poc_last_name');
@@ -880,7 +885,7 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 				business_model: f.business_model || d.business_model || f.business_model,
 				sport_ids: f.sport_ids.length ? f.sport_ids : d.sport_ids,
 				tech_tag_ids: f.tech_tag_ids.length ? f.tech_tag_ids : d.tech_tag_ids,
-				hq: { ...f.hq, city: f.hq.city.trim() || d.city || f.hq.city, country: f.hq.country.trim() || d.country || f.hq.country },
+				hq: { ...f.hq, city: f.hq.city.trim() || (cityFits ? d.city : null) || f.hq.city, country: f.hq.country.trim() || d.country || f.hq.country },
 				social: {
 					...f.social,
 					linkedin_url: f.social.linkedin_url.trim() || d.linkedin || f.social.linkedin_url,

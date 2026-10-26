@@ -832,7 +832,7 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 	// Fields the "Enrich" button just filled — merged with `enrichedFields`
 	// (the pipeline-promote ones) so both get the "verify before saving" highlight.
 	const [attioEnriched, setAttioEnriched] = useState<Set<string>>(new Set());
-	// Pull everything we can find for the website's domain — Attio + Apollo, with
+	// Pull everything we can find for the website's domain — Apollo first, Attio as fallback, with
 	// taxonomy mapped to our reference data server-side. Fills only empty fields
 	// so it never clobbers admin edits.
 	const enrich = async () => {
@@ -847,7 +847,7 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 				sources: Record<string, 'attio' | 'apollo' | 'ai'>;
 			} | null }>(
 				'GET', `/api/admin/integrations/company-enrich?domain=${encodeURIComponent(form.website.trim())}${form.name.trim() ? `&name=${encodeURIComponent(form.name.trim())}` : ''}`);
-			if (!r.found || !r.data) { toast.error('Neither Attio nor Apollo knows this domain.'); return; }
+			if (!r.found || !r.data) { toast.error('Neither Apollo nor Attio knows this domain.'); return; }
 			const d = r.data;
 			const poc = d.poc;
 			// Track which fields this actually fills (empty-before + source-has-value),
@@ -903,7 +903,7 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 			};
 			const src = d.sources ?? {};
 			const usedKeys = filled.size ? [...filled].flatMap((f) => FEEDS[f] ?? [f]) : Object.keys(src);
-			const used = [...new Set(usedKeys.map((k) => src[k]).filter((v): v is 'attio' | 'apollo' | 'ai' => !!v))].map((k) => LABEL[k]).join(' + ') || 'Attio/Apollo';
+			const used = [...new Set(usedKeys.map((k) => src[k]).filter((v): v is 'attio' | 'apollo' | 'ai' => !!v))].map((k) => LABEL[k]).join(' + ') || 'Apollo/Attio';
 			toast.success(filled.size ? `Filled ${filled.size} field${filled.size === 1 ? '' : 's'} from ${used} — highlighted for review` : `Matched (${used}), but every field was already filled`);
 		} catch (e) { toast.error((e as Error).message); } finally { setEnriching(false); }
 	};
@@ -999,10 +999,10 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 							key: 'profile', label: 'Profile', node: (
 								<>
 									<Field name="name" label="Name *" hint="required — the display name used everywhere"><input className="search-input" value={form.name} onChange={(e) => set('name', e.target.value)} placeholder="e.g. Acme Sports" /></Field>
-									<Field label="Website *" hint="required & unique — used to dedupe and to enrich from Attio + Apollo">
+									<Field label="Website *" hint="required & unique — used to dedupe and to enrich from Apollo (+ Attio)">
 										<div style={{ display: 'flex', gap: 6 }}>
 											<input className="search-input" type="url" value={form.website} onChange={(e) => set('website', e.target.value)} placeholder="https://acmesports.com" style={{ flex: 1 }} />
-											<button type="button" className="btn ghost" disabled={enriching || !form.website.trim()} onClick={() => void enrich()} title="Fill empty fields (description, logo, founded year, HQ, socials, sector, sports, tech tags, business model, contact) from Attio + Apollo using this domain">{enriching ? 'Enriching…' : 'Enrich'}</button>
+											<button type="button" className="btn ghost" disabled={enriching || !form.website.trim()} onClick={() => void enrich()} title="Fill empty fields (description, logo, founded year, HQ, socials, sector, sports, tech tags, business model, contact) from Apollo, with Attio as fallback, using this domain">{enriching ? 'Enriching…' : 'Enrich'}</button>
 										</div>
 									</Field>
 									<Field label="Slug" hint={isEdit ? 'the public URL is fixed once created' : 'optional — auto-generated from the name if left blank'}><input className="search-input" style={{ fontFamily: 'var(--font-mono)' }} value={form.slug} onChange={(e) => set('slug', e.target.value)} disabled={isEdit} placeholder={isEdit ? undefined : 'acme-sports'} /></Field>

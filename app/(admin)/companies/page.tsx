@@ -845,6 +845,7 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 				sector_id: string | null; sector_name: string | null; sport_ids: string[]; tech_tag_ids: string[]; business_model: string | null;
 				poc: { first_name: string | null; last_name: string | null; job_title: string | null; email: string | null; linkedin: string | null } | null;
 				sources: Record<string, 'attio' | 'apollo' | 'ai'>;
+				unavailable?: Array<'attio' | 'apollo' | 'ai'>;
 			} | null }>(
 				'GET', `/api/admin/integrations/company-enrich?domain=${encodeURIComponent(form.website.trim())}${form.name.trim() ? `&name=${encodeURIComponent(form.name.trim())}` : ''}`);
 			if (!r.found || !r.data) { toast.error('Neither Apollo nor Attio knows this domain.'); return; }
@@ -910,6 +911,8 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 			const usedKeys = filled.size ? [...filled].flatMap((f) => FEEDS[f] ?? [f]) : Object.keys(src);
 			const used = [...new Set(usedKeys.map((k) => src[k]).filter((v): v is 'attio' | 'apollo' | 'ai' => !!v))].map((k) => LABEL[k]).join(' + ') || 'Apollo/Attio';
 			toast.success(filled.size ? `Filled ${filled.size} field${filled.size === 1 ? '' : 's'} from ${used} — highlighted for review` : `Matched (${used}), but every field was already filled`);
+			// Apollo (the primary source) errored — this is a partial, Attio-only result.
+			if (d.unavailable?.includes('apollo')) toast.warning('Apollo was unavailable, so this used Attio only — click Enrich again shortly for the full result.');
 		} catch (e) { toast.error((e as Error).message); } finally { setEnriching(false); }
 	};
 

@@ -178,7 +178,13 @@ function RoundupPreview({ year, month }: { year: number; month: number }) {
 					{donuts.map((d) => (
 						<div className="card" key={d.title} style={{ padding: 16 }}>
 							<div style={{ fontWeight: 700, fontSize: 14, marginBottom: 10 }}>{d.title}</div>
-							{d.rows.length === 0 ? <div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>No data.</div> : (
+							{d.rows.length === 0 ? <div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>No data.</div> : d.rows.every((x) => val(x) === 0) ? (
+								// Deals exist but none disclosed a value — an all-$0 donut renders blank.
+								<div style={{ fontSize: 13, color: 'var(--fg-muted)' }}>
+									No disclosed values for these deals.{' '}
+									<button type="button" className="btn ghost" style={{ padding: 0, height: 'auto' }} onClick={() => setMetric('count')}>View by count</button>
+								</div>
+							) : (
 								<>
 									<div style={{ display: 'grid', placeItems: 'center' }}><PieDonut mode="donut" size={150} segments={toSeg(d.rows)} /></div>
 									<PieLegend segments={toSeg(d.rows)} />

@@ -43,7 +43,7 @@ export default function StrategySessionsPage() {
 				scheduled_at: new Date(local).toISOString(),
 				meeting_link: link[id]?.trim() || null,
 			});
-			toast.success('Session confirmed — the founder will see the time.');
+			toast.success('Session confirmed — the founder has been notified in Atlas.');
 			void mutate();
 		} catch (e) { toast.error((e as Error).message); }
 		finally { setPending(null); }

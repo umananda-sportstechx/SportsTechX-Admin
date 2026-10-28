@@ -58,6 +58,7 @@ const DATA_NAV: NavItem[] = [
 	{ label: 'Site assets', href: '/site-assets', Icon: Images },
 	{ label: 'Intro requests', href: '/intro-requests', Icon: Handshake },
 	{ label: 'Strategy sessions', href: '/strategy-sessions', Icon: CalendarClock },
+	{ label: 'Fundraising Guide', href: '/raise-resources', Icon: BookOpen },
 	{ label: 'Deal Flow', href: '/scout-deals', Icon: Rocket },
 ];
 

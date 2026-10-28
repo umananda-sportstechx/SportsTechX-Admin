@@ -376,16 +376,18 @@ function EntryDetails({ id, details }: { id: unknown; details: unknown }) {
 
 /** Funding rounds, M&A and portfolio from the claim, with each company / investor's status. */
 function SubmittedEntries({ claimId, verified }: { claimId: string; verified: boolean }) {
-	const { data } = useSWR<{ company?: { funding_rounds?: Row[]; mna?: Row[] }; investor?: { portfolio?: Row[] } }>([`/api/claims/${claimId}/form`], { revalidateOnFocus: false });
+	const { data } = useSWR<{ company?: { details?: { programs?: Row[] | null } | null; funding_rounds?: Row[]; mna?: Row[] }; investor?: { portfolio?: Row[] } }>([`/api/claims/${claimId}/form`], { revalidateOnFocus: false });
 	const rounds = data?.company?.funding_rounds ?? [];
 	const mna = data?.company?.mna ?? [];
 	const portfolio = data?.investor?.portfolio ?? [];
-	if (!rounds.length && !mna.length && !portfolio.length) return null;
+	const programs = Array.isArray(data?.company?.details?.programs) ? data!.company!.details!.programs! : [];
+	if (!rounds.length && !mna.length && !portfolio.length && !programs.length) return null;
 	const waiting = (id: unknown, details: unknown) => !id && !!details && !(details as Row).materialized_at;
 	const pending = [
 		...rounds.flatMap((r) => (Array.isArray(r.investor_refs) ? (r.investor_refs as Row[]) : []).filter((x) => waiting(x.investor_id, { ...(x.new_investor as Row ?? {}), materialized_at: x.materialized_at }) && x.new_investor)),
 		...mna.filter((m) => waiting(m.counterparty_company_id, m.new_counterparty)),
 		...portfolio.filter((p) => waiting(p.company_id, p.new_company)),
+		...programs.filter((p) => waiting(p.program_id, p.new_program && { ...(p.new_program as Row), materialized_at: p.materialized_at })),
 	].length;
 	const line = { padding: '6px 0', borderTop: '1px solid var(--border)', fontSize: 12 } as const;
 	const head = (t: string) => <div className="co-stat-label" style={{ margin: '10px 0 4px' }}>{t}</div>;
@@ -423,6 +425,17 @@ function SubmittedEntries({ claimId, verified }: { claimId: string; verified: bo
 					<div key={i} style={line}>
 						<span style={{ marginRight: 6 }}>{[str(m.deal_type), str(m.counterparty)].filter(Boolean).join(' — ')}</span><EntryBadge id={m.counterparty_company_id} details={m.new_counterparty} />
 						<EntryDetails id={m.counterparty_company_id} details={m.new_counterparty} />
+					</div>
+				))}
+			</>}
+			{programs.length > 0 && <>
+				{head('Program participation')}
+				{programs.map((p, i) => (
+					<div key={i} style={line}>
+						<span style={{ marginRight: 6 }}>{[str(p.name), str(p.cohort_year)].filter(Boolean).join(' · ')}</span>
+						{/* Linked to the company when the claim is verified (added ones are created first). */}
+						<EntryBadge id={p.program_id} details={p.new_program && { ...(p.new_program as Row), materialized_at: p.materialized_at }} />
+						<EntryDetails id={p.program_id} details={p.new_program} />
 					</div>
 				))}
 			</>}

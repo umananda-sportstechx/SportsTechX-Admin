@@ -232,6 +232,7 @@ export function ClaimsView({ embedded = false, lockType }: { embedded?: boolean;
 							<span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Use the Verified toggle to verify / un-verify (emails the claimant if enabled).</span>
 						</div>
 						{cl.claim_type === 'company' && <DeckAnalysisPanel claimId={cl.id} />}
+						{(cl.claim_type === 'company' || cl.claim_type === 'investor') && <SubmittedEntries claimId={cl.id} />}
 						{cl.new_entry_request && !cl.entity_id && <CreateEntityPanel claim={cl} onDone={() => void refresh()} />}
 					</td>
 				</tr>
@@ -344,6 +345,93 @@ interface DeckAnalysis {
  * (admin-triggered) and renders Claude's extracted fields + score once ready.
  * Renders nothing if the claim has no deck.
  */
+type Row = Record<string, unknown>;
+const str = (v: unknown) => (v == null || v === '' ? '' : String(v));
+
+/**
+ * Where a submitted company / investor stands: an Atlas record (picked from
+ * search), one the claimant ADDED because search didn't find it — unverified,
+ * shown with its details, created as a live record when this claim is verified
+ * (or linked to an existing one with the same website) — or plain text from an
+ * older claim.
+ */
+function EntryBadge({ id, details }: { id: unknown; details: unknown }) {
+	if (id && details) return <span className="tag pos" title="Added by the claimant; created when the claim was verified">Added by user · created</span>;
+	if (id) return <span className="tag pos">In Atlas</span>;
+	if (details) return <span className="tag warn" title="Not in Atlas yet — created when you verify this claim">Added by user · unverified</span>;
+	return <span className="tag">Text only</span>;
+}
+function EntryDetails({ id, details }: { id: unknown; details: unknown }) {
+	if (id || !details || typeof details !== 'object') return null;
+	const d = details as Row;
+	const parts = [str(d.website), [str(d.hq_city), str(d.hq_country)].filter(Boolean).join(', '), str(d.category).replace(/_/g, ' '), str(d.founded_year) && `founded ${str(d.founded_year)}`].filter(Boolean);
+	return (
+		<div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 2 }}>
+			{parts.join(' · ')}{d.description ? <> — {str(d.description)}</> : null}
+		</div>
+	);
+}
+
+/** Funding rounds, M&A and portfolio from the claim, with each company / investor's status. */
+function SubmittedEntries({ claimId }: { claimId: string }) {
+	const { data } = useSWR<{ company?: { funding_rounds?: Row[]; mna?: Row[] }; investor?: { portfolio?: Row[] } }>([`/api/claims/${claimId}/form`], { revalidateOnFocus: false });
+	const rounds = data?.company?.funding_rounds ?? [];
+	const mna = data?.company?.mna ?? [];
+	const portfolio = data?.investor?.portfolio ?? [];
+	if (!rounds.length && !mna.length && !portfolio.length) return null;
+	const pending = [
+		...rounds.flatMap((r) => (Array.isArray(r.investor_refs) ? (r.investor_refs as Row[]) : []).filter((x) => !x.investor_id && x.new_investor)),
+		...mna.filter((m) => !m.counterparty_company_id && m.new_counterparty),
+		...portfolio.filter((p) => !p.company_id && p.new_company),
+	].length;
+	const line = { padding: '6px 0', borderTop: '1px solid var(--border)', fontSize: 12 } as const;
+	const head = (t: string) => <div className="co-stat-label" style={{ margin: '10px 0 4px' }}>{t}</div>;
+	return (
+		<div style={{ padding: '4px 4px 12px' }}>
+			{pending > 0 && (
+				<div style={{ fontSize: 12, color: 'var(--fg-muted)', marginBottom: 6 }}>
+					<strong>{pending}</strong> {pending === 1 ? 'entry was' : 'entries were'} added by the claimant and {pending === 1 ? "isn't" : "aren't"} in Atlas yet. Verifying this claim creates {pending === 1 ? 'it' : 'them'} as live (unclaimed) records — or links an existing record with the same website.
+				</div>
+			)}
+			{rounds.length > 0 && <>
+				{head('Funding rounds')}
+				{rounds.map((r, i) => {
+					const refs = Array.isArray(r.investor_refs) ? (r.investor_refs as Row[]) : [];
+					return (
+						<div key={i} style={line}>
+							<div>{[str(r.round_label), r.amount_usd ? `$${Number(r.amount_usd).toLocaleString()}` : '', str(r.round_date)].filter(Boolean).join(' · ') || 'Round'}</div>
+							{refs.length ? refs.map((x, k) => (
+								<div key={k} style={{ marginTop: 4, paddingLeft: 10 }}>
+									<span style={{ marginRight: 6 }}>{str(x.name)}</span><EntryBadge id={x.investor_id} details={x.new_investor} />
+									<EntryDetails id={x.investor_id} details={x.new_investor} />
+								</div>
+							)) : r.investors ? <div style={{ marginTop: 4, paddingLeft: 10 }}>{str(r.investors)} <span className="tag">Text only</span></div> : null}
+						</div>
+					);
+				})}
+			</>}
+			{mna.length > 0 && <>
+				{head('M&A')}
+				{mna.map((m, i) => (
+					<div key={i} style={line}>
+						<span style={{ marginRight: 6 }}>{[str(m.deal_type), str(m.counterparty)].filter(Boolean).join(' — ')}</span><EntryBadge id={m.counterparty_company_id} details={m.new_counterparty} />
+						<EntryDetails id={m.counterparty_company_id} details={m.new_counterparty} />
+					</div>
+				))}
+			</>}
+			{portfolio.length > 0 && <>
+				{head('Portfolio')}
+				{portfolio.map((p, i) => (
+					<div key={i} style={line}>
+						<span style={{ marginRight: 6 }}>{[str(p.company_name), str(p.stage), str(p.invest_year)].filter(Boolean).join(' · ')}</span><EntryBadge id={p.company_id} details={p.new_company} />
+						<EntryDetails id={p.company_id} details={p.new_company} />
+					</div>
+				))}
+			</>}
+		</div>
+	);
+}
+
 function DeckAnalysisPanel({ claimId }: { claimId: string }) {
 	const { data, mutate, isLoading } = useSWR<{ hasDeck: boolean; analysis: DeckAnalysis | null }>(
 		[`/api/admin/claims/${claimId}/deck-analysis`],

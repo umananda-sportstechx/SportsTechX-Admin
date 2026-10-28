@@ -37,7 +37,17 @@ interface DcrResponse { data: Dcr[]; total: number; totalPages: number }
 // (`context.changes` = { details, funding_rounds, mna, funds, portfolio, thesis_* }).
 // Raw JSON of that is unreadable for an admin, so it's rendered as a labelled
 // summary below; funding rounds also get a one-click "Add as deal".
-interface FundingRound { round_type_id?: string | null; round_label?: string | null; amount_usd?: number | null; round_date?: string | null; investors?: string | null; source_url?: string | null }
+interface FundingRound { round_type_id?: string | null; round_label?: string | null; amount_usd?: number | null; round_date?: string | null; investors?: string | null; investor_refs?: Array<Record<string, unknown>> | null; source_url?: string | null }
+
+// A company / investor the user ADDED because search didn't find it: not in Atlas.
+// Edit requests are applied by hand, so it's flagged for the admin to create (or
+// match) before using it; a claim, by contrast, creates it on verify.
+function userAdded(id: unknown, details: unknown, name?: unknown) {
+	if (id || !details || typeof details !== 'object') return null;
+	const d = details as Record<string, unknown>;
+	const tip = ['Not in Atlas — added by the user, unverified.', d.website, [d.hq_city, d.hq_country].filter(Boolean).join(', '), d.description].filter(Boolean).join(' · ');
+	return <span className="tag warn" title={tip}>{name ? `${String(name)} · ` : ''}added by user</span>;
+}
 interface ClaimEditCtx { kind?: string; role?: string; changes?: Record<string, unknown> }
 const asClaimEdit = (ctx: Record<string, unknown> | null): ClaimEditCtx | null => {
 	const c = ctx as ClaimEditCtx | null;
@@ -264,6 +274,7 @@ function ClaimEditSummary({ r, sectorMap, roundMap, techMap, rounds, current, de
 							<div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5, flexWrap: 'wrap' }}>
 								<span style={{ fontWeight: 600 }}>{label}</span>
 								<span style={{ color: 'var(--fg-muted)' }}>{line([fr.round_date, typeof fr.amount_usd === 'number' ? fmtMoney(fr.amount_usd) : null, fr.investors])}</span>
+								{(fr.investor_refs ?? []).map((x, k) => <span key={k}>{userAdded(x.investor_id, x.new_investor, x.name)}</span>)}
 								<div style={{ flex: 1 }} />
 								{r.target_company_id && (
 									<button className="btn ghost" disabled={added || dealPending === key} onClick={() => onAddDeal(r, fr, i)}>
@@ -279,7 +290,7 @@ function ClaimEditSummary({ r, sectorMap, roundMap, techMap, rounds, current, de
 			{mna.length > 0 && (
 				<div style={{ display: 'grid', gap: 6 }}>
 					<div className="co-stat-label">M&amp;A</div>
-					{mna.map((m, i) => <div key={i} style={{ fontSize: 12.5 }}>{line([m.deal_type, m.counterparty, typeof m.amount_usd === 'number' ? fmtMoney(m.amount_usd) : null, m.deal_date])}</div>)}
+					{mna.map((m, i) => <div key={i} style={{ fontSize: 12.5 }}>{line([m.deal_type, m.counterparty, typeof m.amount_usd === 'number' ? fmtMoney(m.amount_usd) : null, m.deal_date])} {userAdded(m.counterparty_company_id, m.new_counterparty)}</div>)}
 				</div>
 			)}
 			{funds.length > 0 && (
@@ -291,7 +302,7 @@ function ClaimEditSummary({ r, sectorMap, roundMap, techMap, rounds, current, de
 			{portfolio.length > 0 && (
 				<div style={{ display: 'grid', gap: 6 }}>
 					<div className="co-stat-label">Portfolio</div>
-					{portfolio.map((p, i) => <div key={i} style={{ fontSize: 12.5 }}>{line([p.company_name, p.stage, p.invest_year])}</div>)}
+					{portfolio.map((p, i) => <div key={i} style={{ fontSize: 12.5 }}>{line([p.company_name, p.stage, p.invest_year])} {userAdded(p.company_id, p.new_company)}</div>)}
 				</div>
 			)}
 			{empty && <div style={{ fontSize: 12, color: 'var(--fg-muted)' }}>No field values in this request.</div>}

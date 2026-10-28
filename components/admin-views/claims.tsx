@@ -81,7 +81,8 @@ export function ClaimsView({ embedded = false, lockType }: { embedded?: boolean;
 
 	const claims = data?.data ?? [];
 
-	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/admin/claims');
+	// Also re-reads each claim's submitted form, so its entries show what verify created.
+	const refresh = () => mutate((key) => Array.isArray(key) && (key[0] === '/api/admin/claims' || String(key[0]).startsWith('/api/claims/')));
 
 	const act = async (id: string, fn: () => Promise<unknown>, ok: string) => {
 		setPendingId(id);
@@ -232,7 +233,7 @@ export function ClaimsView({ embedded = false, lockType }: { embedded?: boolean;
 							<span style={{ fontSize: 11, color: 'var(--fg-muted)' }}>Use the Verified toggle to verify / un-verify (emails the claimant if enabled).</span>
 						</div>
 						{cl.claim_type === 'company' && <DeckAnalysisPanel claimId={cl.id} />}
-						{(cl.claim_type === 'company' || cl.claim_type === 'investor') && <SubmittedEntries claimId={cl.id} />}
+						{(cl.claim_type === 'company' || cl.claim_type === 'investor') && <SubmittedEntries claimId={cl.id} verified={cl.is_verified} />}
 						{cl.new_entry_request && !cl.entity_id && <CreateEntityPanel claim={cl} onDone={() => void refresh()} />}
 					</td>
 				</tr>
@@ -357,6 +358,7 @@ const str = (v: unknown) => (v == null || v === '' ? '' : String(v));
  */
 function EntryBadge({ id, details }: { id: unknown; details: unknown }) {
 	if (id && details) return <span className="tag pos" title="Added by the claimant; created when the claim was verified">Added by user · created</span>;
+	if (details && (details as Row).materialized_at) return <span className="tag neg" title="Created on verify, then the record was deleted — it won't be recreated">Added by user · record deleted</span>;
 	if (id) return <span className="tag pos">In Atlas</span>;
 	if (details) return <span className="tag warn" title="Not in Atlas yet — created when you verify this claim">Added by user · unverified</span>;
 	return <span className="tag">Text only</span>;
@@ -373,26 +375,31 @@ function EntryDetails({ id, details }: { id: unknown; details: unknown }) {
 }
 
 /** Funding rounds, M&A and portfolio from the claim, with each company / investor's status. */
-function SubmittedEntries({ claimId }: { claimId: string }) {
+function SubmittedEntries({ claimId, verified }: { claimId: string; verified: boolean }) {
 	const { data } = useSWR<{ company?: { funding_rounds?: Row[]; mna?: Row[] }; investor?: { portfolio?: Row[] } }>([`/api/claims/${claimId}/form`], { revalidateOnFocus: false });
 	const rounds = data?.company?.funding_rounds ?? [];
 	const mna = data?.company?.mna ?? [];
 	const portfolio = data?.investor?.portfolio ?? [];
 	if (!rounds.length && !mna.length && !portfolio.length) return null;
+	const waiting = (id: unknown, details: unknown) => !id && !!details && !(details as Row).materialized_at;
 	const pending = [
-		...rounds.flatMap((r) => (Array.isArray(r.investor_refs) ? (r.investor_refs as Row[]) : []).filter((x) => !x.investor_id && x.new_investor)),
-		...mna.filter((m) => !m.counterparty_company_id && m.new_counterparty),
-		...portfolio.filter((p) => !p.company_id && p.new_company),
+		...rounds.flatMap((r) => (Array.isArray(r.investor_refs) ? (r.investor_refs as Row[]) : []).filter((x) => waiting(x.investor_id, { ...(x.new_investor as Row ?? {}), materialized_at: x.materialized_at }) && x.new_investor)),
+		...mna.filter((m) => waiting(m.counterparty_company_id, m.new_counterparty)),
+		...portfolio.filter((p) => waiting(p.company_id, p.new_company)),
 	].length;
 	const line = { padding: '6px 0', borderTop: '1px solid var(--border)', fontSize: 12 } as const;
 	const head = (t: string) => <div className="co-stat-label" style={{ margin: '10px 0 4px' }}>{t}</div>;
 	return (
 		<div style={{ padding: '4px 4px 12px' }}>
-			{pending > 0 && (
-				<div style={{ fontSize: 12, color: 'var(--fg-muted)', marginBottom: 6 }}>
-					<strong>{pending}</strong> {pending === 1 ? 'entry was' : 'entries were'} added by the claimant and {pending === 1 ? "isn't" : "aren't"} in Atlas yet. Verifying this claim creates {pending === 1 ? 'it' : 'them'} as live (unclaimed) records — or links an existing record with the same website.
+			{pending > 0 && (verified ? (
+				<div style={{ fontSize: 12, color: 'var(--accent)', marginBottom: 6 }}>
+					<strong>{pending}</strong> user-added {pending === 1 ? "entry wasn't" : "entries weren't"} created when this claim was verified (see the server log) — add them by hand in Companies / Investors, or re-verify the claim to retry.
 				</div>
-			)}
+			) : (
+				<div style={{ fontSize: 12, color: 'var(--fg-muted)', marginBottom: 6 }}>
+					<strong>{pending}</strong> {pending === 1 ? 'entry was' : 'entries were'} added by the claimant and {pending === 1 ? "isn't" : "aren't"} in Atlas yet. Verifying this claim creates {pending === 1 ? 'it as a live (unclaimed) record' : 'them as live (unclaimed) records'} — or links an existing record with the same website.
+				</div>
+			))}
 			{rounds.length > 0 && <>
 				{head('Funding rounds')}
 				{rounds.map((r, i) => {
@@ -402,7 +409,7 @@ function SubmittedEntries({ claimId }: { claimId: string }) {
 							<div>{[str(r.round_label), r.amount_usd ? `$${Number(r.amount_usd).toLocaleString()}` : '', str(r.round_date)].filter(Boolean).join(' · ') || 'Round'}</div>
 							{refs.length ? refs.map((x, k) => (
 								<div key={k} style={{ marginTop: 4, paddingLeft: 10 }}>
-									<span style={{ marginRight: 6 }}>{str(x.name)}</span><EntryBadge id={x.investor_id} details={x.new_investor} />
+									<span style={{ marginRight: 6 }}>{str(x.name)}</span><EntryBadge id={x.investor_id} details={x.new_investor && { ...(x.new_investor as Row), materialized_at: x.materialized_at }} />
 									<EntryDetails id={x.investor_id} details={x.new_investor} />
 								</div>
 							)) : r.investors ? <div style={{ marginTop: 4, paddingLeft: 10 }}>{str(r.investors)} <span className="tag">Text only</span></div> : null}

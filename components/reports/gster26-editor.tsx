@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { ChevronDown, ChevronRight, ChevronUp, ExternalLink, Plus, RotateCcw, Trash2, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronUp, ExternalLink, GripVertical, Plus, RotateCcw, Trash2, X } from 'lucide-react';
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { api } from '@/lib/api';
 import { useConfirm } from '@/components/confirm';
 import { useLeaveGuard } from '@/hooks/use-leave-guard';
@@ -160,6 +163,38 @@ function ListField({ name, value, like, onChange, depth }: { name: string; value
 	);
 }
 
+// ---- page order (drag to reorder the parts between the hero and the closing quote) ----
+
+const ORDER_LABELS: Record<string, string> = { trends: 'Trends', peak: 'PEAK 2026', innovators: 'Innovators', startups: 'Startups to Watch', ecomap: 'Ecosystem map', ngsc: 'NGSC', data: 'Data in Full' };
+
+function PageOrder({ order, onChange }: { order: string[]; onChange: (next: string[]) => void }) {
+	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+	const onDragEnd = ({ active, over }: DragEndEvent) => {
+		if (!over || active.id === over.id) return;
+		onChange(arrayMove(order, order.indexOf(String(active.id)), order.indexOf(String(over.id))));
+	};
+	return (
+		<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+			<SortableContext items={order} strategy={verticalListSortingStrategy}>
+				<div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+					{order.map((id) => <OrderRow key={id} id={id} />)}
+				</div>
+			</SortableContext>
+		</DndContext>
+	);
+}
+
+function OrderRow({ id }: { id: string }) {
+	const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+	return (
+		<div ref={setNodeRef} {...attributes} {...listeners} className="g26-order"
+			style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1, cursor: 'grab', display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', background: 'var(--bg-1)', border: '1px solid var(--border)', fontSize: 12, fontWeight: 600, touchAction: 'none' }}>
+			<GripVertical size={14} style={{ color: 'var(--fg-muted)' }} />
+			<span>{ORDER_LABELS[id] ?? id}</span>
+		</div>
+	);
+}
+
 // ---- the editor ----------------------------------------------------------------
 
 export function Gster26Editor({ reportId, saved, previewOpen, onClosePreview, onSaved }: {
@@ -247,6 +282,19 @@ export function Gster26Editor({ reportId, saved, previewOpen, onClosePreview, on
 							</button>
 						))}
 					</div>
+					{defaults && Array.isArray(defaults.partOrder) && (
+						<>
+							<div style={{ fontWeight: 700, fontSize: 14, margin: '16px 0 4px' }}>Page order</div>
+							<div style={{ fontSize: 11, color: 'var(--fg-muted)', marginBottom: 8 }}>Drag to reorder. The hero stays first and the closing quote last.</div>
+							<PageOrder
+								order={[...new Set([...((Array.isArray(draft.partOrder) ? draft.partOrder : []) as string[]), ...(defaults.partOrder as string[])])]}
+								onChange={(next) => setDraft((d) => {
+									if (!(saved && 'partOrder' in saved) && JSON.stringify(next) === JSON.stringify(defaults.partOrder)) { const { partOrder: _, ...rest } = d; return rest; }
+									return { ...d, partOrder: next };
+								})}
+							/>
+						</>
+					)}
 				</aside>
 
 				<main style={{ minWidth: 0 }}>

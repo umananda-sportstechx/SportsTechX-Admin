@@ -74,12 +74,12 @@ export function PreviewOverlay({ sections, theme, focusSectionId, tierPreviewHre
 			/>
 
 			<div className="preview-bar">
-				<span className="preview-bar__label">Preview{publishedOnly ? ' · as users see it' : drafts ? ` · incl. ${drafts} draft${drafts === 1 ? '' : 's'}` : ''} · unsaved edits shown</span>
+				<span className="preview-bar__label">Preview{publishedOnly ? ' · as users see it' : drafts ? ` · incl. ${drafts} draft${drafts === 1 ? '' : 's'}` : ''} · unsaved edits shown (live charts use the saved query)</span>
 				{warning && <span className="preview-bar__warn">{warning}</span>}
 				<label className="preview-bar__toggle">
 					<input type="checkbox" checked={publishedOnly} onChange={(e) => setPublishedOnly(e.target.checked)} /> Published only
 				</label>
-				<Link href={tierPreviewHref} className="preview-bar__btn" title="Saved version, per tier and device width">Tier &amp; device <ExternalLink size={11} /></Link>
+				<Link href={tierPreviewHref} target="_blank" rel="noopener noreferrer" className="preview-bar__btn" title="Saved version, per tier and device width">Tier &amp; device <ExternalLink size={11} /></Link>
 				<button type="button" className="preview-bar__btn preview-bar__btn--primary" onClick={onClose}><X size={12} /> Close</button>
 			</div>
 		</div>

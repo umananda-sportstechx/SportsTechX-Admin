@@ -20,6 +20,7 @@ import { CompanyPicker, SectorPicker, PollPicker } from '@/components/section-pi
 import { ImageInput } from '@/components/image-input';
 import { PreviewOverlay } from '@/components/reports/preview-overlay';
 import { Gster26Editor } from '@/components/reports/gster26-editor';
+import { useLeaveGuard } from '@/hooks/use-leave-guard';
 import type { Section as RkSection } from '@/components/reports/report-kit/types';
 import type { ReportThemeOverride } from '@/components/reports/report-kit/report-theme';
 import { ThemeControls } from '@/components/reports/theme-controls';
@@ -235,24 +236,23 @@ export default function ReportSectionsEditorPage(
 	);
 
 	// The open section has edits that aren't saved yet.
-	const dirty = !!active && !!activeDraft && activeDraft.id === active.id && JSON.stringify(activeDraft) !== JSON.stringify(active);
+	// Only the fields the editor saves: the server bumps updated_at and normalises the row on save.
+	const editable = (s: Section) => JSON.stringify([s.title, s.slug, s.access_tier, s.is_published, s.content, s.poll_id]);
+	const dirty = !!active && !!activeDraft && activeDraft.id === active.id && editable(activeDraft) !== editable(active);
+	const confirmDiscard = async () => !dirty || (await ask('This section has unsaved changes. Leave it and discard them?'));
 	const selectSection = async (id: string) => {
 		if (id === activeId) return;
-		if (dirty && !(await ask('This section has unsaved changes. Leave it and discard them?'))) return;
+		if (!(await confirmDiscard())) return;
 		setActiveDraft(null);
 		setActiveId(id);
 	};
-	useEffect(() => {
-		if (!dirty) return;
-		const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); };
-		window.addEventListener('beforeunload', warn);
-		return () => window.removeEventListener('beforeunload', warn);
-	}, [dirty]);
+	useLeaveGuard(dirty);
 
 	const publishedCount = sections.filter((s) => s.is_published).length;
 	const draftCount = sections.length - publishedCount;
 
 	const onAddKind = async (kind: SectionKind) => {
+		if (!(await confirmDiscard())) return;
 		try {
 			const created = await api<Section>('POST', `/api/admin/reports/${reportId}/sections`, {
 				kind,
@@ -261,6 +261,7 @@ export default function ReportSectionsEditorPage(
 				is_published: false,
 			});
 			toast.success(`${KIND_LABELS[kind]} added`);
+			setActiveDraft(null);
 			setActiveId(created.id);
 			setPickerOpen(false);
 			reload();
@@ -623,7 +624,7 @@ function SectionEditor({
 		setDraft((d) => ({ ...d, content: { ...d.content, ...p } }));
 
 	const persist = async (next: Section) => {
-		await api('PATCH', `/api/admin/reports/${next.report_id}/sections/${next.id}`, {
+		const row = await api<Section>('PATCH', `/api/admin/reports/${next.report_id}/sections/${next.id}`, {
 			title: next.title,
 			slug: next.slug,
 			access_tier: next.access_tier,
@@ -631,6 +632,8 @@ function SectionEditor({
 			content: next.content,
 			poll_id: next.poll_id,
 		});
+		// Continue from what the server stored (it normalises content), so the editor reads as saved.
+		setDraft(row);
 		onSaved();
 	};
 

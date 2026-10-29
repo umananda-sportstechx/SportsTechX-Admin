@@ -19,6 +19,7 @@ import { TiptapEditor } from '@/components/tiptap-editor';
 import { CompanyPicker, SectorPicker, PollPicker } from '@/components/section-pickers';
 import { ImageInput } from '@/components/image-input';
 import { PreviewOverlay } from '@/components/reports/preview-overlay';
+import { Gster26Editor } from '@/components/reports/gster26-editor';
 import type { Section as RkSection } from '@/components/reports/report-kit/types';
 import type { ReportThemeOverride } from '@/components/reports/report-kit/report-theme';
 import { ThemeControls } from '@/components/reports/theme-controls';
@@ -184,6 +185,8 @@ interface ReportMeta {
 	is_published: boolean;
 	has_sections: boolean;
 	theme: ReportThemeOverride | null;
+	/** Editorial overrides for a custom-built page (gster26). */
+	content?: Record<string, unknown> | null;
 }
 
 export default function ReportSectionsEditorPage(
@@ -303,6 +306,7 @@ export default function ReportSectionsEditorPage(
 		<div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 			<PublishBar
 				report={report}
+				custom={isHardcoded}
 				publishedCount={publishedCount}
 				draftCount={draftCount}
 				onPublishToggle={setReportPublished}
@@ -315,11 +319,20 @@ export default function ReportSectionsEditorPage(
 				<div className="card" style={{ padding: '10px 12px', display: 'flex', gap: 10, alignItems: 'flex-start', borderLeft: '3px solid #b45309', background: 'color-mix(in srgb, #b45309 7%, var(--bg-1))' }}>
 					<Info size={15} style={{ color: '#b45309', flexShrink: 0, marginTop: 1 }} />
 					<div style={{ fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.5 }}>
-						<strong>This report renders from a custom-built page on the live site.</strong> The sections below are stored but <strong>don&rsquo;t drive the live report</strong>, so editing them here won&rsquo;t change what users see, and this preview can&rsquo;t match the real page.
+						<strong>This report is a custom-built page.</strong> Edit it part by part below; <strong>Preview</strong> shows the real page with your unsaved edits, and <strong>Save</strong> publishes them to the live report.
 					</div>
 				</div>
 			)}
 
+			{isHardcoded ? (
+				<Gster26Editor
+					reportId={reportId}
+					saved={(report?.content ?? null) as Parameters<typeof Gster26Editor>[0]['saved']}
+					previewOpen={previewOpen}
+					onClosePreview={() => setPreviewOpen(false)}
+					onSaved={reloadReport}
+				/>
+			) : (<>
 			<div className="rep-editor">
 				<aside className="rep-editor__list">
 					<div style={{ position: 'relative' }}>
@@ -384,6 +397,7 @@ export default function ReportSectionsEditorPage(
 					onClose={() => setPreviewOpen(false)}
 				/>
 			)}
+			</>)}
 
 			{themeOpen && (
 				<SlideOver onClose={() => setThemeOpen(false)}>
@@ -413,9 +427,11 @@ export default function ReportSectionsEditorPage(
 // ---- publish / readiness bar -------------------------------------------------
 
 function PublishBar({
-	report, publishedCount, draftCount, onPublishToggle, onOpenTheme, onOpenDetails, onPreview,
+	report, custom, publishedCount, draftCount, onPublishToggle, onOpenTheme, onOpenDetails, onPreview,
 }: {
 	report: ReportMeta | undefined;
+	/** A custom-built page: no sections, so no section counts or warnings. */
+	custom?: boolean;
 	publishedCount: number;
 	draftCount: number;
 	onPublishToggle: (next: boolean) => void;
@@ -425,15 +441,17 @@ function PublishBar({
 }) {
 	const published = report?.is_published ?? false;
 	// A published report with zero published sections shows an empty page to users.
-	const warnEmptyPublished = published && publishedCount === 0;
+	const warnEmptyPublished = !custom && published && publishedCount === 0;
 	return (
 		<div className="card rep-bar">
 			<Link href="/reports" className="btn ghost" title="All reports"><ArrowLeft size={14} /></Link>
 			<div style={{ minWidth: 0 }}>
 				<div style={{ fontWeight: 700, fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 360 }}>{report?.title ?? 'Report'}</div>
 				<div style={{ fontSize: 11, color: 'var(--fg-muted)', display: 'flex', gap: 8, marginTop: 2 }}>
-					<span>{publishedCount} published</span>
-					{draftCount > 0 && <span>· {draftCount} draft{draftCount === 1 ? '' : 's'}</span>}
+					{custom ? <span>Custom-built page</span> : <>
+						<span>{publishedCount} published</span>
+						{draftCount > 0 && <span>· {draftCount} draft{draftCount === 1 ? '' : 's'}</span>}
+					</>}
 				</div>
 			</div>
 

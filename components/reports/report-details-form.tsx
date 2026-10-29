@@ -54,7 +54,7 @@ export function ReportDetailsForm({
 				report_month: month === '' ? null : Number(month),
 				report_year: year === '' ? null : Number(year),
 				tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
-				description: description.trim() || undefined,
+				description: description.trim() || null,
 				cover_url: cover || null,
 				show_on_dashboard: onDash,
 			});

@@ -52,7 +52,7 @@ export default function ReportsAdminPage() {
 	const [editionsId, setEditionsId] = useState<string | null>(null);
 	const [search, setSearch] = useState('');
 	const [analyticsOpen, setAnalyticsOpen] = useState(false);
-	const { data, error, isLoading } = useSWR<Response>(['/api/reports'], { dedupingInterval: 30_000 });
+	const { data, error, isLoading } = useSWR<Response>(['/api/reports', { limit: 200 }], { dedupingInterval: 30_000 });
 
 	const refresh = () => mutate((key) => Array.isArray(key) && key[0] === '/api/reports');
 

@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { ChevronDown, ChevronRight, ChevronUp, ExternalLink, Plus, RotateCcw, Trash2, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useConfirm } from '@/components/confirm';
+import { useLeaveGuard } from '@/hooks/use-leave-guard';
 import { ImageInput } from '@/components/image-input';
 
 /**
@@ -74,7 +75,7 @@ function blankLike(like: Json): Json {
 	if (typeof like === 'number') return 0;
 	if (typeof like === 'boolean') return false;
 	if (Array.isArray(like)) return [];
-	if (isObj(like)) return Object.fromEntries(Object.entries(like).map(([k, v]) => [k, blankLike(v)]));
+	if (isObj(like)) return Object.fromEntries(Object.entries(like).map(([k, v]) => [k, k === 'id' ? `new-${Date.now().toString(36)}` : blankLike(v)]));
 	return '';
 }
 
@@ -111,6 +112,8 @@ function Field({ name, value, like, onChange, depth }: { name: string; value: Js
 			</div>
 		);
 	}
+	// The page keys layouts, anchors and poll votes on ids, so they aren't editable.
+	if (name === 'id') return <label className="g26-field"><span>Id (fixed)</span><input className="search-input" value={s} readOnly disabled /></label>;
 	const long = s.length > 90 || s.includes('\n');
 	return (
 		<label className="g26-field">
@@ -124,7 +127,10 @@ function Field({ name, value, like, onChange, depth }: { name: string; value: Js
 
 function ListField({ name, value, like, onChange, depth }: { name: string; value: Json[]; like: Json[]; onChange: (v: Json) => void; depth: number }) {
 	const [open, setOpen] = useState<number | null>(null);
-	const template = like[0] ?? value[0] ?? '';
+	// Remember the item shape, so emptying a list with no default items and adding again keeps it.
+	const shape = useRef<Json | undefined>(undefined);
+	shape.current = like[0] ?? value[0] ?? shape.current;
+	const template = shape.current ?? '';
 	const primitive = !isObj(template) && !Array.isArray(template);
 	const move = (i: number, d: number) => { const n = [...value]; const [x] = n.splice(i, 1); n.splice(i + d, 0, x!); onChange(n); setOpen(open === i ? i + d : open); };
 	return (
@@ -173,7 +179,11 @@ export function Gster26Editor({ reportId, saved, previewOpen, onClosePreview, on
 	const dirty = JSON.stringify(draft) !== JSON.stringify(saved ?? {});
 	const partDirty = (p: (typeof GSTER26_PARTS)[number]) => p.keys.some((k) => JSON.stringify(draft[k]) !== JSON.stringify((saved ?? {})[k]));
 
-	useEffect(() => { setDraft(saved ?? {}); }, [saved]);
+	// Reset only when the saved content itself changes — publishing or a Details/theme save refetches
+	// the report (new object, same content) and must not wipe unsaved edits.
+	const savedKey = JSON.stringify(saved ?? {});
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	useEffect(() => { setDraft(saved ?? {}); }, [savedKey]);
 
 	// Preview frame: say hello on load, take its defaults, then stream the draft.
 	const post = useCallback((msg: unknown) => frame.current?.contentWindow?.postMessage(msg, ATLAS_ORIGIN), []);
@@ -208,12 +218,7 @@ export function Gster26Editor({ reportId, saved, previewOpen, onClosePreview, on
 		window.addEventListener('keydown', onKey);
 		return () => { document.body.style.overflow = prev; window.removeEventListener('keydown', onKey); };
 	}, [previewOpen, onClosePreview]);
-	useEffect(() => {
-		if (!dirty) return;
-		const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); };
-		window.addEventListener('beforeunload', warn);
-		return () => window.removeEventListener('beforeunload', warn);
-	}, [dirty]);
+	useLeaveGuard(dirty);
 
 	const save = async () => {
 		setSaving(true);
@@ -260,7 +265,11 @@ export function Gster26Editor({ reportId, saved, previewOpen, onClosePreview, on
 							{!defaults ? (
 								<div style={{ color: 'var(--fg-muted)', fontSize: 13 }}>Loading the report’s content…</div>
 							) : part.keys.map((k) => (
-								<Field key={k} name={k} value={draft[k]} like={defaults[k]} depth={0} onChange={(v) => setDraft((d) => ({ ...d, [k]: v }))} />
+								<Field key={k} name={k} value={draft[k]} like={defaults[k]} depth={0} onChange={(v) => setDraft((d) => {
+									// Back to the original copy on a never-saved block: drop it, so it isn't "edited" and isn't saved as a frozen copy.
+									if (!(saved && k in saved) && JSON.stringify(v) === JSON.stringify(defaults[k])) { const { [k]: _, ...rest } = d; return rest; }
+									return { ...d, [k]: v };
+								})} />
 							))}
 						</div>
 					</div>

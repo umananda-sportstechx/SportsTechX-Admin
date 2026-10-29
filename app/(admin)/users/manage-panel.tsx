@@ -8,9 +8,10 @@ import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { Select } from '@/components/select';
 import { Section, PillTabs } from '@/components/atoms';
+import { SignInLinkSection } from './account-access';
 
 /** Minimal user shape the manage panel needs. */
-export interface ManageUser { id: string; user_type: string | null }
+export interface ManageUser { id: string; user_type: string | null; email?: string | null }
 
 interface GrantRow {
 	id: string;
@@ -42,7 +43,10 @@ export function ManagePanel({ user }: { user: ManageUser }) {
 						<GrantAccessSection profileId={user.id} />
 						<FeatureGrantsSection profileId={user.id} />
 					</div>
-					<AccessControlSection profileId={user.id} />
+					<div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 'var(--space-4)' }}>
+						<SignInLinkSection profileId={user.id} email={user.email ?? null} />
+						<AccessControlSection profileId={user.id} />
+					</div>
 				</div>
 			)}
 

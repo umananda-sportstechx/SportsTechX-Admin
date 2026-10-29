@@ -7,7 +7,8 @@ import { getSupabaseBrowser } from '@/lib/supabase';
 /**
  * Opens the backend SSE stream (/api/events) with the admin's bearer token and
  * revalidates the relevant SWR caches when the server broadcasts a change.
- * Today: `pipeline_synced` (Attio webhook → sync) → refresh the Revenue Tracker.
+ * `pipeline_synced` (Attio webhook → sync) → refresh the Revenue Tracker;
+ * `admin_notification` → refresh the topbar bell.
  *
  * Uses a raw fetch reader (EventSource can't send an Authorization header) with
  * simple auto-reconnect — no extra dependency.
@@ -26,6 +27,10 @@ export function useAdminRealtime(): void {
 		const bump = () => { backoff = Math.min(backoff * 2, 60_000); };
 
 		const onEvent = (type: string): void => {
+			// A user did something an admin has to act on (or another admin read one).
+			if (type === 'admin_notification') {
+				void mutate((key) => Array.isArray(key) && key[0] === '/api/admin/notifications');
+			}
 			if (type === 'pipeline_synced') {
 				void mutate((key) => Array.isArray(key) && String(key[0]).startsWith('/api/admin/revenue-tracker'));
 			}

@@ -12,6 +12,7 @@ import { PageHeader, PillTabs, AsyncState, StatCard, StatsPanel, Section } from 
 import { ComboBarLine, PieDonut, PieLegend, Funnel, toSegments, type Bucket } from '@/components/charts';
 import { FilterBar, FilterSelect, StatStrip } from '@/components/filters';
 import { Select } from '@/components/select';
+import { CreateAccountModal } from './account-access';
 
 interface UserStats { total: number; admins: number; by_tier: Bucket[]; by_role: Bucket[]; signups_by_month: Bucket[] }
 interface AuthRow { email: string | null; created_at?: string | null; last_sign_in_at?: string | null; provider?: string | null }
@@ -59,6 +60,7 @@ export function UsersView({ view }: { view: 'directory' | 'stats' | 'charts' }) 
 	const [to, setTo] = useState('');
 	const [freqBucket, setFreqBucket] = useState<'never' | 'once' | '2-5' | '6+' | null>(null);
 	const [planDetail, setPlanDetail] = useState<string | null>(null);
+	const [creating, setCreating] = useState(false);
 
 	// Deep-link support: /users?q=<email>&focus=<id> (e.g. from the AI-usage page)
 	// pre-fills the search; focus opens that user's details page.
@@ -289,6 +291,7 @@ export function UsersView({ view }: { view: 'directory' | 'stats' | 'charts' }) 
 				<FilterSelect ariaLabel="Role" value={role} onChange={(v) => { setRole(v); setPage(1); }} options={[...ROLES]} allLabel="All roles" />
 				<div style={{ flex: 1 }} />
 				<button className="btn ghost" disabled={exporting} onClick={() => void exportCsv()}>{exporting ? 'Exporting…' : 'Export CSV'}</button>
+				<button className="btn" onClick={() => setCreating(true)}>Create account</button>
 			</FilterBar>
 
 			<div className="card">
@@ -366,6 +369,7 @@ export function UsersView({ view }: { view: 'directory' | 'stats' | 'charts' }) 
 
 			{freqBucket && <LoginUsersModal bucket={freqBucket} onClose={() => setFreqBucket(null)} />}
 			{planDetail && <PlanUsersModal detail={planDetail} onClose={() => setPlanDetail(null)} />}
+			{creating && <CreateAccountModal onClose={() => setCreating(false)} />}
 		</div>
 	);
 }

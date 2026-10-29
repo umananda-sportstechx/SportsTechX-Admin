@@ -15,6 +15,7 @@ import { useAuthSession } from '@/hooks/use-auth-session';
 import { useIsAdmin, useUserProfile } from '@/hooks/use-user-profile';
 import { useAdminRealtime } from '@/hooks/use-admin-realtime';
 import { Tooltip } from '@/components/tooltip';
+import { AdminNotifications } from '@/components/admin-notifications';
 
 /** Light/dark toggle — the old admin ships both themes; default is dark. */
 function ThemeToggle() {
@@ -251,6 +252,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 					</button>
 					<div className="admin-topbar-title">{current?.label ?? 'Admin'}</div>
 					<div style={{ flex: 1 }} />
+					<AdminNotifications />
 					<ThemeToggle />
 					<div className="admin-avatar" title={profile?.email ?? undefined}>{initials}</div>
 					<button onClick={() => signOut().then(() => router.replace('/login'))} className="btn ghost" title="Sign out">

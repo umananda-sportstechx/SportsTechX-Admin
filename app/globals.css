@@ -410,6 +410,40 @@ textarea.search-input { border-radius: var(--radius-md); }
   font-family: var(--font-display); font-weight: 700; font-size: 12px;
 }
 .admin-rail-toggle { display: none; }
+
+/* Topbar notification bell + dropdown. */
+.admin-notif { position: relative; }
+.admin-notif__bell { position: relative; }
+.admin-notif__count {
+  position: absolute; top: -4px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px;
+  border-radius: 999px; background: var(--neg); color: #fff;
+  font-family: var(--font-mono); font-size: 10px; line-height: 16px; text-align: center;
+}
+.admin-notif__panel {
+  position: absolute; right: 0; top: calc(100% + 8px); width: min(380px, calc(100vw - 24px));
+  max-height: min(520px, 70vh); display: flex; flex-direction: column; padding: 0; z-index: 40;
+  box-shadow: var(--shadow-sm);
+}
+.admin-notif__head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 12px 14px; border-bottom: 1px solid var(--border);
+  font-family: var(--font-display); font-weight: 700; font-size: 13px;
+}
+.admin-notif__all { background: none; border: 0; padding: 0; cursor: pointer; font-size: 12px; color: var(--accent); }
+.admin-notif__empty { padding: 18px 14px; font-size: 12px; color: var(--fg-muted); line-height: 1.5; }
+.admin-notif__list { list-style: none; margin: 0; padding: 4px 0; overflow-y: auto; }
+.admin-notif__item {
+  display: flex; gap: 10px; width: 100%; padding: 10px 14px; border: 0; background: none;
+  text-align: left; cursor: pointer; color: var(--fg-muted);
+}
+.admin-notif__item:hover { background: var(--bg-2); }
+.admin-notif__dot { flex: none; width: 7px; height: 7px; margin-top: 6px; border-radius: 50%; background: transparent; }
+.admin-notif__item.is-unread { color: var(--fg); }
+.admin-notif__item.is-unread .admin-notif__dot { background: var(--accent); }
+.admin-notif__item.is-unread .admin-notif__title { font-weight: 600; }
+.admin-notif__text { display: grid; gap: 3px; min-width: 0; }
+.admin-notif__title { font-size: 13px; line-height: 1.4; }
+.admin-notif__meta { font-size: 11px; color: var(--fg-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .admin-scrim { display: none; }
 
 /* Mobile / narrow: rail slides off-canvas, toggled by the hamburger. */

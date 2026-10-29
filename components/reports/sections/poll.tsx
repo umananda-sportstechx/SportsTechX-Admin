@@ -1,4 +1,5 @@
 'use client';
+// GENERATED — copied from client/components/features/reports/sections/poll.tsx by scripts/sync-report-renderer.mjs. Edit the client file, then re-run the script.
 
 import { useState } from 'react';
 import useSWR from 'swr';

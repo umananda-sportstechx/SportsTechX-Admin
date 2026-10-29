@@ -1,4 +1,5 @@
 'use client';
+// GENERATED — copied from client/components/features/reports/report-kit/live-data.ts by scripts/sync-report-renderer.mjs. Edit the client file, then re-run the script.
 
 import useSWR from 'swr';
 import { useReveal } from './use-reveal';

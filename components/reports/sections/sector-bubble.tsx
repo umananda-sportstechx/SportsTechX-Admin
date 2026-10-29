@@ -1,7 +1,9 @@
 'use client';
+// GENERATED — copied from client/components/features/reports/sections/sector-bubble.tsx by scripts/sync-report-renderer.mjs. Edit the client file, then re-run the script.
 
 import { useEffect, useRef, useState } from 'react';
 import { Collapse } from '../report-kit/collapse';
+import { rewriteReportHref } from '../report-kit/rewrite-href';
 
 /**
  * sector_bubble — sector → sub-sector → sub-sub funding drilldown (the GSTER
@@ -155,7 +157,7 @@ export function SectorBubbleSection({ content }: { content: Record<string, unkno
 			})}
 			{frameworkUrl && (
 				<div style={{ marginTop: 14, fontSize: 10 }}>
-					<a href={frameworkUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--rk-accent)', textDecoration: 'none' }}>Understand the Framework →</a>
+					<a href={rewriteReportHref(frameworkUrl)} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--rk-accent)', textDecoration: 'none' }}>Understand the Framework →</a>
 				</div>
 			)}
 		</div>

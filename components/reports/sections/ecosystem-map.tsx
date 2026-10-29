@@ -1,4 +1,5 @@
 'use client';
+// GENERATED — copied from client/components/features/reports/sections/ecosystem-map.tsx by scripts/sync-report-renderer.mjs. Edit the client file, then re-run the script.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { geoNaturalEarth1, geoPath } from 'd3-geo';
@@ -6,6 +7,7 @@ import { feature } from 'topojson-client';
 import type { VisibleSection } from '../report-kit/types';
 import { useLiveSectionData } from '../report-kit/live-data';
 import { RichText } from '../report-kit/tiptap';
+import { rewriteReportHref } from '../report-kit/rewrite-href';
 
 /**
  * ecosystem_map — the GSTER global ecosystem map: a d3 Natural-Earth world
@@ -272,7 +274,7 @@ export function EcosystemMapSection({ section }: { section: VisibleSection }) {
 						{cta.subtitle && <div style={{ fontFamily: 'var(--rk-font-mono)', fontSize: 11, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.04em' }}>{cta.subtitle}</div>}
 					</div>
 					{cta.href && cta.label && (
-						<a href={cta.href} target="_blank" rel="noopener noreferrer" style={{ position: 'relative', zIndex: 1, fontFamily: 'var(--rk-font-display)', fontSize: 14, letterSpacing: '0.12em', color: '#fff', background: 'var(--rk-accent)', textDecoration: 'none', padding: '11px 32px', borderRadius: 50, whiteSpace: 'nowrap' }}>{cta.label}</a>
+						<a href={rewriteReportHref(cta.href)} target="_blank" rel="noopener noreferrer" style={{ position: 'relative', zIndex: 1, fontFamily: 'var(--rk-font-display)', fontSize: 14, letterSpacing: '0.12em', color: '#fff', background: 'var(--rk-accent)', textDecoration: 'none', padding: '11px 32px', borderRadius: 50, whiteSpace: 'nowrap' }}>{cta.label}</a>
 					)}
 				</div>
 			)}

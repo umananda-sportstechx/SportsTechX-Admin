@@ -1,3 +1,4 @@
+// GENERATED — copied from client/components/features/reports/report-kit/icons.tsx by scripts/sync-report-renderer.mjs. Edit the client file, then re-run the script.
 import {
 	DollarSign, Trophy, Users, Globe, TrendingUp, Activity, Zap, Building2, Rocket,
 	Star, Heart, Flag, Handshake, Landmark, Footprints, Monitor, GitMerge, Lightbulb, Bot,

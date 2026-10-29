@@ -1,3 +1,4 @@
+// GENERATED — copied from client/components/features/reports/report-kit/format.ts by scripts/sync-report-renderer.mjs. Edit the client file, then re-run the script.
 /** Compact number (1.2K / 3.4M / 5.6B) for report figures. */
 export function formatBig(n: number): string {
 	if (!Number.isFinite(n)) return '—';

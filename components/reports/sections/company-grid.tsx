@@ -1,4 +1,5 @@
 'use client';
+// GENERATED — copied from client/components/features/reports/sections/company-grid.tsx by scripts/sync-report-renderer.mjs. Edit the client file, then re-run the script.
 
 import useSWR from 'swr';
 import type { VisibleSection } from '../report-kit/types';
@@ -35,8 +36,9 @@ function Card({ c }: { c: Co }) {
 		</>
 	);
 	const box: React.CSSProperties = { borderRadius: 14, overflow: 'hidden', border: '1px solid var(--rk-border)', background: 'var(--rk-bg-card)', display: 'block', textDecoration: 'none', color: 'inherit' };
-	// Admin preview: company links (/companies/:slug) don't exist here — render as a plain card.
-	return <div className="rk-hoverlift" style={box}>{inner}</div>;
+	return c.slug || c.id
+		? <a href={`${process.env.NEXT_PUBLIC_ATLAS_URL ?? 'https://atlas.sportstechx.com'}/companies/${c.slug ?? c.id}`} target="_blank" rel="noopener noreferrer" className="rk-hoverlift" style={box}>{inner}</a>
+		: <div className="rk-hoverlift" style={box}>{inner}</div>;
 }
 
 function Grid({ items }: { items: Co[] }) {

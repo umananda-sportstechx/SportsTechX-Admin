@@ -1,7 +1,9 @@
 'use client';
+// GENERATED — copied from client/components/features/reports/report-kit/tiptap.tsx by scripts/sync-report-renderer.mjs. Edit the client file, then re-run the script.
 
 import type { ReactNode } from 'react';
 import { ExternalLink } from 'lucide-react';
+import { rewriteReportHref } from './rewrite-href';
 
 /**
  * Read-only TipTap JSON renderer for report rich-text. Ported from the admin
@@ -64,7 +66,7 @@ function TiptapText({ text, marks }: { text: string; marks?: Array<{ type: strin
 		else if (m.type === 'italic') node = <em>{node}</em>;
 		else if (m.type === 'code') node = <code style={{ background: 'var(--rk-bg-sec)', padding: '0 4px', borderRadius: 3 }}>{node}</code>;
 		else if (m.type === 'link') {
-			const href = (m.attrs?.href as string) ?? '#';
+			const href = rewriteReportHref(m.attrs?.href as string | undefined);
 			node = <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--rk-accent)' }}>{node} <ExternalLink size={10} style={{ verticalAlign: -1 }} /></a>;
 		}
 	}

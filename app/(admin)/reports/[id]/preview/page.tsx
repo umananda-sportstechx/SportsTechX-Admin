@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { use, useState } from 'react';
 import useSWR from 'swr';
 import { ArrowLeft, Eye, Lock, Moon, Sun, Smartphone, Tablet, Monitor } from 'lucide-react';
-import { ReportPreview } from '@/components/reports/report-preview';
+import { ReportPage } from '@/components/reports/report-page';
 import type { Section, Tier } from '@/components/reports/report-kit/types';
 import type { ReportThemeOverride } from '@/components/reports/report-kit/report-theme';
 
@@ -111,7 +111,7 @@ export default function ReportPreviewPage({ params }: { params: Promise<{ id: st
 						overflow: 'hidden',
 					}}
 				>
-					<ReportPreview sections={sections} theme={report?.theme ?? null} isDark={dark} />
+					<ReportPage sections={sections} theme={report?.theme ?? null} isDark={dark} onToggleDark={() => setIsDark(!dark)} />
 				</div>
 			</div>
 

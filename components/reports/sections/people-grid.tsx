@@ -1,8 +1,10 @@
 'use client';
+// GENERATED — copied from client/components/features/reports/sections/people-grid.tsx by scripts/sync-report-renderer.mjs. Edit the client file, then re-run the script.
 
 import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { RichText } from '../report-kit/tiptap';
+import { rewriteReportHref } from '../report-kit/rewrite-href';
 
 /**
  * people_grid — innovator / people avatars with region-coloured rings, optional
@@ -50,7 +52,7 @@ export function PeopleGridSection({ content }: { content: Record<string, unknown
 				{people.map((p, i) => {
 					const clickable = !!(p.detail || p.link);
 					return (
-						<div key={i} onClick={() => { if (p.detail) setSelected(p); else if (p.link) window.open(p.link, '_blank', 'noopener'); }} style={{ textAlign: 'center', cursor: clickable ? 'pointer' : 'default' }}>
+						<div key={i} onClick={() => { if (p.detail) setSelected(p); else if (p.link) window.open(rewriteReportHref(p.link), '_blank', 'noopener'); }} style={{ textAlign: 'center', cursor: clickable ? 'pointer' : 'default' }}>
 							<div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}><Avatar person={p} size={92} colorFor={colorFor} /></div>
 							<div style={{ fontFamily: 'var(--rk-font-display)', fontSize: 17, letterSpacing: '0.01em', lineHeight: 1.05, color: 'var(--rk-fg)' }}><RichText value={p.name} inline /></div>
 							{p.org != null && <div style={{ fontFamily: 'var(--rk-font-mono)', fontSize: 10, color: colorFor(p.region), textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 4, lineHeight: 1.3 }}><RichText value={p.org} inline /></div>}
@@ -66,7 +68,7 @@ export function PeopleGridSection({ content }: { content: Record<string, unknown
 						<h3 style={{ margin: '0 0 2px', fontFamily: 'var(--rk-font-display)', fontSize: 24, color: 'var(--rk-title)' }}><RichText value={selected.name} inline /></h3>
 						{selected.org != null && <div style={{ fontSize: 13, color: colorFor(selected.region), marginBottom: 12 }}><RichText value={selected.org} inline /></div>}
 						{selected.detail != null && <div style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--rk-fg-sec)' }}><RichText value={selected.detail} /></div>}
-						{selected.link && <a href={selected.link} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 16, color: 'var(--rk-accent)', fontSize: 13 }}>Profile <ExternalLink size={12} /></a>}
+						{selected.link && <a href={rewriteReportHref(selected.link)} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 16, color: 'var(--rk-accent)', fontSize: 13 }}>Profile <ExternalLink size={12} /></a>}
 					</div>
 				</div>
 			)}

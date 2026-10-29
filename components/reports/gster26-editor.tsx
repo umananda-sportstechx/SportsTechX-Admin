@@ -27,8 +27,11 @@ type Content = Record<string, Json>;
 /** The page's parts, in page order, and the content blocks each one owns. */
 export const GSTER26_PARTS: { id: string; label: string; hint: string; anchor: string; keys: string[] }[] = [
 	{ id: 'hero', label: 'Header & hero', hint: 'Top navigation labels, the hero title, intro and the six headline figures.', anchor: '#stx-hero', keys: ['nav', 'hero'] },
-	{ id: 'trends', label: 'Trends', hint: 'The section heading, tab names and intros, and the three Trends cards (their long bodies are not editable yet).', anchor: '#trends', keys: ['trendsHeader', 'trendCards'] },
-	{ id: 'deep-dives', label: 'Trends · Deep Dives', hint: 'The long-form articles under the Deep Dives tab.', anchor: '#trends', keys: ['featuredArticles'] },
+	{ id: 'trends', label: 'Trends', hint: 'The section heading, tab names and intros, and the three Trends cards.', anchor: '#trends', keys: ['trendsHeader', 'trendCards'] },
+	{ id: 'trend-ma', label: 'Trend · M&A article', hint: 'The expanded M&A article. Its figures and charts are computed from the deal data; everything written around them is here.', anchor: '#trend-expanded-ma-sportstech', keys: ['trendMa'] },
+	{ id: 'trend-running', label: 'Trend · Running article', hint: 'The expanded competitive-running article: figures, marathons table, drivers and opportunities.', anchor: '#trend-expanded-running-renaissance', keys: ['trendRunning'] },
+	{ id: 'trend-dtc', label: 'Trend · DTC article', hint: 'The expanded direct-to-consumer article: figures, the launches table, the three forces, quote and implications.', anchor: '#trend-expanded-dtc-shift', keys: ['trendDtc'] },
+	{ id: 'deep-dives', label: 'Trends · Deep Dives', hint: 'The long-form articles under the Deep Dives tab.', anchor: '#deep-dives', keys: ['featuredArticles'] },
 	{ id: 'peak', label: 'PEAK 2026', hint: 'PEAK copy, the Startup World Cup finalists, Groundbreakers and the partner logo wall.', anchor: '#peak2026', keys: ['peakCopy', 'peakSwcFinalists', 'groundbreakersOrgs', 'peakPartnersTier1', 'peakPartnersTier2', 'peakPartnersTier3'] },
 	{ id: 'innovators', label: 'Innovators', hint: 'The heading, the three questions, the innovators themselves (name, role, photo, answers) and answer overrides keyed by exact name.', anchor: '#innovators', keys: ['innovatorsHeader', 'innovators', 'innovatorResponses'] },
 	{ id: 'startups', label: 'Startups to Watch', hint: 'The heading, tab intros, call to action, and the three tabs of companies.', anchor: '#ecosystem', keys: ['startupsHeader', 'watchInnovators', 'watchPeak', 'watchStxRecommends'] },
@@ -46,12 +49,19 @@ const LABELS: Record<string, string> = {
 	nav: 'Navigation', hero: 'Hero', trendsHeader: 'Section heading & tabs', trendCards: 'Trend cards', peakCopy: 'PEAK copy',
 	innovatorsHeader: 'Section heading & questions', startupsHeader: 'Section heading, tab intros & call to action', ecomap: 'Map heading',
 	ngsc: 'NGSC', dataHeader: 'Headings & call to action', closing: 'Closing quote',
+	trendMa: 'M&A article', trendRunning: 'Running article', trendDtc: 'DTC article',
+	statLabels: 'Figure labels (the figures are computed)', insightTitle: 'Insight heading', insight: 'Insight paragraphs',
+	insightEmphasis: 'Emphasised closing line', acquirerLogos: 'Acquirer logos (name → website domain)', sectorLabels: 'Sector names',
+	whyHappeningTitle: '“Why it’s happening” heading', whyHappening: '“Why it’s happening”', whyMattersTitle: '“Why it matters” heading', whyMatters: '“Why it matters”',
+	whyMattersIntro: '“Why it matters” intro', marathons: 'Marathons table', footnotes: 'Footnotes', drivers: 'Drivers', impactStats: 'Impact figures',
+	opportunities: 'Opportunities', launches: 'DTC launches table', launchesHeaders: 'Launches table headers', points: 'Bulleted points', paragraphs: 'Paragraphs',
+	quoteAttribution: 'Quote attribution', closingLine: 'Closing line', g2324: '2023→24 change', g2425: '2024→25 change',
 	innovators: 'Innovators', designation: 'Role', continent: 'Region (Europe, North America or APAC)', linkedin: 'LinkedIn URL', photo_url: 'Photo', logo_url: 'Organisation logo',
 	'ma-sportstech': 'M&A acquirers', 'running-renaissance': 'Competitive running', 'dtc-shift': 'DTC & streaming',
 	kpis: 'Headline figures', num: 'Figure', icon: 'Icon (funding, unicorn, investors, globe, trending or ma)',
 	titleLine1: 'Title line 1', titleLine2: 'Title line 2 (pink)', titleLine3: 'Title line 3', titleLine4: 'Title line 4', titleYear: 'Year (pink)',
 	ctaUrl: 'Button link', ctaLabel: 'Button label', ctaTitle: 'Call-to-action title', ctaText: 'Call-to-action text', ctaSubtitle: 'Call-to-action subtitle',
-	videoUrl: 'Video embed URL', stats: 'Stats bar', about: 'About paragraphs (the last one is bold)', pillars: 'Pillars',
+	videoUrl: 'Video embed URL', stats: 'Figures', about: 'About paragraphs (the last one is bold)', pillars: 'Pillars',
 };
 const humanize = (k: string) => LABELS[k] ?? k.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase());
 const isImageKey = (k: string) => /logo|photo|image|avatar|img|cover/i.test(k);

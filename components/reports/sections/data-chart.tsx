@@ -1,4 +1,5 @@
 'use client';
+// GENERATED — copied from client/components/features/reports/sections/data-chart.tsx by scripts/sync-report-renderer.mjs. Edit the client file, then re-run the script.
 
 import type { VisibleSection } from '../report-kit/types';
 import { useLiveSectionData } from '../report-kit/live-data';

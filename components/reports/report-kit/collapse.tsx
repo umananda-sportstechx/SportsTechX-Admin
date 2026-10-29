@@ -1,4 +1,5 @@
 'use client';
+// GENERATED — copied from client/components/features/reports/report-kit/collapse.tsx by scripts/sync-report-renderer.mjs. Edit the client file, then re-run the script.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 

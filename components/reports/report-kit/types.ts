@@ -1,3 +1,4 @@
+// GENERATED — copied from client/components/features/reports/report-kit/types.ts by scripts/sync-report-renderer.mjs. Edit the client file, then re-run the script.
 /** Mirrors the server `/api/reports/:slug/sections` response (sections.repository.ts). */
 export type Tier = 'explore' | 'raise' | 'scout';
 
@@ -33,6 +34,8 @@ export interface ReportDetail {
 	report_month: number | null;
 	report_year: number | null;
 	has_sections: boolean;
+	/** Some edition has a PDF the server can serve (false = nothing uploaded yet). */
+	has_pdf?: boolean;
 	is_published: boolean;
 	tags: string[];
 	theme: import('./report-theme').ReportThemeOverride | null;

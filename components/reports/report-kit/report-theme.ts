@@ -1,3 +1,4 @@
+// GENERATED — copied from client/components/features/reports/report-kit/report-theme.ts by scripts/sync-report-renderer.mjs. Edit the client file, then re-run the script.
 /**
  * STX report theme — ported verbatim from the legacy Intelligence Hub
  * (STX-WebApp/client/src/lib/report-theme.ts) so ported reports keep their

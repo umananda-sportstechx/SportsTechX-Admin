@@ -2,12 +2,18 @@
    the --rk-* vars from the resolved theme (ReportView); these classes read them.
    Report fonts are loaded as a plain stylesheet (NOT next/font) to avoid the
    Turbopack google-font build flake and to keep the reports' exact typography. */
-@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@400;500&family=Inter:wght@300..800&display=swap');
 
 .rk-report {
-	--rk-font-display: 'Bebas Neue', var(--a-font), sans-serif;
-	--rk-font-mono: 'DM Mono', var(--a-mono), monospace;
-	--rk-font-body: var(--a-body), system-ui, sans-serif;
+	/* Self-contained — no host-app font variables. These stacks used to fall
+	   back to var(--a-font) etc., which only exist under `.atlas`; an undefined
+	   var() with no fallback invalidates the whole stack, so the report silently
+	   took its host page's font (Inter on Atlas, IBM Plex in the admin preview)
+	   and Bebas Neue / DM Mono never showed. A theme's font_display / font_mono
+	   still override these inline. */
+	--rk-font-display: 'Bebas Neue', 'Inter', sans-serif;
+	--rk-font-mono: 'DM Mono', ui-monospace, monospace;
+	--rk-font-body: 'Inter', system-ui, sans-serif;
 	background: var(--rk-bg);
 	color: var(--rk-fg);
 	font-family: var(--rk-font-body);

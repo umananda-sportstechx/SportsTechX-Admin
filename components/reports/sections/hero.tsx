@@ -1,4 +1,5 @@
 'use client';
+// GENERATED — copied from client/components/features/reports/sections/hero.tsx by scripts/sync-report-renderer.mjs. Edit the client file, then re-run the script.
 
 import { RichText } from '../report-kit/tiptap';
 import { SectionIcon } from '../report-kit/icons';

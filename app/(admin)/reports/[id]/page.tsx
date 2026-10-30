@@ -32,7 +32,7 @@ import { ReportDetailsForm } from '@/components/reports/report-details-form';
  * so the editor shows a banner: edits here won't change the live report, and the
  * preview can't match it. Add a slug here if another report gets a custom page.
  */
-const HARDCODED_REPORT_SLUGS = new Set(['gster26', 'ftabr26']);
+const HARDCODED_REPORT_SLUGS = new Set(['gster26', 'ftabr26', 'investors-survey26']);
 
 // ---- types matching the server registry --------------------------------------
 

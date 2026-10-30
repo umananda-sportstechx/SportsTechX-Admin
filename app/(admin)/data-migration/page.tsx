@@ -70,7 +70,7 @@ export default function DataMigrationPage() {
 			<AsyncState loading={status.isLoading} error={status.error} onRetry={() => void status.mutate()}>
 				{status.data && !status.data.ready ? (
 					<Section title="Not set up yet">
-						<p style={{ fontSize: 13, color: 'var(--fg-2)' }}>The migration tracking tables don’t exist yet. Apply migration <code>20261030083522_migration_tracking</code> (<code>npx supabase db push</code> in <code>server/</code>).</p>
+						<p style={{ fontSize: 13, color: 'var(--fg-2)' }}>The migration tracking tables don’t exist yet. Apply migration <code>20261030102851_migration_tracking</code> (<code>npx supabase db push</code> in <code>server/</code>).</p>
 					</Section>
 				) : (
 					<>

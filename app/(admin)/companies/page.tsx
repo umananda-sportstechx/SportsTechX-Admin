@@ -32,6 +32,7 @@ import { DateRangePicker, type RangeValue } from '@/components/date-range-picker
 interface Company {
 	id: string;
 	name: string;
+	is_hidden?: boolean;
 	slug?: string;
 	website?: string | null;
 	description?: string | null;
@@ -80,7 +81,7 @@ export function CompaniesView({ embedded = false }: { embedded?: boolean }) {
 			is_actively_raising: raising || undefined, is_unicorn: unicorn || undefined,
 			founded_year_min: foundedMin || undefined, founded_year_max: foundedMax || undefined,
 			min_funding: fundingMin || undefined, max_funding: fundingMax || undefined,
-			page, limit: 30, sort,
+			page, limit: 30, sort, include_hidden: 1,   // admins see hidden (test) records; users never do
 		}],
 		{ dedupingInterval: 30_000 },
 	);
@@ -183,7 +184,7 @@ export function CompaniesView({ embedded = false }: { embedded?: boolean }) {
 									<td className="num">{c.slug ?? '—'}</td>
 									<td>{c.primary_sector ?? '—'}</td>
 									<td>{c.hq_country ?? '—'}</td>
-									<td>{c.status ?? '—'}</td>
+									<td>{c.status ?? '—'}{c.is_hidden && <span className="tag" style={{ marginLeft: 6 }} title="Hidden from users">Hidden</span>}</td>
 									<td style={{ textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
 										<button className="btn ghost" onClick={() => setEditingId(c.id)}>Edit</button>
 										<button className="btn ghost" style={{ color: 'var(--accent)' }} disabled={removePending} onClick={() => void remove(c.id, c.name)}>
@@ -215,6 +216,7 @@ interface CompanyForm {
 	status: string;
 	is_verified: boolean;
 	is_unicorn: boolean;
+	is_hidden: boolean;
 	is_actively_raising: boolean;
 	raising_amount: string; raising_round: string; raising_valuation: string; raising_pitch_deck_url: string;
 	social: SocialValue;
@@ -229,7 +231,7 @@ const EMPTY_COMPANY: CompanyForm = {
 	name: '', website: '', slug: '', description: '', custom_logo_url: '',
 	sector_id: '', business_model: '', hq: { ...EMPTY_LOCATION },
 	founded_year: '', ipo_date: '', status: 'active',
-	is_verified: false, is_unicorn: false, is_actively_raising: false,
+	is_verified: false, is_unicorn: false, is_hidden: false, is_actively_raising: false,
 	raising_amount: '', raising_round: '', raising_valuation: '', raising_pitch_deck_url: '',
 	social: { ...EMPTY_SOCIAL }, sport_ids: [], tech_tag_ids: [],
 	poc_first_name: '', poc_last_name: '', poc_job_position: '', poc_email: '', poc_linkedin: '', poc_personal_email: '', poc_personal_linkedin: '', accelerator: '', cohort: '',
@@ -241,6 +243,7 @@ interface CompanyEdit extends Company {
 	ipo_date?: string | null;
 	is_verified?: boolean;
 	is_unicorn?: boolean;
+	is_hidden?: boolean;
 	is_actively_raising?: boolean;
 	actively_raising_amount?: string | number | null; actively_raising_round?: string | null;
 	actively_raising_valuation?: string | number | null; actively_raising_pitch_deck_url?: string | null;
@@ -260,7 +263,7 @@ function toCompanyForm(h: CompanyEdit): CompanyForm {
 		hq: { country: h.hq_country ?? '', city: h.hq_city ?? '', continent: h.hq_continent ?? '', region: h.hq_region ?? '', state: h.hq_state ?? '', report_region: h.hq_report_region ?? '' },
 		founded_year: h.founded_year ? String(h.founded_year) : '',
 		ipo_date: h.ipo_date ? String(h.ipo_date).slice(0, 10) : '',
-		status: h.status ?? 'active', is_verified: !!h.is_verified, is_unicorn: !!h.is_unicorn, is_actively_raising: !!h.is_actively_raising,
+		status: h.status ?? 'active', is_verified: !!h.is_verified, is_unicorn: !!h.is_unicorn, is_hidden: !!h.is_hidden, is_actively_raising: !!h.is_actively_raising,
 		raising_amount: h.actively_raising_amount != null ? String(h.actively_raising_amount) : '',
 		raising_round: h.actively_raising_round ?? '',
 		raising_valuation: h.actively_raising_valuation != null ? String(h.actively_raising_valuation) : '',
@@ -958,6 +961,7 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 				status: form.status,
 				is_verified: form.is_verified,
 				is_unicorn: form.is_unicorn,
+				is_hidden: form.is_hidden,
 				is_actively_raising: form.is_actively_raising,
 				actively_raising_amount: form.raising_amount.trim() ? Number(form.raising_amount) : undefined,
 				actively_raising_round: form.raising_round.trim() || undefined,
@@ -1098,6 +1102,9 @@ function CompanyForm({ id, initial, onClose, onSaved, promotePipelineId, enriche
 									</label>
 									<label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
 										<input type="checkbox" checked={form.is_unicorn} onChange={(e) => set('is_unicorn', e.target.checked)} /> Unicorn <span style={{ color: 'var(--fg-muted)', fontWeight: 400 }}>— valuation has reached $1B or more</span>
+									</label>
+									<label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+										<input type="checkbox" checked={form.is_hidden} onChange={(e) => set('is_hidden', e.target.checked)} /> Hidden <span style={{ color: 'var(--fg-muted)', fontWeight: 400 }}>— test or fake record: kept here, never shown to users</span>
 									</label>
 									<label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
 										<input type="checkbox" checked={form.is_actively_raising} onChange={(e) => set('is_actively_raising', e.target.checked)} /> Actively raising <span style={{ color: 'var(--fg-muted)', fontWeight: 400 }}>— surfaces in “raising” filters and reveals the raise details below</span>

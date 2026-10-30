@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ChevronDown, ChevronRight, ChevronUp, ExternalLink, GripVertical, Plus, RotateCcw, Trash2, X } from 'lucide-react';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
@@ -12,13 +12,13 @@ import { useLeaveGuard } from '@/hooks/use-leave-guard';
 import { ImageInput } from '@/components/image-input';
 
 /**
- * Editor for GSTER26 — a custom-built report page, not a section report.
+ * Editor for the custom-built report pages (GSTER26, FTABR26) — not section reports.
  *
- * The page renders `reports.content.<block> ?? <default>` for each editable
+ * Each page renders `reports.content.<block> ?? <default>` for each editable
  * block, so this edits that `content` document, part by part. The forms are
  * inferred from each block's real shape (the defaults the page itself ships),
  * and Preview is the real page: a hidden iframe of the client's
- * /report-preview/gster26, which re-renders from the draft as you type and is
+ * /report-preview/<slug>, which re-renders from the draft as you type and is
  * shown full screen on demand.
  */
 
@@ -45,6 +45,25 @@ export const GSTER26_PARTS: { id: string; label: string; hint: string; anchor: s
 	{ id: 'closing', label: 'Closing quote', hint: 'The quote that closes the report.', anchor: '#closing', keys: ['closing'] },
 ];
 
+/** FTABR26's parts. `facts`, `ecosystem` and `startups` are the report's data as published by STX. */
+export const FTABR26_PARTS: { id: string; label: string; hint: string; anchor: string; keys: string[] }[] = [
+	{ id: 'hero', label: 'Hero & about', hint: 'The hero standfirst, edition and hashtag, and the “about this report” paragraph.', anchor: '#stx-hero', keys: ['hero', 'about'] },
+	{ id: 'insights', label: 'Insights', hint: 'The Insights articles (one per tab), the creators-with-live-rights list and the women’s multi-club ownership groups.', anchor: '#trends', keys: ['insights', 'creatorDeals', 'womensMcoGroups'] },
+	{ id: 'worldcup', label: 'FIFA WC26 Recap', hint: 'The World Cup recap tab: copy, figures and the tech list, and the order of the tech categories.', anchor: '#trends', keys: ['worldcup', 'worldcupTechCategories'] },
+	{ id: 'featured', label: 'Featured company', hint: 'The featured company panel.', anchor: '#featured', keys: ['featured'] },
+	{ id: 'innovators', label: 'Innovators', hint: 'The three questions and the innovators (name, role, photo, answers).', anchor: '#innovators', keys: ['questions', 'innovators'] },
+	{ id: 'startups', label: 'Startups to Watch', hint: 'The Playmakers roster shown here, the note under it, and the startup records it reads (description, sector, logo, site).', anchor: '#ecosystem', keys: ['playmakerCompanies', 'startupsNote', 'startups'] },
+	{ id: 'soccerment', label: 'Soccerment feature', hint: 'The Soccerment partner feature.', anchor: '#soccerment', keys: ['soccerment'] },
+	{ id: 'ecosystem', label: 'Ecosystem', hint: 'The initiatives and programs on the map and in its tables.', anchor: '#ecomap', keys: ['ecosystem'] },
+	{ id: 'data', label: 'Data in Full', hint: 'The report’s figures as published (dealflow by year, region and sector, leaderboards, top companies) and the methodology note. Resetting the figures falls back to the snapshot in the page’s code.', anchor: '#dealflow', keys: ['facts', 'methodology'] },
+];
+
+/** The custom-built report pages this editor serves, by slug. */
+export const CUSTOM_REPORT_PARTS: Record<string, typeof GSTER26_PARTS> = { gster26: GSTER26_PARTS, ftabr26: FTABR26_PARTS };
+
+/** The report being edited — image uploads go to its own folder. */
+const SlugContext = createContext('gster26');
+
 const LABELS: Record<string, string> = {
 	featuredArticles: 'Deep Dive articles', peakSwcFinalists: 'Startup World Cup finalists', groundbreakersOrgs: 'Groundbreakers organisations',
 	peakPartnersTier1: 'Partners — tier 1', peakPartnersTier2: 'Partners — tier 2', peakPartnersTier3: 'Partners — tier 3',
@@ -66,6 +85,10 @@ const LABELS: Record<string, string> = {
 	titleLine1: 'Title line 1', titleLine2: 'Title line 2 (pink)', titleLine3: 'Title line 3', titleLine4: 'Title line 4', titleYear: 'Year (pink)',
 	ctaUrl: 'Button link', ctaLabel: 'Button label', ctaTitle: 'Call-to-action title', ctaText: 'Call-to-action text', ctaSubtitle: 'Call-to-action subtitle',
 	videoUrl: 'Video embed URL', stats: 'Figures', about: 'About paragraphs (the last one is bold)', pillars: 'Pillars',
+	insights: 'Insight articles', creatorDeals: 'Creators with live rights', womensMcoGroups: 'Women’s multi-club ownership groups',
+	worldcup: 'World Cup recap', worldcupTechCategories: 'Tech categories (order)', featured: 'Featured company', soccerment: 'Soccerment',
+	questions: 'Questions', playmakerCompanies: 'Playmakers roster', startupsNote: 'Note under the list', startups: 'Startup records',
+	ecosystem: 'Ecosystem rows', facts: 'Figures (as published)', methodology: 'Methodology note',
 };
 const humanize = (k: string) => LABELS[k] ?? k.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase());
 const isImageKey = (k: string) => /logo|photo|image|avatar|img|cover/i.test(k);
@@ -85,6 +108,7 @@ function blankLike(like: Json): Json {
 // ---- generic, shape-driven form ----------------------------------------------
 
 function Field({ name, value, like, onChange, depth }: { name: string; value: Json | undefined; like: Json | undefined; onChange: (v: Json) => void; depth: number }) {
+	const slug = useContext(SlugContext);
 	const v = value ?? like ?? '';
 	if (Array.isArray(v)) return <ListField name={name} value={v} like={Array.isArray(like) ? like : v} onChange={onChange} depth={depth} />;
 	if (isObj(v)) {
@@ -110,7 +134,7 @@ function Field({ name, value, like, onChange, depth }: { name: string; value: Js
 				<span>{humanize(name)}</span>
 				<div className="g26-img">
 					{s && <img src={s.startsWith('/') ? `${ATLAS}${s}` : s} alt="" />}
-					<div style={{ flex: 1, minWidth: 0 }}><ImageInput value={s} onChange={(url) => onChange(url)} pathPrefix="reports/gster26" /></div>
+					<div style={{ flex: 1, minWidth: 0 }}><ImageInput value={s} onChange={(url) => onChange(url)} pathPrefix={`reports/${slug}`} /></div>
 				</div>
 			</div>
 		);
@@ -197,8 +221,10 @@ function OrderRow({ id }: { id: string }) {
 
 // ---- the editor ----------------------------------------------------------------
 
-export function Gster26Editor({ reportId, saved, previewOpen, onClosePreview, onSaved }: {
+export function Gster26Editor({ reportId, slug = 'gster26', saved, previewOpen, onClosePreview, onSaved }: {
 	reportId: string;
+	/** Which custom page: its parts, preview frame and message prefix. */
+	slug?: string;
 	saved: Content | null;
 	previewOpen: boolean;
 	onClosePreview: () => void;
@@ -207,12 +233,13 @@ export function Gster26Editor({ reportId, saved, previewOpen, onClosePreview, on
 	const ask = useConfirm();
 	const [draft, setDraft] = useState<Content>(saved ?? {});
 	const [defaults, setDefaults] = useState<Content | null>(null);
-	const [partId, setPartId] = useState(GSTER26_PARTS[0]!.id);
+	const PARTS = CUSTOM_REPORT_PARTS[slug] ?? GSTER26_PARTS;
+	const [partId, setPartId] = useState(PARTS[0]!.id);
 	const [saving, setSaving] = useState(false);
 	const frame = useRef<HTMLIFrameElement>(null);
-	const part = GSTER26_PARTS.find((p) => p.id === partId)!;
+	const part = PARTS.find((p) => p.id === partId)!;
 	const dirty = JSON.stringify(draft) !== JSON.stringify(saved ?? {});
-	const partDirty = (p: (typeof GSTER26_PARTS)[number]) => p.keys.some((k) => JSON.stringify(draft[k]) !== JSON.stringify((saved ?? {})[k]));
+	const partDirty = (p: (typeof PARTS)[number]) => p.keys.some((k) => JSON.stringify(draft[k]) !== JSON.stringify((saved ?? {})[k]));
 
 	// Reset only when the saved content itself changes — publishing or a Details/theme save refetches
 	// the report (new object, same content) and must not wipe unsaved edits.
@@ -226,25 +253,25 @@ export function Gster26Editor({ reportId, saved, previewOpen, onClosePreview, on
 		const onMessage = (e: MessageEvent) => {
 			if (e.origin !== ATLAS_ORIGIN || e.source !== frame.current?.contentWindow) return;
 			const m = e.data as { type?: string; defaults?: Content };
-			if (m?.type === 'gster26:ready' && m.defaults) setDefaults(m.defaults);
+			if (m?.type === `${slug}:ready` && m.defaults) setDefaults(m.defaults);
 		};
 		window.addEventListener('message', onMessage);
 		return () => window.removeEventListener('message', onMessage);
-	}, []);
+	}, [slug]);
 	// Keep saying hello until the frame answers (it may hydrate after onLoad).
 	useEffect(() => {
 		if (defaults) return;
-		const t = setInterval(() => post({ type: 'gster26:hello' }), 800);
+		const t = setInterval(() => post({ type: `${slug}:hello` }), 800);
 		return () => clearInterval(t);
-	}, [defaults, post]);
+	}, [defaults, post, slug]);
 	useEffect(() => {
 		if (!defaults) return;
-		const t = setTimeout(() => post({ type: 'gster26:content', content: draft }), 120);
+		const t = setTimeout(() => post({ type: `${slug}:content`, content: draft }), 120);
 		return () => clearTimeout(t);
-	}, [draft, defaults, post]);
+	}, [draft, defaults, post, slug]);
 	useEffect(() => {
-		if (previewOpen) post({ type: 'gster26:jump', anchor: part.anchor });
-	}, [previewOpen, part.anchor, post]);
+		if (previewOpen) post({ type: `${slug}:jump`, anchor: part.anchor });
+	}, [previewOpen, part.anchor, post, slug]);
 	useEffect(() => {
 		if (!previewOpen) return;
 		const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClosePreview(); };
@@ -270,12 +297,12 @@ export function Gster26Editor({ reportId, saved, previewOpen, onClosePreview, on
 	};
 
 	return (
-		<>
+		<SlugContext.Provider value={slug}>
 			<div className="rep-editor">
 				<aside className="rep-editor__list">
 					<div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8 }}>Page parts</div>
 					<div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-						{GSTER26_PARTS.map((p) => (
+						{PARTS.map((p) => (
 							<button key={p.id} type="button" className={`g26-part${p.id === partId ? ' is-active' : ''}`} onClick={() => setPartId(p.id)}>
 								<span className="g26-part__label">{p.label}</span>
 								<span className="g26-part__meta">{p.keys.length} block{p.keys.length === 1 ? '' : 's'}{partDirty(p) ? ' · edited' : ''}</span>
@@ -326,15 +353,15 @@ export function Gster26Editor({ reportId, saved, previewOpen, onClosePreview, on
 
 			{/* Always mounted so Preview opens instantly and is always current. */}
 			<div className={`g26-preview${previewOpen ? ' is-open' : ''}`} aria-hidden={!previewOpen} role={previewOpen ? 'dialog' : undefined} aria-label="Report preview">
-				<iframe ref={frame} title="Report preview" src={`${ATLAS}/report-preview/gster26`} onLoad={() => post({ type: 'gster26:hello' })} />
+				<iframe ref={frame} title="Report preview" src={`${ATLAS}/report-preview/${slug}`} onLoad={() => post({ type: `${slug}:hello` })} />
 				{previewOpen && (
 					<div className="preview-bar">
 						<span className="preview-bar__label">Preview · the live page with your unsaved edits</span>
-						<a href={`${ATLAS}/reports/gster26`} target="_blank" rel="noopener noreferrer" className="preview-bar__btn" title="The saved, live version">Live page <ExternalLink size={11} /></a>
+						<a href={`${ATLAS}/reports/${slug}`} target="_blank" rel="noopener noreferrer" className="preview-bar__btn" title="The saved, live version">Live page <ExternalLink size={11} /></a>
 						<button type="button" className="preview-bar__btn preview-bar__btn--primary" onClick={onClosePreview}><X size={12} /> Close</button>
 					</div>
 				)}
 			</div>
-		</>
+		</SlugContext.Provider>
 	);
 }

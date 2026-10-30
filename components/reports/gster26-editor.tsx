@@ -93,7 +93,7 @@ const LABELS: Record<string, string> = {
 const humanize = (k: string) => LABELS[k] ?? k.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase());
 const isImageKey = (k: string) => /logo|photo|image|avatar|img|cover/i.test(k);
 const isObj = (v: unknown): v is Record<string, Json> => !!v && typeof v === 'object' && !Array.isArray(v);
-const itemTitle = (v: Json, i: number) => (isObj(v) ? String(v.name ?? v.title ?? v.label ?? v.id ?? v.heading ?? `Item ${i + 1}`) : String(v).slice(0, 60) || `Item ${i + 1}`);
+const itemTitle = (v: Json, i: number) => (isObj(v) ? String(v.name ?? v.title ?? v.label ?? v.heading ?? v.company ?? v.creator ?? v.region ?? v.year ?? v.key ?? v.id ?? `Item ${i + 1}`) : String(v).slice(0, 60) || `Item ${i + 1}`);
 
 /** A blank item shaped like `like` — for "Add" on a list. */
 function blankLike(like: Json): Json {

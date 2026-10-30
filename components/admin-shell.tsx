@@ -185,7 +185,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 
 	// The browser tab names the page ("Reports | SportsTechX Admin"), as the topbar does.
 	const pageLabel = ALL_LEAVES.find((n) => n.href === activeLeafHref(pathname))?.label;
-	useEffect(() => { document.title = pageLabel ? `${pageLabel} | SportsTechX Admin` : 'SportsTechX Admin'; }, [pageLabel]);
+	// Re-applied once the shell is ready: set while loading, Next's own <title> writes over it.
+	const shellReady = !authLoading && !adminLoading && !!session && isAdmin;
+	useEffect(() => { document.title = pageLabel ? `${pageLabel} | SportsTechX Admin` : 'SportsTechX Admin'; }, [pageLabel, shellReady]);
 
 	if (authLoading || adminLoading || !session || !isAdmin) {
 		return (

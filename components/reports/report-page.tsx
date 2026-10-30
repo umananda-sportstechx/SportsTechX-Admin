@@ -2,7 +2,7 @@
 // GENERATED — copied from client/components/features/reports/report-page.tsx by scripts/sync-report-renderer.mjs. Edit the client file, then re-run the script.
 
 import { useMemo, type CSSProperties, type ReactNode } from 'react';
-import { MoonStar, SunMedium } from 'lucide-react';
+import { Moon, SunMedium } from 'lucide-react';
 import { resolveTheme, type ReportThemeOverride } from './report-kit/report-theme';
 import { useReveal } from './report-kit/use-reveal';
 import type { Section } from './report-kit/types';
@@ -54,7 +54,7 @@ export function ReportPage({ sections, theme, isDark, onToggleDark, back, empty 
 						<button key={a.slug} type="button" className="rk-nav__link" onClick={() => document.getElementById(a.slug)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>{a.title}</button>
 					))}
 				</div>
-				<button type="button" className="rk-iconbtn rk-iconbtn--bare" aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} title={isDark ? 'Switch to light mode' : 'Switch to dark mode'} onClick={onToggleDark}>{isDark ? <SunMedium size={18} strokeWidth={1.75} /> : <MoonStar size={18} strokeWidth={1.75} />}</button>
+				<button type="button" className="rk-iconbtn rk-iconbtn--bare" aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} title={isDark ? 'Switch to light mode' : 'Switch to dark mode'} onClick={onToggleDark}>{isDark ? <SunMedium size={18} strokeWidth={1.75} /> : <Moon size={18} strokeWidth={1.75} />}</button>
 			</nav>
 
 			{sections.length === 0

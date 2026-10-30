@@ -54,5 +54,9 @@
 .rk-nav__link:hover, .rk-nav__link.is-active { color: var(--rk-accent); }
 .rk-iconbtn { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--rk-border); background: none; color: var(--rk-fg); cursor: pointer; flex-shrink: 0; }
 .rk-iconbtn:hover { background: var(--rk-bg-card-hover); }
+/* Icon only: no frame (the theme toggle). */
+.rk-iconbtn--bare { border: none; color: var(--rk-accent, currentColor); }
+.rk-iconbtn--bare:hover { background: none; opacity: 0.7; }
+.rk-iconbtn:focus-visible { outline: 2px solid var(--rk-accent, currentColor); outline-offset: 2px; }
 
 @media (max-width: 720px) { .rk-section { padding: 44px 16px; } }

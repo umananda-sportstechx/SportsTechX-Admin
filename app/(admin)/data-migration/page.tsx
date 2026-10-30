@@ -22,7 +22,11 @@ interface Status {
 	runs?: Run[];
 	tables?: TableRow[];
 	conflicts?: { entity: string; open: number }[];
+	reviews?: { entity: string; pending: number; total: number }[];
 }
+interface Snap { name?: string | null; website?: string | null; linkedin_url?: string | null; founded_year?: number | null; description?: string | null; status?: string | null; slug?: string | null }
+type Decision = 'pending' | 'same' | 'separate';
+interface Review { entity: string; source_id: string; target_id: string | null; match_key: string; source: Snap; target: Snap | null; decision: Decision; decided_by: string | null; decided_at: string | null }
 interface Conflict { id: number; entity: string; target_id: string; label: string | null; col: string; base_value: unknown; old_value: unknown; new_value: unknown; created_at: string }
 
 const PHASES: { key: Phase; label: string; hint: string }[] = [
@@ -33,6 +37,26 @@ const PHASES: { key: Phase; label: string; hint: string }[] = [
 	{ key: 'complete', label: 'Complete', hint: 'The old database is retired.' },
 ];
 
+const ATLAS = process.env.NEXT_PUBLIC_ATLAS_URL ?? 'https://atlas.sportstechx.com';
+const ENTITY_LABEL: Record<string, string> = { companies: 'Company', investors: 'Investor', ecosystem_entities: 'Ecosystem' };
+const WHY: Record<string, string> = { name: 'Same name, different or missing website', duplicate_source: 'Two old records share this one (same website)' };
+const atlasHref = (entity: string, id: string, t: Snap) =>
+	entity === 'companies' ? `${ATLAS}/companies/${t.slug ?? id}` : entity === 'investors' ? `${ATLAS}/investors/${t.slug ?? id}` : null;
+
+/** One side of a possible duplicate: just what tells two records apart. */
+function SnapCell({ s, href }: { s: Snap | null; href?: string | null }) {
+	if (!s) return <em style={{ color: 'var(--fg-muted)' }}>record no longer exists</em>;
+	return (
+		<div style={{ maxWidth: 340 }}>
+			<div style={{ fontWeight: 600 }}>{href ? <a href={href} target="_blank" rel="noopener noreferrer">{s.name ?? '—'}</a> : s.name ?? '—'}</div>
+			<div style={{ fontSize: 11.5, color: 'var(--fg-muted)' }}>
+				{[s.website, s.founded_year && `founded ${s.founded_year}`, s.status && s.status !== 'active' && s.status].filter(Boolean).join(' · ') || 'no website'}
+			</div>
+			{s.description && <div style={{ fontSize: 11.5, color: 'var(--fg-2)', marginTop: 4, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{s.description}</div>}
+		</div>
+	);
+}
+
 const when = (s: string | null | undefined) => (s ? new Date(s).toLocaleString() : '—');
 const show = (v: unknown) => (v === null || v === undefined || v === '' ? <em style={{ color: 'var(--fg-muted)' }}>empty</em> : typeof v === 'object' ? JSON.stringify(v) : String(v));
 
@@ -40,6 +64,10 @@ export default function DataMigrationPage() {
 	const status = useSWR<Status>('/api/admin/migration/status');
 	const conflicts = useSWR<Conflict[]>(status.data?.ready ? '/api/admin/migration/conflicts' : null);
 	const [busy, setBusy] = useState<string | null>(null);
+	const [view, setView] = useState<Decision>('pending');
+	const [entity, setEntity] = useState('');
+	const reviews = useSWR<Review[]>(status.data?.ready ? `/api/admin/migration/reviews?decision=${view}` : null);
+	const shown = (reviews.data ?? []).filter((r) => !entity || r.entity === entity);
 
 	const tables = status.data?.tables ?? [];
 	const byTable = new Map<string, { dry?: TableRow; apply?: TableRow }>();
@@ -63,6 +91,16 @@ export default function DataMigrationPage() {
 			toast.success(action === 'use_old' ? 'Old value applied' : 'Kept the new value');
 		} catch (e) { toast.error((e as Error).message); } finally { setBusy(null); }
 	};
+
+	const decide = async (r: Review, decision: Decision) => {
+		setBusy(`r${r.entity}${r.source_id}`);
+		try {
+			await api('POST', '/api/admin/migration/reviews/decide', { entity: r.entity, source_id: r.source_id, decision });
+			await Promise.all([reviews.mutate(), status.mutate()]);
+			toast.success(decision === 'same' ? 'Marked as the same record' : decision === 'separate' ? 'Marked as a different record' : 'Back to pending');
+		} catch (e) { toast.error((e as Error).message); } finally { setBusy(null); }
+	};
+	const pendingBy = status.data?.reviews ?? [];
 
 	return (
 		<>
@@ -140,6 +178,59 @@ export default function DataMigrationPage() {
 												</td>
 											</tr>
 										))}
+									</tbody>
+								</table>
+							</AsyncState>
+						</Section>
+
+						<Section
+							title="Possible duplicates"
+							meta={`${pendingBy.reduce((n, r) => n + r.pending, 0)} to verify — the next sync applies your answers`}
+							action={
+								<div style={{ display: 'flex', gap: 6 }}>
+									<select className="search-input" value={entity} onChange={(e) => setEntity(e.target.value)} aria-label="Record type">
+										<option value="">All types</option>
+										{pendingBy.map((r) => <option key={r.entity} value={r.entity}>{ENTITY_LABEL[r.entity] ?? r.entity} ({r.pending})</option>)}
+									</select>
+									<select className="search-input" value={view} onChange={(e) => setView(e.target.value as Decision)} aria-label="Show">
+										<option value="pending">To verify</option>
+										<option value="same">Marked same</option>
+										<option value="separate">Marked different</option>
+									</select>
+								</div>
+							}
+							padded={false}
+						>
+							<p style={{ fontSize: 12.5, color: 'var(--fg-2)', margin: '0 16px 10px' }}>
+								The old system has a record that may already exist here. Until someone decides, it is left out. <b>Same</b>: the old record fills only empty fields of the one here. <b>Different</b>: it is added as a new record.
+							</p>
+							<AsyncState loading={reviews.isLoading} error={reviews.error} empty={shown.length === 0} emptyMsg={view === 'pending' ? 'Nothing to verify' : 'None yet'} onRetry={() => void reviews.mutate()}>
+								<table className="data-table">
+									<thead><tr><th>Old system</th><th>Already here</th><th>Why flagged</th><th /></tr></thead>
+									<tbody>
+										{shown.map((r) => {
+											const k = `r${r.entity}${r.source_id}`;
+											return (
+												<tr key={`${r.entity}|${r.source_id}`}>
+													<td><div style={{ fontSize: 10.5, color: 'var(--fg-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{ENTITY_LABEL[r.entity] ?? r.entity}</div><SnapCell s={r.source} /></td>
+													<td><SnapCell s={r.target} href={r.target && r.target_id ? atlasHref(r.entity, r.target_id, r.target) : null} /></td>
+													<td style={{ fontSize: 12, color: 'var(--fg-2)', maxWidth: 200 }}>
+														{WHY[r.match_key] ?? r.match_key}
+														{r.decided_by && <div style={{ fontSize: 11, color: 'var(--fg-muted)', marginTop: 4 }}>{r.decided_by} · {when(r.decided_at)}</div>}
+													</td>
+													<td style={{ whiteSpace: 'nowrap' }}>
+														{view === 'pending' ? (
+															<>
+																<button className="btn ghost" disabled={busy === k || !r.target} onClick={() => void decide(r, 'same')}>Same</button>{' '}
+																<button className="btn ghost" disabled={busy === k} onClick={() => void decide(r, 'separate')}>Different</button>
+															</>
+														) : (
+															<button className="btn ghost" disabled={busy === k} onClick={() => void decide(r, 'pending')}>Undo</button>
+														)}
+													</td>
+												</tr>
+											);
+										})}
 									</tbody>
 								</table>
 							</AsyncState>

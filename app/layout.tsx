@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { IBM_Plex_Sans, JetBrains_Mono } from 'next/font/google';
 import { Providers } from './providers';
 import './globals.css';
@@ -18,8 +18,21 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-	title: 'SportsTechX Admin',
+	title: { default: 'SportsTechX Admin', template: '%s | SportsTechX Admin' },
 	description: 'Internal administration tools for the SportsTechX platform',
+	applicationName: 'SportsTechX Admin',
+	// An internal tool: never indexed, never followed, never cached in search results.
+	// (No sitemap on purpose — it would only advertise the admin's URLs.)
+	robots: { index: false, follow: false, nocache: true, googleBot: { index: false, follow: false } },
+	referrer: 'strict-origin-when-cross-origin',
+	formatDetection: { telephone: false, email: false, address: false },
+};
+
+export const viewport: Viewport = {
+	themeColor: [
+		{ media: '(prefers-color-scheme: light)', color: '#ffffff' },
+		{ media: '(prefers-color-scheme: dark)', color: '#0c0f1a' },
+	],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

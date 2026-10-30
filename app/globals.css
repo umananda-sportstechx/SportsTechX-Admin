@@ -346,15 +346,24 @@ textarea.search-input { border-radius: var(--radius-md); }
   background: var(--sidebar-bg);
   color: var(--sidebar-fg);
   border-right: 1px solid var(--sidebar-border);
-  padding: var(--space-4) 0;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
+  padding-top: var(--space-4);
+  /* The brand row stays put; only the navigation below it scrolls. */
+  display: flex; flex-direction: column;
+  overflow: hidden;
   z-index: 40;
   transition: transform 0.2s ease;
 }
 .admin-rail-brandrow {
+  flex: none;
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 var(--space-4) var(--space-4);
+  border-bottom: 1px solid var(--sidebar-border);
+}
+.admin-rail > nav {
+  flex: 1; min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding: var(--space-4) 0;
 }
 .nav-group { margin-top: 14px; }
 .nav-group:first-of-type { margin-top: 0; }

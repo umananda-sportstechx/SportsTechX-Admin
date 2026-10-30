@@ -183,6 +183,10 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
 		}
 	}, [authLoading, session, adminLoading, isAdmin, router]);
 
+	// The browser tab names the page ("Reports | SportsTechX Admin"), as the topbar does.
+	const pageLabel = ALL_LEAVES.find((n) => n.href === activeLeafHref(pathname))?.label;
+	useEffect(() => { document.title = pageLabel ? `${pageLabel} | SportsTechX Admin` : 'SportsTechX Admin'; }, [pageLabel]);
+
 	if (authLoading || adminLoading || !session || !isAdmin) {
 		return (
 			<div style={{ display: 'grid', placeItems: 'center', minHeight: '100vh' }}>

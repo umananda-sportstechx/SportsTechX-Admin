@@ -58,8 +58,17 @@ export const FTABR26_PARTS: { id: string; label: string; hint: string; anchor: s
 	{ id: 'data', label: 'Data in Full', hint: 'The report’s figures as published (dealflow by year, region and sector, leaderboards, top companies) and the methodology note. Resetting the figures falls back to the snapshot in the page’s code.', anchor: '#dealflow', keys: ['facts', 'methodology'] },
 ];
 
+/** The VC Deal Sourcing Benchmark: its whole published document, block by block. */
+export const BENCHMARK26_PARTS: { id: string; label: string; hint: string; anchor: string; keys: string[] }[] = [
+	{ id: 'meta', label: 'Cover & facts', hint: 'Title, subtitle, edition, dates and the counts shown on the cover and in charts.', anchor: '#why-now', keys: ['meta'] },
+	{ id: 'intro', label: 'Why now', hint: 'The opening section and the contributor counts.', anchor: '#why-now', keys: ['intro'] },
+	{ id: 'sections', label: 'Findings', hint: 'The numbered sections: headings, intros, figures, charts and takeaways.', anchor: '#deal-sourcing-reality', keys: ['sections'] },
+	{ id: 'closing', label: 'Implications & call to action', hint: 'The closing points and the call-to-action card above the footer.', anchor: '#closing', keys: ['closing'] },
+	{ id: 'method', label: 'Method', hint: 'The method notes and data note.', anchor: '#method', keys: ['methodology'] },
+];
+
 /** The custom-built report pages this editor serves, by slug. */
-export const CUSTOM_REPORT_PARTS: Record<string, typeof GSTER26_PARTS> = { gster26: GSTER26_PARTS, ftabr26: FTABR26_PARTS };
+export const CUSTOM_REPORT_PARTS: Record<string, typeof GSTER26_PARTS> = { gster26: GSTER26_PARTS, ftabr26: FTABR26_PARTS, 'investors-survey26': BENCHMARK26_PARTS };
 
 /** The report being edited — image uploads go to its own folder. */
 const SlugContext = createContext('gster26');
@@ -89,6 +98,7 @@ const LABELS: Record<string, string> = {
 	worldcup: 'World Cup recap', worldcupTechCategories: 'Tech categories (order)', featured: 'Featured company', soccerment: 'Soccerment',
 	questions: 'Questions', playmakerCompanies: 'Playmakers roster', startupsNote: 'Note under the list', startups: 'Startup records',
 	ecosystem: 'Ecosystem rows', facts: 'Figures (as published)', methodology: 'Methodology note',
+	meta: 'Cover & facts', takeaways: 'Takeaways', charts: 'Charts', blocks: 'Blocks', cta: 'Call to action', rows: 'Rows',
 };
 const humanize = (k: string) => LABELS[k] ?? k.replace(/_/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase());
 const isImageKey = (k: string) => /logo|photo|image|avatar|img|cover/i.test(k);

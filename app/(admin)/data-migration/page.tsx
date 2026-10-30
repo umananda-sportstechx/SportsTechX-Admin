@@ -173,7 +173,10 @@ export default function DataMigrationPage() {
 												<td style={{ maxWidth: 220 }}>{show(k.old_value)}</td>
 												<td style={{ maxWidth: 220 }}>{show(k.new_value)}</td>
 												<td style={{ whiteSpace: 'nowrap' }}>
-													<button className="btn ghost" disabled={busy === `c${k.id}`} onClick={() => void resolve(k.id, 'use_old')}>Use old</button>{' '}
+													{/* A tier isn't a column to copy back — it's set (with its end date) on the Users page. */}
+													{k.entity === 'profile_tier'
+														? <span style={{ fontSize: 12, color: 'var(--fg-muted)' }}>Set the tier in Users, then </span>
+														: <button className="btn ghost" disabled={busy === `c${k.id}`} onClick={() => void resolve(k.id, 'use_old')}>Use old</button>}{' '}
 													<button className="btn ghost" disabled={busy === `c${k.id}`} onClick={() => void resolve(k.id, 'keep_new')}>Keep new</button>
 												</td>
 											</tr>
